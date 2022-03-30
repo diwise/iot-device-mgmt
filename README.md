@@ -1,2 +1,2 @@
-# iot-device-management
+# iot-device-mgmt
 Device management service

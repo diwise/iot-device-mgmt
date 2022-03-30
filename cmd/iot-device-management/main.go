@@ -6,17 +6,17 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/diwise/iot-device-management/internal/pkg/application"
-	"github.com/diwise/iot-device-management/internal/pkg/infrastructure/router"
-	"github.com/diwise/iot-device-management/internal/pkg/infrastructure/tracing"
-	"github.com/diwise/iot-device-management/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	serviceName := "iot-device-management"
+	serviceName := "iot-device-mgmt"
 	serviceVersion := version()
 
 	logger := log.With().Str("service", strings.ToLower(serviceName)).Str("version", serviceVersion).Logger()

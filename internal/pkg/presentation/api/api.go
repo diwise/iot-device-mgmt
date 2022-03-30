@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/diwise/iot-device-management/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"

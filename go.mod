@@ -1,4 +1,4 @@
-module github.com/diwise/iot-device-management
+module github.com/diwise/iot-device-mgmt
 
 go 1.18
 
