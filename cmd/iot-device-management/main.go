@@ -1,9 +1,14 @@
 package main
 
 import (
+	"net/http"
 	"runtime/debug"
 	"strings"
 
+	"github.com/diwise/iot-device-management/internal/pkg/application"
+	"github.com/diwise/iot-device-management/internal/pkg/infrastructure/router"
+	"github.com/diwise/iot-device-management/internal/pkg/presentation/api"
+	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
@@ -12,13 +17,21 @@ func main() {
 	serviceName := "iot-device-management"
 	serviceVersion := version()
 
-	logger := newLogger(serviceName, serviceVersion)
+	logger := log.With().Str("service", strings.ToLower(serviceName)).Str("version", serviceVersion).Logger()
 	logger.Info().Msg("starting up ...")
+
+	r := createAppAndSetupRouter(logger, serviceName)
+
+	err := http.ListenAndServe(":8080", r)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to start router")
+	}
 }
 
-func newLogger(serviceName, serviceVersion string) zerolog.Logger {
-	logger := log.With().Str("service", strings.ToLower(serviceName)).Str("version", serviceVersion).Logger()
-	return logger
+func createAppAndSetupRouter(logger zerolog.Logger, serviceName string) *chi.Mux {
+	app := application.New(logger)
+	r := router.New(serviceName)
+	return api.RegisterHandlers(logger, r, app)
 }
 
 func version() string {
