@@ -39,19 +39,29 @@ func NewDeviceHandler(logging zerolog.Logger, app application.DeviceManagement) 
 			span.End()
 		}()
 
+		traceID := span.SpanContext().TraceID()
+		if traceID.IsValid() {
+			logging = logging.With().Str("traceID", traceID.String()).Logger()
+		}
+
 		deviceID := chi.URLParam(r, "id")
 		device, err := app.GetDevice(ctx, deviceID)
 		if err != nil {
+			logging.Error().Err(err).Msg("device not found")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 
 		bytes, err := json.Marshal(device)
 		if err != nil {
+			logging.Error().Err(err).Msg("unable to marshal device to json")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
+		logging.Info().Msgf("returning information about device %s (%s)", device.ID(), deviceID)
+
+		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(bytes)
 	}

@@ -8,6 +8,7 @@ import (
 )
 
 type Device interface {
+	ID() string
 }
 
 type DeviceManagement interface {
@@ -20,7 +21,7 @@ func New(logger zerolog.Logger) DeviceManagement {
 		logger:  logger,
 	}
 
-	a.devices["a81758fffe06bfa3"] = device{ID: "intern-a81758fffe06bfa3", Types: []string{"urn:oma:lwm2m:ext:3303"}}
+	a.devices["a81758fffe06bfa3"] = device{Identity: "intern-a81758fffe06bfa3", Types: []string{"urn:oma:lwm2m:ext:3303"}}
 
 	return a
 }
@@ -34,13 +35,17 @@ func (a *app) GetDevice(ctx context.Context, externalID string) (Device, error) 
 
 	device, ok := a.devices[externalID]
 	if !ok {
-		return nil, fmt.Errorf("no such device")
+		return nil, fmt.Errorf("no such device (%s)", externalID)
 	}
 
 	return device, nil
 }
 
 type device struct {
-	ID    string   `json:"id"`
-	Types []string `json:"types"`
+	Identity string   `json:"id"`
+	Types    []string `json:"types"`
+}
+
+func (d device) ID() string {
+	return d.Identity
 }
