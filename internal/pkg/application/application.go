@@ -17,11 +17,9 @@ type DeviceManagement interface {
 
 func New(logger zerolog.Logger) DeviceManagement {
 	a := &app{
-		devices: map[string]Device{},
+		devices: knownDevices,
 		logger:  logger,
 	}
-
-	a.devices["a81758fffe06bfa3"] = device{Identity: "intern-a81758fffe06bfa3", Types: []string{"urn:oma:lwm2m:ext:3303"}}
 
 	return a
 }
@@ -48,4 +46,16 @@ type device struct {
 
 func (d device) ID() string {
 	return d.Identity
+}
+
+var knownDevices map[string]Device = map[string]Device{
+	"a81758fffe06bfa3": device{Identity: "intern-a81758fffe06bfa3", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe051d00": device{Identity: "intern-a81758fffe051d00", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe04d83f": device{Identity: "intern-a81758fffe04d83f", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe0524f3": device{Identity: "intern-a81758fffe0524f3", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe04d84d": device{Identity: "intern-a81758fffe04d84d", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe04d843": device{Identity: "intern-a81758fffe04d843", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe04d851": device{Identity: "intern-a81758fffe04d851", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe051d02": device{Identity: "intern-a81758fffe051d02", Types: []string{"urn:oma:lwm2m:ext:3303"}},
+	"a81758fffe04d856": device{Identity: "intern-a81758fffe04d856", Types: []string{"urn:oma:lwm2m:ext:3303"}},
 }
