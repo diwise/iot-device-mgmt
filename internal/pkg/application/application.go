@@ -3,8 +3,6 @@ package application
 import (
 	"context"
 	"fmt"
-
-	"github.com/rs/zerolog"
 )
 
 type Device interface {
@@ -15,10 +13,9 @@ type DeviceManagement interface {
 	GetDevice(context.Context, string) (Device, error)
 }
 
-func New(logger zerolog.Logger) DeviceManagement {
+func New() DeviceManagement {
 	a := &app{
 		devices: knownDevices,
-		logger:  logger,
 	}
 
 	return a
@@ -26,7 +23,6 @@ func New(logger zerolog.Logger) DeviceManagement {
 
 type app struct {
 	devices map[string]Device
-	logger  zerolog.Logger
 }
 
 func (a *app) GetDevice(ctx context.Context, externalID string) (Device, error) {

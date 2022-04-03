@@ -4,25 +4,23 @@ import (
 	"context"
 	"net/http"
 	"runtime/debug"
-	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/logging"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
 
+const serviceName string = "iot-device-mgmt"
+
 func main() {
-	serviceName := "iot-device-mgmt"
 	serviceVersion := version()
 
-	logger := log.With().Str("service", strings.ToLower(serviceName)).Str("version", serviceVersion).Logger()
+	ctx, logger := logging.NewLogger(context.Background(), serviceName, serviceVersion)
 	logger.Info().Msg("starting up ...")
-
-	ctx := context.Background()
 
 	cleanup, err := tracing.Init(ctx, logger, serviceName, serviceVersion)
 	if err != nil {
@@ -39,7 +37,7 @@ func main() {
 }
 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string) *chi.Mux {
-	app := application.New(logger)
+	app := application.New()
 	r := router.New(serviceName)
 	return api.RegisterHandlers(logger, r, app)
 }
