@@ -13,7 +13,7 @@ import (
 
 func TestSetup(t *testing.T) {
 	is := is.New(t)
-	r := createAppAndSetupRouter(zerolog.Logger{}, "test")
+	r := createAppAndSetupRouter(zerolog.Logger{}, "test", nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -24,7 +24,7 @@ func TestSetup(t *testing.T) {
 
 func TestThatGetUnknownDeviceReturns404(t *testing.T) {
 	is := is.New(t)
-	r := createAppAndSetupRouter(zerolog.Logger{}, "test")
+	r := createAppAndSetupRouter(zerolog.Logger{}, "test", nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
@@ -35,7 +35,7 @@ func TestThatGetUnknownDeviceReturns404(t *testing.T) {
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	is := is.New(t)
-	r := createAppAndSetupRouter(zerolog.Logger{}, "test")
+	r := createAppAndSetupRouter(zerolog.Logger{}, "test", nil)
 	server := httptest.NewServer(r)
 	defer server.Close()
 
