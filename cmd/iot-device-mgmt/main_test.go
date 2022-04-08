@@ -1,4 +1,4 @@
-package api
+package main
 
 import (
 	"bytes"
@@ -11,6 +11,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/go-chi/chi/v5"
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
@@ -50,11 +51,11 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
-	db, err := database.SetUpNewDatabase(log, bytes.NewBuffer([]byte(csvMock))) //replace with mock
+	db, err := database.SetUpNewDatabase(log, bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
-	app := application.New(db) //replace with mock
+	app := application.New(db)
 	router := router.New("testService")
-	RegisterHandlers(log, router, app)
+	api.RegisterHandlers(log, router, app)
 
 	return router, is
 }
