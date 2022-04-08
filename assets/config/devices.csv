@@ -1,6 +1,5 @@
 devEUI;internalID;lat;lon;where;types
-a81758fffe06bfa3;nonsuchdevice;62.39160;17.30723;where;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;where;urn:oma:lwm2m:ext:3303
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;where;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303
 a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;water;urn:oma:lwm2m:ext:3303
 a81758fffe0524f3;intern-a81758fffe0524f3;62.405478430159356;17.317086398702134;air;urn:oma:lwm2m:ext:3303

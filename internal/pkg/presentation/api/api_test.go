@@ -50,9 +50,9 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
-	db, err := database.SetUpNewDatabase(log, bytes.NewBuffer([]byte(csvMock)))
+	db, err := database.SetUpNewDatabase(log, bytes.NewBuffer([]byte(csvMock))) //replace with mock
 	is.NoErr(err)
-	app := application.New(db)
+	app := application.New(db) //replace with mock
 	router := router.New("testService")
 	RegisterHandlers(log, router, app)
 
