@@ -19,22 +19,26 @@ type db struct {
 	devices [][]string
 }
 
-func SetUpNewDatabase(log zerolog.Logger, file io.Reader) (Datastore, error) {
-	r := csv.NewReader(file)
+var knownDevices [][]string
 
-	devices, err := r.ReadAll()
+func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
+	r := csv.NewReader(devicesFile)
+	r.Comma = ';'
+
+	knownDevices, err := r.ReadAll()
 	if err != nil {
 		return nil, err
 	}
 
 	return &db{
 		log:     log,
-		devices: devices,
+		devices: knownDevices,
 	}, nil
 }
 
 func (db *db) GetDeviceFromDevEUI(eui string) (Device, error) {
 	for _, d := range db.devices {
+		fmt.Printf("%s and %s", eui, d[0])
 		if eui == d[0] {
 			lat, err := strconv.ParseFloat(d[2], 64)
 			if err != nil {

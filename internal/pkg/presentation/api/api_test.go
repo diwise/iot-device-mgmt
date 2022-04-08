@@ -44,7 +44,7 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/a81758fffe06bfa3", nil)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal(body, "{\"id\":\"intern-a81758fffe06bfa3\",\"types\":[\"urn:oma:lwm2m:ext:3303\"]}")
+	is.Equal(body, `{"id":"intern-a81758fffe06bfa3","latitude":62.3916,"longitude":17.30723,"where":"where","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"]}`)
 }
 
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
@@ -68,12 +68,7 @@ func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Rea
 	return resp, string(respBody)
 }
 
-const csvMock string = `a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;where;3303
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;3303
-a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;water;3303
-a81758fffe0524f3;intern-a81758fffe0524f3;62.405478430159356;17.317086398702134;air;3303
-a81758fffe04d84d;intern-a81758fffe04d84d;0.0;0.0;water;3303
-a81758fffe04d843;intern-a81758fffe04d843;62.42270376259509;17.428565025329593;where;3303
-a81758fffe04d851;intern-a81758fffe04d851;62.36956091265246;17.319844410529534;where;3303
-a81758fffe051d02;intern-a81758fffe051d02;62.405478430159356;17.317086398702134;air;3303
-a81758fffe04d856;intern-a81758fffe04d856;62.36956091265246;17.319844410529534;where;3303`
+const csvMock string = `devEUI;internalID;lat;lon;where;types
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;where;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303
+a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;water;urn:oma:lwm2m:ext:3303`
