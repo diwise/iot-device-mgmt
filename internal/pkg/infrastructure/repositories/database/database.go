@@ -3,7 +3,7 @@ package database
 import (
 	"encoding/csv"
 	"fmt"
-	"os"
+	"io"
 	"strconv"
 	"strings"
 
@@ -19,8 +19,9 @@ type db struct {
 	devices [][]string
 }
 
-func SetUpNewDatabase(log zerolog.Logger, devicesFile *os.File) (Datastore, error) {
-	r := csv.NewReader(devicesFile)
+func SetUpNewDatabase(log zerolog.Logger, file io.Reader) (Datastore, error) {
+	r := csv.NewReader(file)
+
 	devices, err := r.ReadAll()
 	if err != nil {
 		return nil, err

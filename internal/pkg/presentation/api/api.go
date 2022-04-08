@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -52,6 +53,7 @@ func NewDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http
 		deviceID := chi.URLParam(r, "id")
 		device, err := app.GetDevice(ctx, deviceID)
 		if err != nil {
+			fmt.Printf(err.Error())
 			requestLogger.Error().Err(err).Msg("device not found")
 			w.WriteHeader(http.StatusNotFound)
 			return

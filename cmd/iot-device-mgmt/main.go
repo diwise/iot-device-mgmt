@@ -36,9 +36,9 @@ func main() {
 	}
 	defer cleanup()
 
-	db, err := openFileAndSetupDatabase(logger)
+	db, err := setupDatabase(logger, devicesFilePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to init tracing")
+		logger.Fatal().Err(err).Msg("failed to start database")
 	}
 
 	r := createAppAndSetupRouter(logger, serviceName, db)
@@ -49,14 +49,18 @@ func main() {
 	}
 }
 
-func openFileAndSetupDatabase(logger zerolog.Logger) (database.Datastore, error) {
-	devicesFile, err := os.Open(devicesFilePath)
+func setupDatabase(logger zerolog.Logger, filePath string) (database.Datastore, error) {
+	devicesFile, err := os.Open(filePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", devicesFilePath)
+		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", filePath)
 	}
+
 	defer devicesFile.Close()
 
 	db, err := database.SetUpNewDatabase(logger, devicesFile)
+	if err != nil {
+		return nil, err
+	}
 
 	return db, nil
 }

@@ -23,7 +23,6 @@ type app struct {
 }
 
 func (a *app) GetDevice(ctx context.Context, externalID string) (database.Device, error) {
-
 	device, err := a.db.GetDeviceFromDevEUI(externalID)
 	if err != nil {
 		return nil, err
