@@ -17,7 +17,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-func TestSetup(t *testing.T) {
+func TestThatHealthEndpointReturns204NoContent(t *testing.T) {
 	r, is := setupTest(t)
 	server := httptest.NewServer(r)
 	defer server.Close()

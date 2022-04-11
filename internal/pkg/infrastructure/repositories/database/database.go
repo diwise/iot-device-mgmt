@@ -19,8 +19,6 @@ type db struct {
 	devices [][]string
 }
 
-var knownDevices [][]string
-
 func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
 	r := csv.NewReader(devicesFile)
 	r.Comma = ';'
@@ -38,7 +36,6 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 func (db *db) GetDeviceFromDevEUI(eui string) (Device, error) {
 	for _, d := range db.devices {
-		fmt.Printf("%s and %s", eui, d[0])
 		if eui == d[0] {
 			lat, err := strconv.ParseFloat(d[2], 64)
 			if err != nil {
