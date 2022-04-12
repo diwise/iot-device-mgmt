@@ -22,6 +22,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (database.Device, error) {
 // 				panic("mock out the GetDevice method")
 // 			},
+// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (database.Device, error) {
+// 				panic("mock out the GetDeviceFromEUI method")
+// 			},
 // 		}
 //
 // 		// use mockedDeviceManagement in code that requires DeviceManagement
@@ -32,6 +35,9 @@ type DeviceManagementMock struct {
 	// GetDeviceFunc mocks the GetDevice method.
 	GetDeviceFunc func(contextMoqParam context.Context, s string) (database.Device, error)
 
+	// GetDeviceFromEUIFunc mocks the GetDeviceFromEUI method.
+	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (database.Device, error)
+
 	// calls tracks calls to the methods.
 	calls struct {
 		// GetDevice holds details about calls to the GetDevice method.
@@ -41,8 +47,16 @@ type DeviceManagementMock struct {
 			// S is the s argument value.
 			S string
 		}
+		// GetDeviceFromEUI holds details about calls to the GetDeviceFromEUI method.
+		GetDeviceFromEUI []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// S is the s argument value.
+			S string
+		}
 	}
-	lockGetDevice sync.RWMutex
+	lockGetDevice        sync.RWMutex
+	lockGetDeviceFromEUI sync.RWMutex
 }
 
 // GetDevice calls GetDeviceFunc.
@@ -77,5 +91,40 @@ func (mock *DeviceManagementMock) GetDeviceCalls() []struct {
 	mock.lockGetDevice.RLock()
 	calls = mock.calls.GetDevice
 	mock.lockGetDevice.RUnlock()
+	return calls
+}
+
+// GetDeviceFromEUI calls GetDeviceFromEUIFunc.
+func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Context, s string) (database.Device, error) {
+	if mock.GetDeviceFromEUIFunc == nil {
+		panic("DeviceManagementMock.GetDeviceFromEUIFunc: method is nil but DeviceManagement.GetDeviceFromEUI was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam context.Context
+		S               string
+	}{
+		ContextMoqParam: contextMoqParam,
+		S:               s,
+	}
+	mock.lockGetDeviceFromEUI.Lock()
+	mock.calls.GetDeviceFromEUI = append(mock.calls.GetDeviceFromEUI, callInfo)
+	mock.lockGetDeviceFromEUI.Unlock()
+	return mock.GetDeviceFromEUIFunc(contextMoqParam, s)
+}
+
+// GetDeviceFromEUICalls gets all the calls that were made to GetDeviceFromEUI.
+// Check the length with:
+//     len(mockedDeviceManagement.GetDeviceFromEUICalls())
+func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
+	ContextMoqParam context.Context
+	S               string
+} {
+	var calls []struct {
+		ContextMoqParam context.Context
+		S               string
+	}
+	mock.lockGetDeviceFromEUI.RLock()
+	calls = mock.calls.GetDeviceFromEUI
+	mock.lockGetDeviceFromEUI.RUnlock()
 	return calls
 }

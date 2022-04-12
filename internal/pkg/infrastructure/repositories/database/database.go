@@ -12,11 +12,13 @@ import (
 
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
+	GetDeviceFromID(deviceID string) (Device, error)
 }
 
 type database struct {
-	log     zerolog.Logger
-	devices map[string]device
+	log          zerolog.Logger
+	devicesByEUI map[string]*device
+	devicesByID  map[string]*device
 }
 
 func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
@@ -29,8 +31,9 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 	}
 
 	db := &database{
-		log:     log,
-		devices: map[string]device{},
+		log:          log,
+		devicesByEUI: map[string]*device{},
+		devicesByID:  map[string]*device{},
 	}
 
 	// Create a set of allowed environments from a slice of allowed envs so that
@@ -48,10 +51,16 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 		}
 
 		devEUI := d[0]
+		deviceID := d[1]
 
-		dev, ok := db.devices[devEUI]
+		dev, ok := db.devicesByEUI[devEUI]
 		if ok {
 			return nil, fmt.Errorf("duplicate devEUI %s found on line %d in devices config", devEUI, (idx + 1))
+		}
+
+		dev, ok = db.devicesByID[deviceID]
+		if ok {
+			return nil, fmt.Errorf("duplicate device id %s found on line %d in devices config", deviceID, (idx + 1))
 		}
 
 		lat, err := strconv.ParseFloat(d[2], 64)
@@ -70,7 +79,7 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		types := strings.Split(d[5], ",")
 
-		dev = device{
+		dev = &device{
 			Identity:    d[1],
 			Latitude:    lat,
 			Longitude:   lon,
@@ -78,19 +87,30 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 			Types:       types,
 		}
 
-		db.devices[devEUI] = dev
+		db.devicesByEUI[devEUI] = dev
+		db.devicesByID[deviceID] = dev
 	}
 
-	db.log.Info().Msgf("loaded %d devices from configuration file", len(db.devices))
+	db.log.Info().Msgf("loaded %d devices from configuration file", len(db.devicesByEUI))
 
 	return db, nil
 }
 
 func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
 
-	device, ok := db.devices[eui]
+	device, ok := db.devicesByEUI[eui]
 	if !ok {
 		return nil, fmt.Errorf("no matching devices found with devEUI %s", eui)
+	}
+
+	return device, nil
+}
+
+func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
+
+	device, ok := db.devicesByID[deviceID]
+	if !ok {
+		return nil, fmt.Errorf("no matching devices found with id %s", deviceID)
 	}
 
 	return device, nil

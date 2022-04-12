@@ -8,6 +8,7 @@ import (
 
 type DeviceManagement interface {
 	GetDevice(context.Context, string) (database.Device, error)
+	GetDeviceFromEUI(context.Context, string) (database.Device, error)
 }
 
 func New(db database.Datastore) DeviceManagement {
@@ -22,8 +23,17 @@ type app struct {
 	db database.Datastore
 }
 
-func (a *app) GetDevice(ctx context.Context, externalID string) (database.Device, error) {
-	device, err := a.db.GetDeviceFromDevEUI(externalID)
+func (a *app) GetDevice(ctx context.Context, deviceID string) (database.Device, error) {
+	device, err := a.db.GetDeviceFromID(deviceID)
+	if err != nil {
+		return nil, err
+	}
+
+	return device, nil
+}
+
+func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (database.Device, error) {
+	device, err := a.db.GetDeviceFromDevEUI(devEUI)
 	if err != nil {
 		return nil, err
 	}

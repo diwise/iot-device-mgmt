@@ -20,6 +20,9 @@ var _ Datastore = &DatastoreMock{}
 // 			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
 // 				panic("mock out the GetDeviceFromDevEUI method")
 // 			},
+// 			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
+// 				panic("mock out the GetDeviceFromID method")
+// 			},
 // 		}
 //
 // 		// use mockedDatastore in code that requires Datastore
@@ -30,6 +33,9 @@ type DatastoreMock struct {
 	// GetDeviceFromDevEUIFunc mocks the GetDeviceFromDevEUI method.
 	GetDeviceFromDevEUIFunc func(eui string) (Device, error)
 
+	// GetDeviceFromIDFunc mocks the GetDeviceFromID method.
+	GetDeviceFromIDFunc func(deviceID string) (Device, error)
+
 	// calls tracks calls to the methods.
 	calls struct {
 		// GetDeviceFromDevEUI holds details about calls to the GetDeviceFromDevEUI method.
@@ -37,8 +43,14 @@ type DatastoreMock struct {
 			// Eui is the eui argument value.
 			Eui string
 		}
+		// GetDeviceFromID holds details about calls to the GetDeviceFromID method.
+		GetDeviceFromID []struct {
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+		}
 	}
 	lockGetDeviceFromDevEUI sync.RWMutex
+	lockGetDeviceFromID     sync.RWMutex
 }
 
 // GetDeviceFromDevEUI calls GetDeviceFromDevEUIFunc.
@@ -69,5 +81,36 @@ func (mock *DatastoreMock) GetDeviceFromDevEUICalls() []struct {
 	mock.lockGetDeviceFromDevEUI.RLock()
 	calls = mock.calls.GetDeviceFromDevEUI
 	mock.lockGetDeviceFromDevEUI.RUnlock()
+	return calls
+}
+
+// GetDeviceFromID calls GetDeviceFromIDFunc.
+func (mock *DatastoreMock) GetDeviceFromID(deviceID string) (Device, error) {
+	if mock.GetDeviceFromIDFunc == nil {
+		panic("DatastoreMock.GetDeviceFromIDFunc: method is nil but Datastore.GetDeviceFromID was just called")
+	}
+	callInfo := struct {
+		DeviceID string
+	}{
+		DeviceID: deviceID,
+	}
+	mock.lockGetDeviceFromID.Lock()
+	mock.calls.GetDeviceFromID = append(mock.calls.GetDeviceFromID, callInfo)
+	mock.lockGetDeviceFromID.Unlock()
+	return mock.GetDeviceFromIDFunc(deviceID)
+}
+
+// GetDeviceFromIDCalls gets all the calls that were made to GetDeviceFromID.
+// Check the length with:
+//     len(mockedDatastore.GetDeviceFromIDCalls())
+func (mock *DatastoreMock) GetDeviceFromIDCalls() []struct {
+	DeviceID string
+} {
+	var calls []struct {
+		DeviceID string
+	}
+	mock.lockGetDeviceFromID.RLock()
+	calls = mock.calls.GetDeviceFromID
+	mock.lockGetDeviceFromID.RUnlock()
 	return calls
 }
