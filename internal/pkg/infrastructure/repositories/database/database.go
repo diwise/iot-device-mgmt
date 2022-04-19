@@ -10,9 +10,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+//go:generate moq -out database_mock.go . Datastore
+
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
 	GetDeviceFromID(deviceID string) (Device, error)
+	GetAll() ([]Device, error)
 }
 
 type database struct {
@@ -114,6 +117,15 @@ func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
 	}
 
 	return device, nil
+}
+
+
+func (db *database) GetAll() ([]Device, error) {
+	var devices []Device
+	for _, v := range db.devicesByEUI {
+		devices = append(devices, v)
+	}
+	return devices, nil
 }
 
 type Device interface {

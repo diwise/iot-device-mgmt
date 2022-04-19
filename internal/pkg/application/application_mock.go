@@ -25,6 +25,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (database.Device, error) {
 // 				panic("mock out the GetDeviceFromEUI method")
 // 			},
+// 			ListAllDevicesFunc: func(ctx context.Context) ([]database.Device, error) {
+// 				panic("mock out the ListAllDevices method")
+// 			},
 // 		}
 //
 // 		// use mockedDeviceManagement in code that requires DeviceManagement
@@ -37,6 +40,9 @@ type DeviceManagementMock struct {
 
 	// GetDeviceFromEUIFunc mocks the GetDeviceFromEUI method.
 	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (database.Device, error)
+
+	// ListAllDevicesFunc mocks the ListAllDevices method.
+	ListAllDevicesFunc func(ctx context.Context) ([]database.Device, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -54,9 +60,15 @@ type DeviceManagementMock struct {
 			// S is the s argument value.
 			S string
 		}
+		// ListAllDevices holds details about calls to the ListAllDevices method.
+		ListAllDevices []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 	}
 	lockGetDevice        sync.RWMutex
 	lockGetDeviceFromEUI sync.RWMutex
+	lockListAllDevices   sync.RWMutex
 }
 
 // GetDevice calls GetDeviceFunc.
@@ -126,5 +138,36 @@ func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
 	mock.lockGetDeviceFromEUI.RLock()
 	calls = mock.calls.GetDeviceFromEUI
 	mock.lockGetDeviceFromEUI.RUnlock()
+	return calls
+}
+
+// ListAllDevices calls ListAllDevicesFunc.
+func (mock *DeviceManagementMock) ListAllDevices(ctx context.Context) ([]database.Device, error) {
+	if mock.ListAllDevicesFunc == nil {
+		panic("DeviceManagementMock.ListAllDevicesFunc: method is nil but DeviceManagement.ListAllDevices was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockListAllDevices.Lock()
+	mock.calls.ListAllDevices = append(mock.calls.ListAllDevices, callInfo)
+	mock.lockListAllDevices.Unlock()
+	return mock.ListAllDevicesFunc(ctx)
+}
+
+// ListAllDevicesCalls gets all the calls that were made to ListAllDevices.
+// Check the length with:
+//     len(mockedDeviceManagement.ListAllDevicesCalls())
+func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockListAllDevices.RLock()
+	calls = mock.calls.ListAllDevices
+	mock.lockListAllDevices.RUnlock()
 	return calls
 }

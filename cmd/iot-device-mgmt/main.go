@@ -13,6 +13,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/gui"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
@@ -68,6 +69,9 @@ func setupDatabase(logger zerolog.Logger, filePath string) (database.Datastore, 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore) *chi.Mux {
 	app := application.New(db)
 	r := router.New(serviceName)
+
+	r = gui.RegisterHandlers(logger, r, app)
+
 	return api.RegisterHandlers(logger, r, app)
 }
 
