@@ -10,7 +10,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-//go:generate moq -out database_mock.go . Datastore
+//go:generate moq -rm -out database_mock.go . Datastore
 
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
@@ -82,12 +82,15 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		types := strings.Split(d[5], ",")
 
+		sensorType := d[6]
+
 		dev = &device{
 			Identity:    d[1],
 			Latitude:    lat,
 			Longitude:   lon,
 			Environment: environment,
 			Types:       types,
+			SensorType:  sensorType,
 		}
 
 		db.devicesByEUI[devEUI] = dev
@@ -119,7 +122,6 @@ func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
 	return device, nil
 }
 
-
 func (db *database) GetAll() ([]Device, error) {
 	var devices []Device
 	for _, v := range db.devicesByEUI {
@@ -138,6 +140,7 @@ type device struct {
 	Longitude   float64  `json:"longitude"`
 	Environment string   `json:"environment"`
 	Types       []string `json:"types"`
+	SensorType  string   `json:"sensorType"`
 }
 
 func (d device) ID() string {

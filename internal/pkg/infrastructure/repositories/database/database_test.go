@@ -32,15 +32,15 @@ func TestThatLoadFailsOnBadEnvironment(t *testing.T) {
 	is.True(err != nil)
 }
 
-const csvWithDuplicates string = `devEUI;internalID;lat;lon;where;types
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303
-a81758fffe051d00;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303`
+const csvWithDuplicates string = `devEUI;internalID;lat;lon;where;types;sensorType
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec
+a81758fffe051d00;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec`
 
-const csvWithBadLatitude string = `devEUI;internalID;lat;lon;where;types
-a81758fffe051d00;intern-a81758fffe051d00;gurka;0.0;air;urn:oma:lwm2m:ext:3303`
+const csvWithBadLatitude string = `devEUI;internalID;lat;lon;where;types;sensorType
+a81758fffe051d00;intern-a81758fffe051d00;gurka;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
 
-const csvWithBadLongitude string = `devEUI;internalID;lat;lon;where;types
-a81758fffe051d00;intern-a81758fffe051d00;0.0;gurka;air;urn:oma:lwm2m:ext:3303`
+const csvWithBadLongitude string = `devEUI;internalID;lat;lon;where;types;sensorType
+a81758fffe051d00;intern-a81758fffe051d00;0.0;gurka;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
 
-const csvWithBadEnvironment string = `devEUI;internalID;lat;lon;where;types
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;gurka;urn:oma:lwm2m:ext:3303`
+const csvWithBadEnvironment string = `devEUI;internalID;lat;lon;where;types;sensorType
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;gurka;urn:oma:lwm2m:ext:3303;Elsys_Codec`

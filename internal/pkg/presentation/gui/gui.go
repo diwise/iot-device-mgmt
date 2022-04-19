@@ -3,6 +3,8 @@ package gui
 import (
 	"html/template"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -16,7 +18,9 @@ var tracer = otel.Tracer("iot-device-mgmt/gui")
 
 func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
 
-	filesDir := http.Dir("/Users/micke/Code/diwise/iot-device-mgmt/wwwroot")
+	wwwroot := os.Getenv("GUI_WEB_ROOT")
+
+	filesDir := http.Dir(wwwroot)
 	FileServer(router, "/", filesDir)
 
 	router.Get("/gui", NewGuiHandler(log, app))
@@ -26,9 +30,11 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.Devic
 
 func NewGuiHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 
+	tmplDir := os.Getenv("GUI_TMPL_DIR")
+
 	return func(w http.ResponseWriter, r *http.Request) {
 		t := template.New("index.html")
-		t, err := t.ParseFiles("/Users/micke/Code/diwise/iot-device-mgmt/assets/templates/index.html")
+		t, err := t.ParseFiles(filepath.Join(tmplDir, "index.html"))
 	
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
