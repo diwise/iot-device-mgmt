@@ -19,6 +19,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.Devic
 
 	router.Get("/health", NewHealthHandler(log, app))
 	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))
+	router.Post("/api/v0/devices", NewRegisterNewDeviceHandler(log, app))
 	router.Get("/api/v0/devices/{id}", NewRetrieveDeviceHandler(log, app))
 
 	return router
@@ -119,5 +120,52 @@ func NewRetrieveDeviceHandler(log zerolog.Logger, app application.DeviceManageme
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(bytes)
+	}
+}
+func NewRegisterNewDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		ctx := r.Context()
+
+		ctx, span := tracer.Start(ctx, "register-new-device")
+		defer func() {
+			if err != nil {
+				span.RecordError(err)
+			}
+			span.End()
+		}()
+
+		requestLogger := log
+
+		traceID := span.SpanContext().TraceID()
+		if traceID.IsValid() {
+			requestLogger = requestLogger.With().Str("traceID", traceID.String()).Logger()
+		}
+
+		ctx = logging.NewContextWithLogger(ctx, requestLogger)
+
+		// TODO:
+		// unmarshal request body
+		// create new device
+		// register new device in repository
+		// return new device
+
+		d := struct {
+			DevEUI      string   `json:"devEUI"`
+			Latitude    float64  `json:"latitude"`
+			Longitude   float64  `json:"longitude"`
+			Environment string   `json:"environment"`
+			Types       []string `json:"types"`
+			SensorType  string   `json:"sensorType"`
+		}{}
+
+		err = json.NewDecoder(r.Body).Decode(&d)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
 	}
 }
