@@ -17,6 +17,9 @@ var _ Datastore = &DatastoreMock{}
 //
 // 		// make and configure a mocked Datastore
 // 		mockedDatastore := &DatastoreMock{
+// 			GetAllFunc: func() ([]Device, error) {
+// 				panic("mock out the GetAll method")
+// 			},
 // 			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
 // 				panic("mock out the GetDeviceFromDevEUI method")
 // 			},
@@ -30,6 +33,9 @@ var _ Datastore = &DatastoreMock{}
 //
 // 	}
 type DatastoreMock struct {
+	// GetAllFunc mocks the GetAll method.
+	GetAllFunc func() ([]Device, error)
+
 	// GetDeviceFromDevEUIFunc mocks the GetDeviceFromDevEUI method.
 	GetDeviceFromDevEUIFunc func(eui string) (Device, error)
 
@@ -38,6 +44,9 @@ type DatastoreMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// GetAll holds details about calls to the GetAll method.
+		GetAll []struct {
+		}
 		// GetDeviceFromDevEUI holds details about calls to the GetDeviceFromDevEUI method.
 		GetDeviceFromDevEUI []struct {
 			// Eui is the eui argument value.
@@ -49,8 +58,35 @@ type DatastoreMock struct {
 			DeviceID string
 		}
 	}
+	lockGetAll              sync.RWMutex
 	lockGetDeviceFromDevEUI sync.RWMutex
 	lockGetDeviceFromID     sync.RWMutex
+}
+
+// GetAll calls GetAllFunc.
+func (mock *DatastoreMock) GetAll() ([]Device, error) {
+	if mock.GetAllFunc == nil {
+		panic("DatastoreMock.GetAllFunc: method is nil but Datastore.GetAll was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockGetAll.Lock()
+	mock.calls.GetAll = append(mock.calls.GetAll, callInfo)
+	mock.lockGetAll.Unlock()
+	return mock.GetAllFunc()
+}
+
+// GetAllCalls gets all the calls that were made to GetAll.
+// Check the length with:
+//     len(mockedDatastore.GetAllCalls())
+func (mock *DatastoreMock) GetAllCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockGetAll.RLock()
+	calls = mock.calls.GetAll
+	mock.lockGetAll.RUnlock()
+	return calls
 }
 
 // GetDeviceFromDevEUI calls GetDeviceFromDevEUIFunc.

@@ -18,7 +18,7 @@ var tracer = otel.Tracer("iot-device-mgmt/api")
 func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
 
 	router.Get("/health", NewHealthHandler(log, app))
-	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))
+	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))	
 	router.Get("/api/v0/devices/{id}", NewRetrieveDeviceHandler(log, app))
 
 	return router

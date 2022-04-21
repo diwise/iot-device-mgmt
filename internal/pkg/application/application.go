@@ -9,6 +9,7 @@ import (
 type DeviceManagement interface {
 	GetDevice(context.Context, string) (database.Device, error)
 	GetDeviceFromEUI(context.Context, string) (database.Device, error)
+	ListAllDevices(ctx context.Context) ([]database.Device, error)
 }
 
 func New(db database.Datastore) DeviceManagement {
@@ -39,4 +40,13 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (database.Dev
 	}
 
 	return device, nil
+}
+
+func (a *app) ListAllDevices(ctx context.Context) ([]database.Device, error) {
+	devices, err := a.db.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	return devices, nil
 }
