@@ -41,7 +41,7 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 	// Create a set of allowed environments from a slice of allowed envs so that
 	// we can validate and provide helpful diagnostics if config is wrong
-	allowedEnvironments := []string{"air", "ground", "water", "indoors"}
+	allowedEnvironments := []string{"air", "ground", "water", "indoors", "lifebuoy"}
 	setOfAllowedEnvironments := map[string]bool{}
 	for _, env := range allowedEnvironments {
 		setOfAllowedEnvironments[env] = true
