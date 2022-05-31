@@ -58,7 +58,7 @@ func NewQueryDevicesHandler(log zerolog.Logger, app application.DeviceManagement
 				return
 			}
 			deviceArray = append(deviceArray, devices...)
-			requestLogger.Info().Msgf("returning information about %s devices", len(devices))
+			requestLogger.Info().Msgf("returning information about %d devices", len(devices))
 		} else {
 			device, err := app.GetDeviceFromEUI(ctx, devEUI)
 			if err != nil {
