@@ -18,7 +18,7 @@ var tracer = otel.Tracer("iot-device-mgmt/api")
 func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
 
 	router.Get("/health", NewHealthHandler(log, app))
-	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))	
+	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))
 	router.Get("/api/v0/devices/{id}", NewRetrieveDeviceHandler(log, app))
 
 	return router
@@ -47,29 +47,35 @@ func NewQueryDevicesHandler(log zerolog.Logger, app application.DeviceManagement
 
 		ctx = logging.NewContextWithLogger(ctx, requestLogger)
 
+		deviceArray := []database.Device{}
+
 		devEUI := r.URL.Query().Get("devEUI")
 		if devEUI == "" {
-			w.WriteHeader(http.StatusBadRequest)
-			w.Write([]byte("query only supported from devEUI at this point"))
-			return
+			devices, err := app.ListAllDevices(ctx)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to fetch all devices")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			deviceArray = append(deviceArray, devices...)
+			requestLogger.Info().Msgf("returning information about %d devices", len(devices))
+		} else {
+			device, err := app.GetDeviceFromEUI(ctx, devEUI)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("device not found")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			deviceArray = append(deviceArray, device)
+			requestLogger.Info().Msgf("returning information about device %s", device.ID())
 		}
 
-		device, err := app.GetDeviceFromEUI(ctx, devEUI)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("device not found")
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		deviceArray := []database.Device{device}
 		bytes, err := json.Marshal(&deviceArray)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to marshal device to json")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		requestLogger.Info().Msgf("returning information about device %s", device.ID())
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
