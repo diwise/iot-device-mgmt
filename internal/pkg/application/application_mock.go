@@ -7,6 +7,7 @@ import (
 	"context"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"sync"
+	"time"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -28,6 +29,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			ListAllDevicesFunc: func(ctx context.Context) ([]database.Device, error) {
 // 				panic("mock out the ListAllDevices method")
 // 			},
+// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) (database.Device, error) {
+// 				panic("mock out the UpdateLastObservedOnDevice method")
+// 			},
 // 		}
 //
 // 		// use mockedDeviceManagement in code that requires DeviceManagement
@@ -43,6 +47,9 @@ type DeviceManagementMock struct {
 
 	// ListAllDevicesFunc mocks the ListAllDevices method.
 	ListAllDevicesFunc func(ctx context.Context) ([]database.Device, error)
+
+	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
+	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) (database.Device, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -65,10 +72,18 @@ type DeviceManagementMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
+		// UpdateLastObservedOnDevice holds details about calls to the UpdateLastObservedOnDevice method.
+		UpdateLastObservedOnDevice []struct {
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Timestamp is the timestamp argument value.
+			Timestamp time.Time
+		}
 	}
-	lockGetDevice        sync.RWMutex
-	lockGetDeviceFromEUI sync.RWMutex
-	lockListAllDevices   sync.RWMutex
+	lockGetDevice                  sync.RWMutex
+	lockGetDeviceFromEUI           sync.RWMutex
+	lockListAllDevices             sync.RWMutex
+	lockUpdateLastObservedOnDevice sync.RWMutex
 }
 
 // GetDevice calls GetDeviceFunc.
@@ -169,5 +184,40 @@ func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
 	mock.lockListAllDevices.RLock()
 	calls = mock.calls.ListAllDevices
 	mock.lockListAllDevices.RUnlock()
+	return calls
+}
+
+// UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
+func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (database.Device, error) {
+	if mock.UpdateLastObservedOnDeviceFunc == nil {
+		panic("DeviceManagementMock.UpdateLastObservedOnDeviceFunc: method is nil but DeviceManagement.UpdateLastObservedOnDevice was just called")
+	}
+	callInfo := struct {
+		DeviceID  string
+		Timestamp time.Time
+	}{
+		DeviceID:  deviceID,
+		Timestamp: timestamp,
+	}
+	mock.lockUpdateLastObservedOnDevice.Lock()
+	mock.calls.UpdateLastObservedOnDevice = append(mock.calls.UpdateLastObservedOnDevice, callInfo)
+	mock.lockUpdateLastObservedOnDevice.Unlock()
+	return mock.UpdateLastObservedOnDeviceFunc(deviceID, timestamp)
+}
+
+// UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
+// Check the length with:
+//     len(mockedDeviceManagement.UpdateLastObservedOnDeviceCalls())
+func (mock *DeviceManagementMock) UpdateLastObservedOnDeviceCalls() []struct {
+	DeviceID  string
+	Timestamp time.Time
+} {
+	var calls []struct {
+		DeviceID  string
+		Timestamp time.Time
+	}
+	mock.lockUpdateLastObservedOnDevice.RLock()
+	calls = mock.calls.UpdateLastObservedOnDevice
+	mock.lockUpdateLastObservedOnDevice.RUnlock()
 	return calls
 }
