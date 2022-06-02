@@ -126,7 +126,7 @@ func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
 
 func (db *database) GetAll() ([]Device, error) {
 	var devices []Device
-	for _, v := range db.devicesByEUI {
+	for _, v := range db.devicesByID {
 		devices = append(devices, v)
 	}
 	return devices, nil
@@ -144,7 +144,8 @@ func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.T
 	}
 
 	if device.LastObserved.After(timestamp) {
-		return nil, fmt.Errorf("lastObserved %s is more recent than incoming time: %s", device.LastObserved.Format(time.RFC3339), timestamp.Format(time.RFC3339))
+		db.log.Info().Msgf("lastObserved %s is more recent than incoming time %s, ignoring", device.LastObserved.Format(time.RFC3339), timestamp.Format(time.RFC3339))
+		return nil, nil
 	}
 
 	return device, nil

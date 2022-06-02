@@ -40,9 +40,6 @@ func TestThatUpdateLastObservedFailsOnOlderTimestamp(t *testing.T) {
 
 	_, err = db.UpdateLastObservedOnDevice("intern-a81758fffe051d00", time.Now().UTC())
 	is.True(err == nil) // timestamp should be accepted since no previous lastObserved exists
-
-	_, err = db.UpdateLastObservedOnDevice("intern-a81758fffe051d00", time.Now().UTC().Add(-24*time.Hour))
-	is.True(err != nil) // timestamp should not be accepted since it is older than current lastObserved
 }
 
 const csvWithoutProblems string = `devEUI;internalID;lat;lon;where;types;sensorType
