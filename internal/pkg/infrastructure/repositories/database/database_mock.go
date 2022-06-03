@@ -27,7 +27,7 @@ var _ Datastore = &DatastoreMock{}
 // 			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
 // 				panic("mock out the GetDeviceFromID method")
 // 			},
-// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) (Device, error) {
+// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
 // 				panic("mock out the UpdateLastObservedOnDevice method")
 // 			},
 // 		}
@@ -47,7 +47,7 @@ type DatastoreMock struct {
 	GetDeviceFromIDFunc func(deviceID string) (Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
-	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) (Device, error)
+	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -167,7 +167,7 @@ func (mock *DatastoreMock) GetDeviceFromIDCalls() []struct {
 }
 
 // UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
-func (mock *DatastoreMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (Device, error) {
+func (mock *DatastoreMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
 	if mock.UpdateLastObservedOnDeviceFunc == nil {
 		panic("DatastoreMock.UpdateLastObservedOnDeviceFunc: method is nil but Datastore.UpdateLastObservedOnDevice was just called")
 	}

@@ -15,7 +15,6 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/gui"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/go-chi/chi/v5"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -48,7 +47,6 @@ func main() {
 
 	config := messaging.LoadConfiguration(serviceName, logger)
 	messenger, err := messaging.Initialize(config)
-
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to init messenger")
 	}
@@ -63,7 +61,6 @@ func main() {
 
 func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-
 		logger.Info().Str("body", string(msg.Body)).Msg("received message")
 
 		statusMessage := struct {
@@ -81,7 +78,7 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 			logger.Error().Err(err).Msg("failed to parse time from status message")
 		}
 
-		_, err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
+		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
 		}
@@ -111,9 +108,7 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
 
 	r := router.New(serviceName)
-
-	r = gui.RegisterHandlers(logger, r, app)
-
+	
 	return api.RegisterHandlers(logger, r, app)
 }
 

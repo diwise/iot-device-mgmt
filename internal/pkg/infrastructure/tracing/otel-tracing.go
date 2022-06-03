@@ -18,7 +18,6 @@ import (
 type CleanupFunc func()
 
 func Init(ctx context.Context, logger zerolog.Logger, serviceName, serviceVersion string) (CleanupFunc, error) {
-
 	exporterEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT")
 	cleanupFunc := func() {}
 

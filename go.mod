@@ -9,14 +9,13 @@ require (
 	github.com/riandyrn/otelchi v0.4.0
 	github.com/rs/cors v1.8.2
 	github.com/rs/zerolog v1.26.1
-	github.com/streadway/amqp v1.0.0
 	go.opentelemetry.io/otel v1.6.3
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.6.3
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.6.3
 	go.opentelemetry.io/otel/sdk v1.6.3
 )
 
-require github.com/rabbitmq/amqp091-go v1.3.2 // indirect
+require github.com/rabbitmq/amqp091-go v1.3.2
 
 require (
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect

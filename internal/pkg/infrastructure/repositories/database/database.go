@@ -16,7 +16,7 @@ import (
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
 	GetDeviceFromID(deviceID string) (Device, error)
-	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (Device, error)
+	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	GetAll() ([]Device, error)
 }
 
@@ -105,7 +105,6 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 }
 
 func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
-
 	device, ok := db.devicesByEUI[eui]
 	if !ok {
 		return nil, fmt.Errorf("no matching devices found with devEUI %s", eui)
@@ -115,7 +114,6 @@ func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
 }
 
 func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
-
 	device, ok := db.devicesByID[deviceID]
 	if !ok {
 		return nil, fmt.Errorf("no matching devices found with id %s", deviceID)
@@ -132,23 +130,20 @@ func (db *database) GetAll() ([]Device, error) {
 	return devices, nil
 }
 
-func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (Device, error) {
+func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
 	device, ok := db.devicesByID[deviceID]
 	if !ok {
-		return nil, fmt.Errorf("no matching devices found with id %s", deviceID)
-	}
-
-	if device.LastObserved.IsZero() {
-		device.LastObserved = timestamp
-		return device, nil
+		return fmt.Errorf("no matching devices found with id %s", deviceID)
 	}
 
 	if device.LastObserved.After(timestamp) {
 		db.log.Info().Msgf("lastObserved %s is more recent than incoming time %s, ignoring", device.LastObserved.Format(time.RFC3339), timestamp.Format(time.RFC3339))
-		return nil, nil
+		return nil
 	}
 
-	return device, nil
+	device.LastObserved = timestamp
+
+	return nil
 }
 
 type Device interface {

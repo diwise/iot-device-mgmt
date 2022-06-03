@@ -29,7 +29,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			ListAllDevicesFunc: func(ctx context.Context) ([]database.Device, error) {
 // 				panic("mock out the ListAllDevices method")
 // 			},
-// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) (database.Device, error) {
+// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
 // 				panic("mock out the UpdateLastObservedOnDevice method")
 // 			},
 // 		}
@@ -49,7 +49,7 @@ type DeviceManagementMock struct {
 	ListAllDevicesFunc func(ctx context.Context) ([]database.Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
-	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) (database.Device, error)
+	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -188,7 +188,7 @@ func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
 }
 
 // UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
-func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (database.Device, error) {
+func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
 	if mock.UpdateLastObservedOnDeviceFunc == nil {
 		panic("DeviceManagementMock.UpdateLastObservedOnDeviceFunc: method is nil but DeviceManagement.UpdateLastObservedOnDevice was just called")
 	}

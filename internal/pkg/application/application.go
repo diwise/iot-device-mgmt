@@ -7,11 +7,13 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 )
 
+//go:generate moq -rm -out application_mock.go . DeviceManagement
+
 type DeviceManagement interface {
 	GetDevice(context.Context, string) (database.Device, error)
 	GetDeviceFromEUI(context.Context, string) (database.Device, error)
 	ListAllDevices(ctx context.Context) ([]database.Device, error)
-	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (database.Device, error)
+	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 }
 
 func New(db database.Datastore) DeviceManagement {
@@ -53,11 +55,11 @@ func (a *app) ListAllDevices(ctx context.Context) ([]database.Device, error) {
 	return devices, nil
 }
 
-func (a *app) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) (database.Device, error) {
-	device, err := a.db.UpdateLastObservedOnDevice(deviceID, timestamp)
+func (a *app) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+	err := a.db.UpdateLastObservedOnDevice(deviceID, timestamp)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return device, nil
+	return nil
 }

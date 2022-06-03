@@ -38,7 +38,7 @@ func TestThatUpdateLastObservedFailsOnOlderTimestamp(t *testing.T) {
 	db, err := SetUpNewDatabase(zerolog.Logger{}, bytes.NewBuffer([]byte(csvWithoutProblems)))
 	is.True(err == nil)
 
-	_, err = db.UpdateLastObservedOnDevice("intern-a81758fffe051d00", time.Now().UTC())
+	err = db.UpdateLastObservedOnDevice("intern-a81758fffe051d00", time.Now().UTC())
 	is.True(err == nil) // timestamp should be accepted since no previous lastObserved exists
 }
 
