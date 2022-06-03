@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -29,12 +28,10 @@ func main() {
 	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	logger.Info().Msg("starting up ...")
-
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
 	flag.Parse()
 
-	db, err := setupDatabase(logger, devicesFilePath)
+	db, err := database.New(logger, devicesFilePath)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to start database")
 	}
@@ -77,22 +74,6 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 			logger.Error().Err(err).Msg("failed to handle accepted message")
 		}
 	}
-}
-
-func setupDatabase(logger zerolog.Logger, filePath string) (database.Datastore, error) {
-	devicesFile, err := os.Open(filePath)
-	if err != nil {
-		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", filePath)
-	}
-
-	defer devicesFile.Close()
-
-	db, err := database.SetUpNewDatabase(logger, devicesFile)
-	if err != nil {
-		return nil, err
-	}
-
-	return db, nil
 }
 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext) *chi.Mux {

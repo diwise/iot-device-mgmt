@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -24,6 +25,17 @@ type database struct {
 	log          zerolog.Logger
 	devicesByEUI map[string]*device
 	devicesByID  map[string]*device
+}
+
+func New(logger zerolog.Logger, filePath string) (Datastore, error) {
+	devicesFile, err := os.Open(filePath)
+	if err != nil {
+		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", filePath)
+	}
+
+	defer devicesFile.Close()
+
+	return SetUpNewDatabase(logger, devicesFile)
 }
 
 func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
