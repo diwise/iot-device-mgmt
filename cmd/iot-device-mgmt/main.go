@@ -6,16 +6,15 @@ import (
 	"flag"
 	"net/http"
 	"os"
-	"runtime/debug"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/logging"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/go-chi/chi/v5"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
@@ -26,19 +25,14 @@ const serviceName string = "iot-device-mgmt"
 var devicesFilePath string
 
 func main() {
-	serviceVersion := version()
+	serviceVersion := buildinfo.SourceVersion()
+	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
+	defer cleanup()
 
-	ctx, logger := logging.NewLogger(context.Background(), serviceName, serviceVersion)
 	logger.Info().Msg("starting up ...")
 
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
 	flag.Parse()
-
-	cleanup, err := tracing.Init(ctx, logger, serviceName, serviceVersion)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to init tracing")
-	}
-	defer cleanup()
 
 	db, err := setupDatabase(logger, devicesFilePath)
 	if err != nil {
@@ -108,26 +102,6 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
 
 	r := router.New(serviceName)
-	
+
 	return api.RegisterHandlers(logger, r, app)
-}
-
-func version() string {
-	buildInfo, ok := debug.ReadBuildInfo()
-	if !ok {
-		return "unknown"
-	}
-
-	buildSettings := buildInfo.Settings
-	infoMap := map[string]string{}
-	for _, s := range buildSettings {
-		infoMap[s.Key] = s.Value
-	}
-
-	sha := infoMap["vcs.revision"]
-	if infoMap["vcs.modified"] == "true" {
-		sha += "+"
-	}
-
-	return sha
 }
