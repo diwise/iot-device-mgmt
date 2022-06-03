@@ -5,9 +5,9 @@ import (
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/logging"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/tracing"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
@@ -16,7 +16,6 @@ import (
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
 func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
-
 	router.Get("/health", NewHealthHandler(log, app))
 	router.Get("/api/v0/devices", NewQueryDevicesHandler(log, app))
 	router.Get("/api/v0/devices/{id}", NewRetrieveDeviceHandler(log, app))
@@ -33,9 +32,8 @@ func NewHealthHandler(log zerolog.Logger, app application.DeviceManagement) http
 func NewQueryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx := r.Context()
 
-		ctx, span := tracer.Start(ctx, "query-devices")
+		ctx, span := tracer.Start(r.Context(), "query-devices")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 		requestLogger := log
@@ -86,15 +84,9 @@ func NewQueryDevicesHandler(log zerolog.Logger, app application.DeviceManagement
 func NewRetrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx := r.Context()
 
-		ctx, span := tracer.Start(ctx, "get-device")
-		defer func() {
-			if err != nil {
-				span.RecordError(err)
-			}
-			span.End()
-		}()
+		ctx, span := tracer.Start(r.Context(), "get-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 		requestLogger := log
 

@@ -4,8 +4,10 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 )
@@ -15,6 +17,7 @@ import (
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
 	GetDeviceFromID(deviceID string) (Device, error)
+	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	GetAll() ([]Device, error)
 }
 
@@ -22,6 +25,17 @@ type database struct {
 	log          zerolog.Logger
 	devicesByEUI map[string]*device
 	devicesByID  map[string]*device
+}
+
+func New(logger zerolog.Logger, filePath string) (Datastore, error) {
+	devicesFile, err := os.Open(filePath)
+	if err != nil {
+		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", filePath)
+	}
+
+	defer devicesFile.Close()
+
+	return SetUpNewDatabase(logger, devicesFile)
 }
 
 func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
@@ -56,12 +70,12 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 		devEUI := d[0]
 		deviceID := d[1]
 
-		dev, ok := db.devicesByEUI[devEUI]
+		_, ok := db.devicesByEUI[devEUI]
 		if ok {
 			return nil, fmt.Errorf("duplicate devEUI %s found on line %d in devices config", devEUI, (idx + 1))
 		}
 
-		dev, ok = db.devicesByID[deviceID]
+		_, ok = db.devicesByID[deviceID]
 		if ok {
 			return nil, fmt.Errorf("duplicate device id %s found on line %d in devices config", deviceID, (idx + 1))
 		}
@@ -84,7 +98,7 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		sensorType := d[6]
 
-		dev = &device{
+		dev := &device{
 			Identity:    d[1],
 			Latitude:    lat,
 			Longitude:   lon,
@@ -103,7 +117,6 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 }
 
 func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
-
 	device, ok := db.devicesByEUI[eui]
 	if !ok {
 		return nil, fmt.Errorf("no matching devices found with devEUI %s", eui)
@@ -113,7 +126,6 @@ func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
 }
 
 func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
-
 	device, ok := db.devicesByID[deviceID]
 	if !ok {
 		return nil, fmt.Errorf("no matching devices found with id %s", deviceID)
@@ -124,10 +136,26 @@ func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
 
 func (db *database) GetAll() ([]Device, error) {
 	var devices []Device
-	for _, v := range db.devicesByEUI {
+	for _, v := range db.devicesByID {
 		devices = append(devices, v)
 	}
 	return devices, nil
+}
+
+func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+	device, ok := db.devicesByID[deviceID]
+	if !ok {
+		return fmt.Errorf("no matching devices found with id %s", deviceID)
+	}
+
+	if device.LastObserved.After(timestamp) {
+		db.log.Info().Msgf("lastObserved %s is more recent than incoming time %s, ignoring", device.LastObserved.Format(time.RFC3339), timestamp.Format(time.RFC3339))
+		return nil
+	}
+
+	device.LastObserved = timestamp
+
+	return nil
 }
 
 type Device interface {
@@ -135,12 +163,13 @@ type Device interface {
 }
 
 type device struct {
-	Identity    string   `json:"id"`
-	Latitude    float64  `json:"latitude"`
-	Longitude   float64  `json:"longitude"`
-	Environment string   `json:"environment"`
-	Types       []string `json:"types"`
-	SensorType  string   `json:"sensorType"`
+	Identity     string    `json:"id"`
+	Latitude     float64   `json:"latitude"`
+	Longitude    float64   `json:"longitude"`
+	Environment  string    `json:"environment"`
+	Types        []string  `json:"types"`
+	SensorType   string    `json:"sensorType"`
+	LastObserved time.Time `json:"lastObserved"`
 }
 
 func (d device) ID() string {

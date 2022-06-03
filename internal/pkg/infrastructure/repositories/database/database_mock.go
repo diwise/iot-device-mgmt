@@ -5,6 +5,7 @@ package database
 
 import (
 	"sync"
+	"time"
 )
 
 // Ensure, that DatastoreMock does implement Datastore.
@@ -26,6 +27,9 @@ var _ Datastore = &DatastoreMock{}
 // 			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
 // 				panic("mock out the GetDeviceFromID method")
 // 			},
+// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
+// 				panic("mock out the UpdateLastObservedOnDevice method")
+// 			},
 // 		}
 //
 // 		// use mockedDatastore in code that requires Datastore
@@ -42,6 +46,9 @@ type DatastoreMock struct {
 	// GetDeviceFromIDFunc mocks the GetDeviceFromID method.
 	GetDeviceFromIDFunc func(deviceID string) (Device, error)
 
+	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
+	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
+
 	// calls tracks calls to the methods.
 	calls struct {
 		// GetAll holds details about calls to the GetAll method.
@@ -57,10 +64,18 @@ type DatastoreMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 		}
+		// UpdateLastObservedOnDevice holds details about calls to the UpdateLastObservedOnDevice method.
+		UpdateLastObservedOnDevice []struct {
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Timestamp is the timestamp argument value.
+			Timestamp time.Time
+		}
 	}
-	lockGetAll              sync.RWMutex
-	lockGetDeviceFromDevEUI sync.RWMutex
-	lockGetDeviceFromID     sync.RWMutex
+	lockGetAll                     sync.RWMutex
+	lockGetDeviceFromDevEUI        sync.RWMutex
+	lockGetDeviceFromID            sync.RWMutex
+	lockUpdateLastObservedOnDevice sync.RWMutex
 }
 
 // GetAll calls GetAllFunc.
@@ -148,5 +163,40 @@ func (mock *DatastoreMock) GetDeviceFromIDCalls() []struct {
 	mock.lockGetDeviceFromID.RLock()
 	calls = mock.calls.GetDeviceFromID
 	mock.lockGetDeviceFromID.RUnlock()
+	return calls
+}
+
+// UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
+func (mock *DatastoreMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+	if mock.UpdateLastObservedOnDeviceFunc == nil {
+		panic("DatastoreMock.UpdateLastObservedOnDeviceFunc: method is nil but Datastore.UpdateLastObservedOnDevice was just called")
+	}
+	callInfo := struct {
+		DeviceID  string
+		Timestamp time.Time
+	}{
+		DeviceID:  deviceID,
+		Timestamp: timestamp,
+	}
+	mock.lockUpdateLastObservedOnDevice.Lock()
+	mock.calls.UpdateLastObservedOnDevice = append(mock.calls.UpdateLastObservedOnDevice, callInfo)
+	mock.lockUpdateLastObservedOnDevice.Unlock()
+	return mock.UpdateLastObservedOnDeviceFunc(deviceID, timestamp)
+}
+
+// UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
+// Check the length with:
+//     len(mockedDatastore.UpdateLastObservedOnDeviceCalls())
+func (mock *DatastoreMock) UpdateLastObservedOnDeviceCalls() []struct {
+	DeviceID  string
+	Timestamp time.Time
+} {
+	var calls []struct {
+		DeviceID  string
+		Timestamp time.Time
+	}
+	mock.lockUpdateLastObservedOnDevice.RLock()
+	calls = mock.calls.UpdateLastObservedOnDevice
+	mock.lockUpdateLastObservedOnDevice.RUnlock()
 	return calls
 }

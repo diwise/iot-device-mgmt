@@ -3,6 +3,7 @@ package database
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
@@ -31,6 +32,18 @@ func TestThatLoadFailsOnBadEnvironment(t *testing.T) {
 	_, err := SetUpNewDatabase(zerolog.Logger{}, bytes.NewBuffer([]byte(csvWithBadEnvironment)))
 	is.True(err != nil)
 }
+
+func TestThatUpdateLastObservedFailsOnOlderTimestamp(t *testing.T) {
+	is := is.New(t)
+	db, err := SetUpNewDatabase(zerolog.Logger{}, bytes.NewBuffer([]byte(csvWithoutProblems)))
+	is.True(err == nil)
+
+	err = db.UpdateLastObservedOnDevice("intern-a81758fffe051d00", time.Now().UTC())
+	is.True(err == nil) // timestamp should be accepted since no previous lastObserved exists
+}
+
+const csvWithoutProblems string = `devEUI;internalID;lat;lon;where;types;sensorType
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
 
 const csvWithDuplicates string = `devEUI;internalID;lat;lon;where;types;sensorType
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec
