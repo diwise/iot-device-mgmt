@@ -98,13 +98,25 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		sensorType := d[6]
 
+		name := d[7]
+
+		description := d[8]
+
+		active, err := strconv.ParseBool(d[9])
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse active for device %s: %s", devEUI, err.Error())
+		}
+
 		dev := &device{
 			Identity:    d[1],
+			Name: name,
+			Description: description,
 			Latitude:    lat,
 			Longitude:   lon,
 			Environment: environment,
 			Types:       types,
 			SensorType:  sensorType,
+			Active: active,
 		}
 
 		db.devicesByEUI[devEUI] = dev
@@ -164,12 +176,15 @@ type Device interface {
 
 type device struct {
 	Identity     string    `json:"id"`
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
 	Latitude     float64   `json:"latitude"`
 	Longitude    float64   `json:"longitude"`
 	Environment  string    `json:"environment"`
 	Types        []string  `json:"types"`
 	SensorType   string    `json:"sensorType"`
 	LastObserved time.Time `json:"lastObserved"`
+	Active       bool      `json:"active"`
 }
 
 func (d device) ID() string {
