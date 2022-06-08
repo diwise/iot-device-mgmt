@@ -25,6 +25,7 @@ type database struct {
 	log          zerolog.Logger
 	devicesByEUI map[string]*device
 	devicesByID  map[string]*device
+	keys         []string
 }
 
 func New(logger zerolog.Logger, filePath string) (Datastore, error) {
@@ -109,18 +110,19 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		dev := &device{
 			Identity:    d[1],
-			Name: name,
+			Name:        name,
 			Description: description,
 			Latitude:    lat,
 			Longitude:   lon,
 			Environment: environment,
 			Types:       types,
 			SensorType:  sensorType,
-			Active: active,
+			Active:      active,
 		}
 
 		db.devicesByEUI[devEUI] = dev
 		db.devicesByID[deviceID] = dev
+		db.keys = append(db.keys, deviceID)
 	}
 
 	db.log.Info().Msgf("loaded %d devices from configuration file", len(db.devicesByEUI))
@@ -147,11 +149,13 @@ func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
 }
 
 func (db *database) GetAll() ([]Device, error) {
-	var devices []Device
-	for _, v := range db.devicesByID {
-		devices = append(devices, v)
+	s := make([]Device, len(db.devicesByID))
+
+	for idx, k := range db.keys {
+		s[idx] = db.devicesByID[k]
 	}
-	return devices, nil
+
+	return s, nil
 }
 
 func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
