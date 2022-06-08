@@ -42,18 +42,18 @@ func TestThatUpdateLastObservedFailsOnOlderTimestamp(t *testing.T) {
 	is.True(err == nil) // timestamp should be accepted since no previous lastObserved exists
 }
 
-const csvWithoutProblems string = `devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
+const csvWithoutProblems string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true`
 
-const csvWithDuplicates string = `devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec
-a81758fffe051d00;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec`
+const csvWithDuplicates string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true
+a81758fffe051d00;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true`
 
-const csvWithBadLatitude string = `devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe051d00;intern-a81758fffe051d00;gurka;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
+const csvWithBadLatitude string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe051d00;intern-a81758fffe051d00;gurka;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true`
 
-const csvWithBadLongitude string = `devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe051d00;intern-a81758fffe051d00;0.0;gurka;air;urn:oma:lwm2m:ext:3303;Elsys_Codec`
+const csvWithBadLongitude string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe051d00;intern-a81758fffe051d00;0.0;gurka;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true`
 
-const csvWithBadEnvironment string = `devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;gurka;urn:oma:lwm2m:ext:3303;Elsys_Codec`
+const csvWithBadEnvironment string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;gurka;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true`

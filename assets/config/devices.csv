@@ -1,3 +1,3 @@
-devEUI;internalID;lat;lon;where;types;sensorType
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec
-a81758fffe05e6fb;intern-a81758fffe05e6fb;62.39160;17.30723;indoors;urn:oma:lwm2m:ext:3428;Elsys_Codec
+devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true
+a81758fffe05e6fb;intern-a81758fffe05e6fb;62.39160;17.30723;indoors;urn:oma:lwm2m:ext:3428;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true
