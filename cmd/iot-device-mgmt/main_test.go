@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -62,7 +61,7 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
-	db, err := database.SetUpNewDatabase(log, bytes.NewBuffer([]byte(csvMock)))
+	db, err := database.ConnectDb("")
 	is.NoErr(err)
 	app := application.New(db)
 	router := router.New("testService")

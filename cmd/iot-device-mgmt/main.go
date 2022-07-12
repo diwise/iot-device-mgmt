@@ -13,6 +13,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
+	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/go-chi/chi/v5"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -31,10 +32,14 @@ func main() {
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
 	flag.Parse()
 
-	db, err := database.New(logger, devicesFilePath)
+	dsn := env.GetVariableOrDie(logger, "POSTGRE_DSN", "DSN for postgre database")
+
+	db, err := database.ConnectDb(dsn)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to start database")
+		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
+
+	db.Seed(devicesFilePath)
 
 	config := messaging.LoadConfiguration(serviceName, logger)
 	messenger, err := messaging.Initialize(config)
