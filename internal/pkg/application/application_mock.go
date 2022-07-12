@@ -5,7 +5,6 @@ package application
 
 import (
 	"context"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"sync"
 	"time"
 )
@@ -20,14 +19,23 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 // 		// make and configure a mocked DeviceManagement
 // 		mockedDeviceManagement := &DeviceManagementMock{
-// 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (database.Device, error) {
+// 			CreateDeviceFunc: func(contextMoqParam context.Context, device Device) error {
+// 				panic("mock out the CreateDevice method")
+// 			},
+// 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (Device, error) {
 // 				panic("mock out the GetDevice method")
 // 			},
-// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (database.Device, error) {
+// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (Device, error) {
 // 				panic("mock out the GetDeviceFromEUI method")
 // 			},
-// 			ListAllDevicesFunc: func(ctx context.Context) ([]database.Device, error) {
+// 			ListAllDevicesFunc: func(contextMoqParam context.Context) ([]Device, error) {
 // 				panic("mock out the ListAllDevices method")
+// 			},
+// 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
+// 				panic("mock out the ListEnvironments method")
+// 			},
+// 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+// 				panic("mock out the UpdateDevice method")
 // 			},
 // 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
 // 				panic("mock out the UpdateLastObservedOnDevice method")
@@ -39,20 +47,36 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 // 	}
 type DeviceManagementMock struct {
+	// CreateDeviceFunc mocks the CreateDevice method.
+	CreateDeviceFunc func(contextMoqParam context.Context, device Device) error
+
 	// GetDeviceFunc mocks the GetDevice method.
-	GetDeviceFunc func(contextMoqParam context.Context, s string) (database.Device, error)
+	GetDeviceFunc func(contextMoqParam context.Context, s string) (Device, error)
 
 	// GetDeviceFromEUIFunc mocks the GetDeviceFromEUI method.
-	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (database.Device, error)
+	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (Device, error)
 
 	// ListAllDevicesFunc mocks the ListAllDevices method.
-	ListAllDevicesFunc func(ctx context.Context) ([]database.Device, error)
+	ListAllDevicesFunc func(contextMoqParam context.Context) ([]Device, error)
+
+	// ListEnvironmentsFunc mocks the ListEnvironments method.
+	ListEnvironmentsFunc func(contextMoqParam context.Context) ([]Environment, error)
+
+	// UpdateDeviceFunc mocks the UpdateDevice method.
+	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
 	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// CreateDevice holds details about calls to the CreateDevice method.
+		CreateDevice []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+			// Device is the device argument value.
+			Device Device
+		}
 		// GetDevice holds details about calls to the GetDevice method.
 		GetDevice []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
@@ -69,8 +93,22 @@ type DeviceManagementMock struct {
 		}
 		// ListAllDevices holds details about calls to the ListAllDevices method.
 		ListAllDevices []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+		}
+		// ListEnvironments holds details about calls to the ListEnvironments method.
+		ListEnvironments []struct {
+			// ContextMoqParam is the contextMoqParam argument value.
+			ContextMoqParam context.Context
+		}
+		// UpdateDevice holds details about calls to the UpdateDevice method.
+		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Fields is the fields argument value.
+			Fields map[string]interface{}
 		}
 		// UpdateLastObservedOnDevice holds details about calls to the UpdateLastObservedOnDevice method.
 		UpdateLastObservedOnDevice []struct {
@@ -80,14 +118,52 @@ type DeviceManagementMock struct {
 			Timestamp time.Time
 		}
 	}
+	lockCreateDevice               sync.RWMutex
 	lockGetDevice                  sync.RWMutex
 	lockGetDeviceFromEUI           sync.RWMutex
 	lockListAllDevices             sync.RWMutex
+	lockListEnvironments           sync.RWMutex
+	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
 
+// CreateDevice calls CreateDeviceFunc.
+func (mock *DeviceManagementMock) CreateDevice(contextMoqParam context.Context, device Device) error {
+	if mock.CreateDeviceFunc == nil {
+		panic("DeviceManagementMock.CreateDeviceFunc: method is nil but DeviceManagement.CreateDevice was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam context.Context
+		Device          Device
+	}{
+		ContextMoqParam: contextMoqParam,
+		Device:          device,
+	}
+	mock.lockCreateDevice.Lock()
+	mock.calls.CreateDevice = append(mock.calls.CreateDevice, callInfo)
+	mock.lockCreateDevice.Unlock()
+	return mock.CreateDeviceFunc(contextMoqParam, device)
+}
+
+// CreateDeviceCalls gets all the calls that were made to CreateDevice.
+// Check the length with:
+//     len(mockedDeviceManagement.CreateDeviceCalls())
+func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
+	ContextMoqParam context.Context
+	Device          Device
+} {
+	var calls []struct {
+		ContextMoqParam context.Context
+		Device          Device
+	}
+	mock.lockCreateDevice.RLock()
+	calls = mock.calls.CreateDevice
+	mock.lockCreateDevice.RUnlock()
+	return calls
+}
+
 // GetDevice calls GetDeviceFunc.
-func (mock *DeviceManagementMock) GetDevice(contextMoqParam context.Context, s string) (database.Device, error) {
+func (mock *DeviceManagementMock) GetDevice(contextMoqParam context.Context, s string) (Device, error) {
 	if mock.GetDeviceFunc == nil {
 		panic("DeviceManagementMock.GetDeviceFunc: method is nil but DeviceManagement.GetDevice was just called")
 	}
@@ -122,7 +198,7 @@ func (mock *DeviceManagementMock) GetDeviceCalls() []struct {
 }
 
 // GetDeviceFromEUI calls GetDeviceFromEUIFunc.
-func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Context, s string) (database.Device, error) {
+func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Context, s string) (Device, error) {
 	if mock.GetDeviceFromEUIFunc == nil {
 		panic("DeviceManagementMock.GetDeviceFromEUIFunc: method is nil but DeviceManagement.GetDeviceFromEUI was just called")
 	}
@@ -157,33 +233,103 @@ func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
 }
 
 // ListAllDevices calls ListAllDevicesFunc.
-func (mock *DeviceManagementMock) ListAllDevices(ctx context.Context) ([]database.Device, error) {
+func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context) ([]Device, error) {
 	if mock.ListAllDevicesFunc == nil {
 		panic("DeviceManagementMock.ListAllDevicesFunc: method is nil but DeviceManagement.ListAllDevices was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
+		ContextMoqParam context.Context
 	}{
-		Ctx: ctx,
+		ContextMoqParam: contextMoqParam,
 	}
 	mock.lockListAllDevices.Lock()
 	mock.calls.ListAllDevices = append(mock.calls.ListAllDevices, callInfo)
 	mock.lockListAllDevices.Unlock()
-	return mock.ListAllDevicesFunc(ctx)
+	return mock.ListAllDevicesFunc(contextMoqParam)
 }
 
 // ListAllDevicesCalls gets all the calls that were made to ListAllDevices.
 // Check the length with:
 //     len(mockedDeviceManagement.ListAllDevicesCalls())
 func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
-	Ctx context.Context
+	ContextMoqParam context.Context
 } {
 	var calls []struct {
-		Ctx context.Context
+		ContextMoqParam context.Context
 	}
 	mock.lockListAllDevices.RLock()
 	calls = mock.calls.ListAllDevices
 	mock.lockListAllDevices.RUnlock()
+	return calls
+}
+
+// ListEnvironments calls ListEnvironmentsFunc.
+func (mock *DeviceManagementMock) ListEnvironments(contextMoqParam context.Context) ([]Environment, error) {
+	if mock.ListEnvironmentsFunc == nil {
+		panic("DeviceManagementMock.ListEnvironmentsFunc: method is nil but DeviceManagement.ListEnvironments was just called")
+	}
+	callInfo := struct {
+		ContextMoqParam context.Context
+	}{
+		ContextMoqParam: contextMoqParam,
+	}
+	mock.lockListEnvironments.Lock()
+	mock.calls.ListEnvironments = append(mock.calls.ListEnvironments, callInfo)
+	mock.lockListEnvironments.Unlock()
+	return mock.ListEnvironmentsFunc(contextMoqParam)
+}
+
+// ListEnvironmentsCalls gets all the calls that were made to ListEnvironments.
+// Check the length with:
+//     len(mockedDeviceManagement.ListEnvironmentsCalls())
+func (mock *DeviceManagementMock) ListEnvironmentsCalls() []struct {
+	ContextMoqParam context.Context
+} {
+	var calls []struct {
+		ContextMoqParam context.Context
+	}
+	mock.lockListEnvironments.RLock()
+	calls = mock.calls.ListEnvironments
+	mock.lockListEnvironments.RUnlock()
+	return calls
+}
+
+// UpdateDevice calls UpdateDeviceFunc.
+func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+	if mock.UpdateDeviceFunc == nil {
+		panic("DeviceManagementMock.UpdateDeviceFunc: method is nil but DeviceManagement.UpdateDevice was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		Fields   map[string]interface{}
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		Fields:   fields,
+	}
+	mock.lockUpdateDevice.Lock()
+	mock.calls.UpdateDevice = append(mock.calls.UpdateDevice, callInfo)
+	mock.lockUpdateDevice.Unlock()
+	return mock.UpdateDeviceFunc(ctx, deviceID, fields)
+}
+
+// UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
+// Check the length with:
+//     len(mockedDeviceManagement.UpdateDeviceCalls())
+func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	Fields   map[string]interface{}
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+		Fields   map[string]interface{}
+	}
+	mock.lockUpdateDevice.RLock()
+	calls = mock.calls.UpdateDevice
+	mock.lockUpdateDevice.RUnlock()
 	return calls
 }
 

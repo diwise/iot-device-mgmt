@@ -3,13 +3,14 @@ package database
 import (
 	"encoding/csv"
 	"fmt"
-	"io"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 //go:generate moq -rm -out database_mock.go . Datastore
@@ -17,50 +18,63 @@ import (
 type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
 	GetDeviceFromID(deviceID string) (Device, error)
+	UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error)
+	CreateDevice(devEUI, deviceId, name, description, environment, sensorType string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	GetAll() ([]Device, error)
+
+	ListEnvironments() ([]Environment, error)
+
+	Seed(f string) error
 }
 
-type database struct {
-	log          zerolog.Logger
-	devicesByEUI map[string]*device
-	devicesByID  map[string]*device
-	keys         []string
+type store struct {
+	db *gorm.DB
 }
 
-func New(logger zerolog.Logger, filePath string) (Datastore, error) {
-	devicesFile, err := os.Open(filePath)
+func ConnectDb(dsn string) (Datastore, error) {
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {
-		logger.Fatal().Err(err).Msgf("failed to open the file of known devices %s", filePath)
+		return nil, err
 	}
 
-	defer devicesFile.Close()
+	err = db.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
+	if err != nil {
+		return nil, err
+	}
 
-	return SetUpNewDatabase(logger, devicesFile)
+	return &store{
+		db: db,
+	}, nil
 }
 
-func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, error) {
+func (s store) Seed(seedFile string) error {
+	devicesFile, err := os.Open(seedFile)
+	if err != nil {
+		return err
+	}
+	defer devicesFile.Close()
+
 	r := csv.NewReader(devicesFile)
 	r.Comma = ';'
 
 	knownDevices, err := r.ReadAll()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read csv data from file: %s", err.Error())
+		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
-	db := &database{
-		log:          log,
-		devicesByEUI: map[string]*device{},
-		devicesByID:  map[string]*device{},
-	}
+	s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoNothing: true,
+	}).CreateInBatches([]Environment{
+		{Name: "air"},
+		{Name: "ground"},
+		{Name: "water"},
+		{Name: "indoors"},
+		{Name: "lifebuoy"},
+	}, 5)
 
-	// Create a set of allowed environments from a slice of allowed envs so that
-	// we can validate and provide helpful diagnostics if config is wrong
-	allowedEnvironments := []string{"air", "ground", "water", "indoors", "lifebuoy"}
-	setOfAllowedEnvironments := map[string]bool{}
-	for _, env := range allowedEnvironments {
-		setOfAllowedEnvironments[env] = true
-	}
+	devices := []Device{}
 
 	for idx, d := range knownDevices {
 		if idx == 0 {
@@ -71,31 +85,24 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 		devEUI := d[0]
 		deviceID := d[1]
 
-		_, ok := db.devicesByEUI[devEUI]
-		if ok {
-			return nil, fmt.Errorf("duplicate devEUI %s found on line %d in devices config", devEUI, (idx + 1))
-		}
-
-		_, ok = db.devicesByID[deviceID]
-		if ok {
-			return nil, fmt.Errorf("duplicate device id %s found on line %d in devices config", deviceID, (idx + 1))
-		}
-
 		lat, err := strconv.ParseFloat(d[2], 64)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse latitude for device %s: %s", devEUI, err.Error())
+			return fmt.Errorf("failed to parse latitude for device %s: %s", devEUI, err.Error())
 		}
 		lon, err := strconv.ParseFloat(d[3], 64)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse longitude for device %s: %s", devEUI, err.Error())
+			return fmt.Errorf("failed to parse longitude for device %s: %s", devEUI, err.Error())
 		}
 
-		environment := d[4]
-		if !setOfAllowedEnvironments[environment] {
-			return nil, fmt.Errorf("bad environment specified for device %s on line %d in config (\"%s\" not in %v)", devEUI, (idx + 1), environment, allowedEnvironments)
-		}
+		var environment Environment
+		s.db.First(&environment, "name=?", d[4])
 
-		types := strings.Split(d[5], ",")
+		types := []Lwm2mType{}
+		ts := strings.Split(d[5], ",")
+
+		for _, t := range ts {
+			types = append(types, Lwm2mType{Type: t})
+		}
 
 		sensorType := d[6]
 
@@ -105,11 +112,12 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 
 		active, err := strconv.ParseBool(d[9])
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse active for device %s: %s", devEUI, err.Error())
+			return fmt.Errorf("failed to parse active for device %s: %s", devEUI, err.Error())
 		}
 
-		dev := &device{
-			Identity:    d[1],
+		d := Device{
+			DevEUI:      devEUI,
+			DeviceId:    deviceID,
 			Name:        name,
 			Description: description,
 			Latitude:    lat,
@@ -120,77 +128,90 @@ func SetUpNewDatabase(log zerolog.Logger, devicesFile io.Reader) (Datastore, err
 			Active:      active,
 		}
 
-		db.devicesByEUI[devEUI] = dev
-		db.devicesByID[deviceID] = dev
-		db.keys = append(db.keys, deviceID)
+		devices = append(devices, d)
 	}
 
-	db.log.Info().Msgf("loaded %d devices from configuration file", len(db.devicesByEUI))
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "device_id"}},
+		UpdateAll: true,
+	}).Create(devices)
 
-	return db, nil
+	return result.Error
 }
 
-func (db *database) GetDeviceFromDevEUI(eui string) (Device, error) {
-	device, ok := db.devicesByEUI[eui]
-	if !ok {
-		return nil, fmt.Errorf("no matching devices found with devEUI %s", eui)
+func (s store) GetDeviceFromDevEUI(eui string) (Device, error) {
+	var d Device
+	result := s.db.Preload("Types").Preload("Environment").First(&d, "dev_eui=?", eui)
+
+	return d, result.Error
+}
+
+func (s store) GetDeviceFromID(deviceID string) (Device, error) {
+	var d Device
+	result := s.db.Preload("Types").Preload("Environment").First(&d, "device_id=?", deviceID)
+
+	return d, result.Error
+}
+
+func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+	result := s.db.Model(&Device{}).Where("device_id = ?", deviceID).Update("last_observed", timestamp)
+	return result.Error
+}
+
+func (s store) GetAll() ([]Device, error) {
+	var devices []Device
+	err := s.db.Debug().Preload("Types").Preload("Environment").Find(&devices).Error
+	if err != nil {
+		return nil, err
 	}
 
-	return device, nil
+	return devices, err
 }
 
-func (db *database) GetDeviceFromID(deviceID string) (Device, error) {
-	device, ok := db.devicesByID[deviceID]
-	if !ok {
-		return nil, fmt.Errorf("no matching devices found with id %s", deviceID)
+func (s store) UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error) {
+	d, err := s.GetDeviceFromID(deviceID)
+	if err != nil {
+		return Device{}, err
 	}
 
-	return device, nil
-}
-
-func (db *database) GetAll() ([]Device, error) {
-	s := make([]Device, len(db.devicesByID))
-
-	for idx, k := range db.keys {
-		s[idx] = db.devicesByID[k]
+	result := s.db.Model(&d).Select("name","description","latitude","longitude","active").Updates(fields)
+	if result.Error != nil {
+		return Device{}, result.Error
 	}
 
-	return s, nil
+	return s.GetDeviceFromID(deviceID)
 }
 
-func (db *database) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
-	device, ok := db.devicesByID[deviceID]
-	if !ok {
-		return fmt.Errorf("no matching devices found with id %s", deviceID)
+func (s store) CreateDevice(devEUI, deviceId, name, description, environment, sensorType string, latitude, longitude float64, types []string, active bool) (Device, error) {
+	var env Environment
+	s.db.First(&env, "name=?", environment)
+
+	lwm2mTypes := []Lwm2mType{}
+	for _, t := range types {
+		lwm2mTypes = append(lwm2mTypes, Lwm2mType{Type: t})
 	}
 
-	if device.LastObserved.After(timestamp) {
-		db.log.Info().Msgf("lastObserved %s is more recent than incoming time %s, ignoring", device.LastObserved.Format(time.RFC3339), timestamp.Format(time.RFC3339))
-		return nil
+	d := Device{
+		DevEUI:      devEUI,
+		DeviceId:    deviceId,
+		Name:        name,
+		Description: description,
+		SensorType:  sensorType,
+		Latitude:    latitude,
+		Longitude:   longitude,
+		Active:      active,
+		Environment: env,
+		Types:       lwm2mTypes,
 	}
 
-	device.LastObserved = timestamp
+	err := s.db.Create(&d).Error
 
-	return nil
+	return d, err
 }
 
-type Device interface {
-	ID() string
-}
+func (s store) ListEnvironments() ([]Environment, error) {
+	var env []Environment
+	err := s.db.Find(&env).Error
 
-type device struct {
-	Identity     string    `json:"id"`
-	Name         string    `json:"name"`
-	Description  string    `json:"description"`
-	Latitude     float64   `json:"latitude"`
-	Longitude    float64   `json:"longitude"`
-	Environment  string    `json:"environment"`
-	Types        []string  `json:"types"`
-	SensorType   string    `json:"sensorType"`
-	LastObserved time.Time `json:"lastObserved"`
-	Active       bool      `json:"active"`
-}
-
-func (d device) ID() string {
-	return d.Identity
+	return env, err
 }
