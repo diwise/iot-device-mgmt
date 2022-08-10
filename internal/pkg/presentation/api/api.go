@@ -50,7 +50,7 @@ func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http
 		env, err := app.ListEnvironments(ctx)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to list environments")
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
