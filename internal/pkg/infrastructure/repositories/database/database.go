@@ -40,23 +40,6 @@ type store struct {
 // ConnectorFunc is used to inject a database connection method into NewDatabaseConnection
 type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
 
-func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
-	impl, logger, err := connect()
-	if err != nil {
-		return nil, err
-	}
-
-	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
-	if err != nil {
-		return nil, err
-	}
-
-	return &store{
-		db:     impl,
-		logger: logger,
-	}, nil
-}
-
 // NewPostgreSQLConnector opens a connection to a postgresql database
 func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
 	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
@@ -107,6 +90,23 @@ func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 
 		return db, log, err
 	}
+}
+
+func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
+	impl, logger, err := connect()
+	if err != nil {
+		return nil, err
+	}
+
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
+	if err != nil {
+		return nil, err
+	}
+
+	return &store{
+		db:     impl,
+		logger: logger,
+	}, nil
 }
 
 func (s store) Seed(seedFile string) error {
