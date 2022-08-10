@@ -1,13 +1,12 @@
 package api
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -42,7 +41,11 @@ func NewHealthHandler(log zerolog.Logger, app application.DeviceManagement) http
 func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx, requestLogger := initContextAndTracing("list-environment", r, err, log)
+
+		ctx, span := tracer.Start(r.Context(), "list-environments")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		env, err := app.ListEnvironments(ctx)
 		if err != nil {
@@ -67,7 +70,10 @@ func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http
 func createDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx, requestLogger := initContextAndTracing("create-device", r, err, log)
+
+		ctx, span := tracer.Start(r.Context(), "create-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -99,7 +105,10 @@ func createDeviceHandler(log zerolog.Logger, app application.DeviceManagement) h
 func patchDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx, requestLogger := initContextAndTracing("patch-device", r, err, log)
+
+		ctx, span := tracer.Start(r.Context(), "patch-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		deviceID := chi.URLParam(r, "id")
 
@@ -133,7 +142,10 @@ func patchDeviceHandler(log zerolog.Logger, app application.DeviceManagement) ht
 func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx, requestLogger := initContextAndTracing("query-devices", r, err, log)
+
+		ctx, span := tracer.Start(r.Context(), "query-devices")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		deviceArray := []application.Device{}
 
@@ -174,7 +186,10 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		ctx, requestLogger := initContextAndTracing("get-device", r, err, log)
+
+		ctx, span := tracer.Start(r.Context(), "get-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		deviceID := chi.URLParam(r, "id")
 		device, err := app.GetDevice(ctx, deviceID)
@@ -197,18 +212,4 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement)
 		w.WriteHeader(http.StatusOK)
 		w.Write(bytes)
 	}
-}
-
-func initContextAndTracing(spanName string, r *http.Request, err error, log zerolog.Logger) (context.Context, zerolog.Logger) {
-	ctx, span := tracer.Start(r.Context(), spanName)
-	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-
-	requestLogger := log
-
-	traceID := span.SpanContext().TraceID()
-	if traceID.IsValid() {
-		requestLogger = requestLogger.With().Str("traceID", traceID.String()).Logger()
-	}
-
-	return logging.NewContextWithLogger(ctx, requestLogger), requestLogger
 }
