@@ -32,18 +32,16 @@ func main() {
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
 	flag.Parse()
 
-	db, err := database.NewDatabaseConnection(database.NewPostgreSQLConnector(logger))
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to database")
-	}
+	db := connectToDatabaseOrDie(logger)
 
 	devicesFile, err := os.Open(devicesFilePath)
 	if err == nil {
 		defer devicesFile.Close()
 
+		logger.Info().Msgf("seeding database from %s", devicesFilePath)
 		err = db.Seed(devicesFile)
 		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to seed database from devices file")
+			logger.Fatal().Err(err).Msg("failed to seed database")
 		}
 	}
 
@@ -88,6 +86,24 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 			return
 		}
 	}
+}
+
+func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
+	var db database.Datastore
+	var err error
+
+	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
+		db, err = database.NewDatabaseConnection(database.NewPostgreSQLConnector(logger))
+	} else {
+		logger.Info().Msg("no sql database configured, using builtin sqlite instead")
+		db, err = database.NewDatabaseConnection(database.NewSQLiteConnector(logger))
+	}
+
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+
+	return db
 }
 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext) *chi.Mux {
