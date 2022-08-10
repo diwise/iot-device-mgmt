@@ -73,16 +73,19 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 		err := json.Unmarshal(msg.Body, &statusMessage)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
+			return
 		}
 
 		timestamp, err := time.Parse(time.RFC3339, statusMessage.Timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to parse time from status message")
+			return
 		}
 
 		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
+			return
 		}
 	}
 }
