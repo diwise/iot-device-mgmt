@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -36,7 +37,15 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
-	db.Seed(devicesFilePath)
+	devicesFile, err := os.Open(devicesFilePath)
+	if err == nil {
+		defer devicesFile.Close()
+
+		err = db.Seed(devicesFile)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to seed database from devices file")
+		}
+	}
 
 	config := messaging.LoadConfiguration(serviceName, logger)
 	messenger, err := messaging.Initialize(config)

@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/csv"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -29,7 +30,7 @@ type Datastore interface {
 
 	ListEnvironments() ([]Environment, error)
 
-	Seed(f string) error
+	Seed(r io.Reader) error
 }
 
 type store struct {
@@ -109,14 +110,9 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 	}, nil
 }
 
-func (s store) Seed(seedFile string) error {
-	devicesFile, err := os.Open(seedFile)
-	if err != nil {
-		return err
-	}
-	defer devicesFile.Close()
+func (s store) Seed(seedFileReader io.Reader) error {
 
-	r := csv.NewReader(devicesFile)
+	r := csv.NewReader(seedFileReader)
 	r.Comma = ';'
 
 	knownDevices, err := r.ReadAll()

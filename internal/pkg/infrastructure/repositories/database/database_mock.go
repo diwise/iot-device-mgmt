@@ -4,6 +4,7 @@
 package database
 
 import (
+	"io"
 	"sync"
 	"time"
 )
@@ -33,7 +34,7 @@ var _ Datastore = &DatastoreMock{}
 // 			ListEnvironmentsFunc: func() ([]Environment, error) {
 // 				panic("mock out the ListEnvironments method")
 // 			},
-// 			SeedFunc: func(f string) error {
+// 			SeedFunc: func(r io.Reader) error {
 // 				panic("mock out the Seed method")
 // 			},
 // 			UpdateDeviceFunc: func(deviceID string, fields map[string]interface{}) (Device, error) {
@@ -65,7 +66,7 @@ type DatastoreMock struct {
 	ListEnvironmentsFunc func() ([]Environment, error)
 
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(f string) error
+	SeedFunc func(r io.Reader) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(deviceID string, fields map[string]interface{}) (Device, error)
@@ -116,8 +117,8 @@ type DatastoreMock struct {
 		}
 		// Seed holds details about calls to the Seed method.
 		Seed []struct {
-			// F is the f argument value.
-			F string
+			// R is the r argument value.
+			R io.Reader
 		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
@@ -326,29 +327,29 @@ func (mock *DatastoreMock) ListEnvironmentsCalls() []struct {
 }
 
 // Seed calls SeedFunc.
-func (mock *DatastoreMock) Seed(f string) error {
+func (mock *DatastoreMock) Seed(r io.Reader) error {
 	if mock.SeedFunc == nil {
 		panic("DatastoreMock.SeedFunc: method is nil but Datastore.Seed was just called")
 	}
 	callInfo := struct {
-		F string
+		R io.Reader
 	}{
-		F: f,
+		R: r,
 	}
 	mock.lockSeed.Lock()
 	mock.calls.Seed = append(mock.calls.Seed, callInfo)
 	mock.lockSeed.Unlock()
-	return mock.SeedFunc(f)
+	return mock.SeedFunc(r)
 }
 
 // SeedCalls gets all the calls that were made to Seed.
 // Check the length with:
 //     len(mockedDatastore.SeedCalls())
 func (mock *DatastoreMock) SeedCalls() []struct {
-	F string
+	R io.Reader
 } {
 	var calls []struct {
-		F string
+		R io.Reader
 	}
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed
