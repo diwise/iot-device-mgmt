@@ -8,9 +8,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diwise/service-chassis/pkg/infrastructure/env"
+	"github.com/rs/zerolog"
 	"gorm.io/driver/postgres"
+	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/gorm/logger"
 )
 
 //go:generate moq -rm -out database_mock.go . Datastore
@@ -29,23 +33,80 @@ type Datastore interface {
 }
 
 type store struct {
-	db *gorm.DB
+	db     *gorm.DB
+	logger zerolog.Logger
 }
 
-func ConnectDb(dsn string) (Datastore, error) {
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+// ConnectorFunc is used to inject a database connection method into NewDatabaseConnection
+type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
+
+func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
+	impl, logger, err := connect()
 	if err != nil {
 		return nil, err
 	}
 
-	err = db.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
 	if err != nil {
 		return nil, err
 	}
 
 	return &store{
-		db: db,
+		db:     impl,
+		logger: logger,
 	}, nil
+}
+
+// NewPostgreSQLConnector opens a connection to a postgresql database
+func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
+	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
+	username := os.Getenv("DIWISE_SQLDB_USER")
+	dbName := os.Getenv("DIWISE_SQLDB_NAME")
+	password := os.Getenv("DIWISE_SQLDB_PASSWORD")
+	sslMode := env.GetVariableOrDefault(log, "DIWISE_SQLDB_SSLMODE", "require")
+
+	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=%s password=%s", dbHost, username, dbName, sslMode, password)
+
+	return func() (*gorm.DB, zerolog.Logger, error) {
+		sublogger := log.With().Str("host", dbHost).Str("database", dbName).Logger()
+
+		for {
+			sublogger.Info().Msg("connecting to database host")
+
+			db, err := gorm.Open(postgres.Open(dbURI), &gorm.Config{
+				Logger: logger.New(
+					&sublogger,
+					logger.Config{
+						SlowThreshold:             time.Second,
+						LogLevel:                  logger.Info,
+						IgnoreRecordNotFoundError: false,
+						Colorful:                  false,
+					},
+				),
+			})
+			if err != nil {
+				sublogger.Fatal().Err(err).Msg("failed to connect to database")
+				time.Sleep(3 * time.Second)
+			} else {
+				return db, sublogger, nil
+			}
+		}
+	}
+}
+
+// NewSQLiteConnector opens a connection to a local sqlite database
+func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
+	return func() (*gorm.DB, zerolog.Logger, error) {
+		db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{
+			Logger: logger.Default.LogMode(logger.Silent),
+		})
+
+		if err == nil {
+			db.Exec("PRAGMA foreign_keys = ON")
+		}
+
+		return db, log, err
+	}
 }
 
 func (s store) Seed(seedFile string) error {
@@ -174,7 +235,7 @@ func (s store) UpdateDevice(deviceID string, fields map[string]interface{}) (Dev
 		return Device{}, err
 	}
 
-	result := s.db.Model(&d).Select("name","description","latitude","longitude","active").Updates(fields)
+	result := s.db.Model(&d).Select("name", "description", "latitude", "longitude", "active").Updates(fields)
 	if result.Error != nil {
 		return Device{}, result.Error
 	}

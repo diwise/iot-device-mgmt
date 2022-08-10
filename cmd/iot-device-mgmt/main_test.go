@@ -2,7 +2,6 @@ package main
 
 import (
 	"io"
-	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -61,8 +60,10 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
-	db, err := database.ConnectDb("")
+
+	db, err := database.NewDatabaseConnection(database.NewSQLiteConnector(log))
 	is.NoErr(err)
+
 	app := application.New(db)
 	router := router.New("testService")
 	api.RegisterHandlers(log, router, app)
@@ -73,7 +74,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
 	req, _ := http.NewRequest(method, ts.URL+path, body)
 	resp, _ := http.DefaultClient.Do(req)
-	respBody, _ := ioutil.ReadAll(resp.Body)
+	respBody, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
 	return resp, string(respBody)

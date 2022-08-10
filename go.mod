@@ -15,7 +15,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.8.0 // indirect
 )
 
-require github.com/rabbitmq/amqp091-go v1.3.4
+require (
+	github.com/rabbitmq/amqp091-go v1.3.4
+	gorm.io/driver/sqlite v1.3.6
+)
 
 require (
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -30,6 +33,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-sqlite3 v1.14.12 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 )
 
