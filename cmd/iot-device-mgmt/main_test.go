@@ -65,7 +65,8 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	db, err := database.NewDatabaseConnection(database.NewSQLiteConnector(log))
 	is.NoErr(err)
 
-	db.Seed(bytes.NewBuffer([]byte(csvMock)))
+	err = db.Seed(bytes.NewBuffer([]byte(csvMock)))
+	is.NoErr(err)
 
 	app := application.New(db)
 	router := router.New("testService")
