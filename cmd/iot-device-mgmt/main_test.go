@@ -12,6 +12,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
 )
@@ -77,11 +78,21 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 
 func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
 	req, _ := http.NewRequest(method, ts.URL+path, body)
+
+	token := createJWT()
+	req.Header.Add("Authorization", "Bearer "+token)
+
 	resp, _ := http.DefaultClient.Do(req)
 	respBody, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
 
 	return resp, string(respBody)
+}
+
+func createJWT() string {
+	tokenAuth := jwtauth.New("HS256", []byte("secret"), nil)
+	_, tokenString, _ := tokenAuth.Encode(map[string]interface{}{"user_id": 123})
+	return tokenString
 }
 
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
