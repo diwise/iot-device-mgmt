@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/lestrrat-go/jwx/jwt"
@@ -36,13 +37,12 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger) (func(http.Han
 				return
 			}
 
+			path := strings.Split(r.URL.Path, "/")
+
 			input := map[string]any{
-				"method": "GET",
-				"path":   []interface{}{"salary", "bob"},
-				"subject": map[string]interface{}{
-					"user":   "bob",
-					"groups": []interface{}{"sales", "marketing"},
-				},
+				"method": r.Method,
+				"path":   path[1:],
+				"token":  token,
 			}
 
 			results, err := query.Eval(r.Context(), rego.EvalInput(input))
@@ -90,6 +90,10 @@ default allow := false
 
 allow {
     input.method == "GET"
-    input.path == ["salary", input.subject.user]
+    pathstart := array.slice(input.path, 0, 3)
+    pathstart == ["api", "v0", "devices"]
+
+    azp := object.get(input.token, "azp", "")
+    azp == "diwise-frontend"
 }
 `

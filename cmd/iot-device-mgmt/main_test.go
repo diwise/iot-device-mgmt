@@ -91,7 +91,7 @@ func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Rea
 
 func createJWT() string {
 	tokenAuth := jwtauth.New("HS256", []byte("secret"), nil)
-	_, tokenString, _ := tokenAuth.Encode(map[string]interface{}{"user_id": 123})
+	_, tokenString, _ := tokenAuth.Encode(map[string]interface{}{"user_id": 123, "azp": "diwise-frontend"})
 	return tokenString
 }
 
