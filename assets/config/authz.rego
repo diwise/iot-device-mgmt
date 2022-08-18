@@ -30,11 +30,8 @@ jwks_request(url) := http.send({
 
 is_valid_token {
 
-    metadata := metadata_discovery(token.payload.iss)
-
-    jwks_endpoint := metadata.jwks_uri
-	
-    jwks := jwks_request(jwks_endpoint).raw_body
+    openid_config := metadata_discovery(token.payload.iss)
+    jwks := jwks_request(openid_config.jwks_uri).raw_body
 	
     verified := io.jwt.verify_rs256(input.token, jwks)
     verified == true
