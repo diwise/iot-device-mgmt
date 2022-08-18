@@ -11,27 +11,22 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/jwtauth/v5"
 	"github.com/rs/zerolog"
 	"go.opentelemetry.io/otel"
 )
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-var tokenAuth *jwtauth.JWTAuth
-
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
-	tokenAuth = jwtauth.New("HS256", []byte("secret"), nil)
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement) *chi.Mux {
 
 	router.Get("/health", NewHealthHandler(log, app))
 
 	router.Route("/api/v0", func(r chi.Router) {
 		r.Route("/devices", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
-				// Seek, verify and validate JWT tokens
-				r.Use(jwtauth.Verifier(tokenAuth))
+
 				// Handle valid / invalid tokens.
-				authenticator, err := auth.NewAuthenticator(context.Background(), log)
+				authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
 				if err != nil {
 					log.Fatal().Err(err).Msg("failed to create api authenticator")
 				}

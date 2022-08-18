@@ -3,20 +3,25 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
-	"github.com/go-chi/jwtauth/v5"
-	"github.com/lestrrat-go/jwx/jwt"
 	"github.com/open-policy-agent/opa/rego"
 	"github.com/rs/zerolog"
 )
 
-func NewAuthenticator(ctx context.Context, logger zerolog.Logger) (func(http.Handler) http.Handler, error) {
+func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Reader) (func(http.Handler) http.Handler, error) {
+
+	module, err := io.ReadAll(policies)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
+	}
 
 	query, err := rego.New(
 		rego.Query("x = data.example.authz.allow"),
-		rego.Module("example.rego", module),
+		rego.Module("example.rego", string(module)),
 	).PrepareForEval(ctx)
 
 	if err != nil {
@@ -25,14 +30,9 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger) (func(http.Han
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			token, _, err := jwtauth.FromContext(r.Context())
+			token := r.Header.Get("Authorization")
 
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusUnauthorized)
-				return
-			}
-
-			if token == nil || jwt.Validate(token) != nil {
+			if token == "" || !strings.HasPrefix(token, "Bearer ") {
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
@@ -42,7 +42,7 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger) (func(http.Han
 			input := map[string]any{
 				"method": r.Method,
 				"path":   path[1:],
-				"token":  token,
+				"token":  token[7:],
 			}
 
 			results, err := query.Eval(r.Context(), rego.EvalInput(input))
@@ -80,20 +80,3 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger) (func(http.Han
 		})
 	}, nil
 }
-
-const module string = `
-package example.authz
-
-import future.keywords
-
-default allow := false
-
-allow {
-    input.method == "GET"
-    pathstart := array.slice(input.path, 0, 3)
-    pathstart == ["api", "v0", "devices"]
-
-    azp := object.get(input.token, "azp", "")
-    azp == "diwise-frontend"
-}
-`

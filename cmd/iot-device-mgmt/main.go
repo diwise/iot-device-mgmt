@@ -23,6 +23,7 @@ import (
 const serviceName string = "iot-device-mgmt"
 
 var devicesFilePath string
+var opaFilePath string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -30,6 +31,7 @@ func main() {
 	defer cleanup()
 
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
+	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
 	db := connectToDatabaseOrDie(logger)
@@ -114,5 +116,11 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 
 	r := router.New(serviceName)
 
-	return api.RegisterHandlers(logger, r, app)
+	policies, err := os.Open(opaFilePath)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("unable to open opa policy file")
+	}
+	defer policies.Close()
+
+	return api.RegisterHandlers(logger, r, policies, app)
 }
