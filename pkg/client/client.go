@@ -7,31 +7,51 @@ import (
 	"io"
 	"net/http"
 
+	models "github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/oauth2/clientcredentials"
 )
 
 type DeviceManagementClient interface {
-	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (*QueryResult, error)
+	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 }
 
 type devManagementClient struct {
-	url string
+	url               string
+	clientCredentials *clientcredentials.Config
 }
 
 var tracer = otel.Tracer("device-mgmt-client")
 
-func NewDeviceManagementClient(devMgmtUrl string) DeviceManagementClient {
-	dmc := &devManagementClient{
-		url: devMgmtUrl,
+func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
+	oauthConfig := &clientcredentials.Config{
+		ClientID:     oauthClientID,
+		ClientSecret: oauthClientSecret,
+		TokenURL:     oauthTokenURL,
 	}
-	return dmc
+
+	token, err := oauthConfig.Token(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client credentials from %s: %w", oauthConfig.TokenURL, err)
+	}
+
+	if !token.Valid() {
+		return nil, fmt.Errorf("an invalid token was returned from %s", oauthTokenURL)
+	}
+
+	dmc := &devManagementClient{
+		url:               devMgmtUrl,
+		clientCredentials: oauthConfig,
+	}
+
+	return dmc, nil
 }
 
-func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (*QueryResult, error) {
+func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
 	var err error
 	ctx, span := tracer.Start(ctx, "find-device-from-deveui")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -73,21 +93,21 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	result := []QueryResult{}
+	impls := []models.Device{}
 
-	err = json.Unmarshal(respBody, &result)
+	err = json.Unmarshal(respBody, &impls)
 	if err != nil {
 		err = fmt.Errorf("failed to unmarshal response body: %w", err)
 		return nil, err
 	}
 
-	if len(result) == 0 {
+	if len(impls) == 0 {
 		err = fmt.Errorf("device management returned an empty list of devices")
 		return nil, err
 	}
 
-	device := result[0]
-	return &device, nil
+	device := impls[0]
+	return &deviceWrapper{&device}, nil
 }
 
 func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
@@ -132,15 +152,15 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		return nil, err
 	}
 
-	result := &device{}
+	impl := &models.Device{}
 
-	err = json.Unmarshal(respBody, result)
+	err = json.Unmarshal(respBody, impl)
 	if err != nil {
 		err = fmt.Errorf("failed to unmarshal response body: %w", err)
 		return nil, err
 	}
 
-	return result, nil
+	return &deviceWrapper{impl}, nil
 }
 
 type Device interface {
@@ -149,48 +169,38 @@ type Device interface {
 	Longitude() float64
 	Environment() string
 	Types() []string
+	SensorType() string
+	IsActive() bool
 }
 
-type device struct {
-	Identity string   `json:"id"`
-	Lat      float64  `json:"latitude"`
-	Long     float64  `json:"longitude"`
-	Env      string   `json:"environment"`
-	Types_   []string `json:"types"`
+type deviceWrapper struct {
+	impl *models.Device
 }
 
-func NewDevice(id, env string, lat, long float64) Device {
-	return &device{
-		Identity: id,
-		Env:      env,
-		Lat:      lat,
-		Long:     long,
-	}
+func (d *deviceWrapper) ID() string {
+	return d.impl.DeviceId
 }
 
-func (d *device) ID() string {
-	return d.Identity
+func (d *deviceWrapper) Latitude() float64 {
+	return d.impl.Latitude
 }
 
-func (d *device) Latitude() float64 {
-	return d.Lat
+func (d *deviceWrapper) Longitude() float64 {
+	return d.impl.Longitude
 }
 
-func (d *device) Longitude() float64 {
-	return d.Long
+func (d *deviceWrapper) Environment() string {
+	return d.impl.Environment
 }
 
-func (d *device) Environment() string {
-	return d.Env
+func (d *deviceWrapper) SensorType() string {
+	return d.impl.SensorType
 }
 
-func (d *device) Types() []string {
-	return d.Types_
+func (d *deviceWrapper) Types() []string {
+	return d.impl.Types
 }
 
-type QueryResult struct {
-	InternalID string   `json:"id"`
-	SensorType string   `json:"sensorType"`
-	Types      []string `json:"types"`
-	IsActive   bool     `json:"active"`
+func (d *deviceWrapper) IsActive() bool {
+	return d.impl.Active
 }

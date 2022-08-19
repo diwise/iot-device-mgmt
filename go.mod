@@ -18,6 +18,7 @@ require (
 require (
 	github.com/rabbitmq/amqp091-go v1.3.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.34.0
+	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
 	gorm.io/driver/sqlite v1.3.6
 )
 
@@ -37,6 +38,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.12 // indirect
 	go.opentelemetry.io/otel/metric v0.31.0 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
+	google.golang.org/appengine v1.6.6 // indirect
 )
 
 require (
