@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -37,7 +37,6 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 	log := logging.GetFromContext(ctx)
-
 	log.Info().Msgf("looking up internal id and types for devEUI %s", devEUI)
 
 	httpClient := http.Client{
@@ -57,12 +56,18 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
 		return nil, err
 	}
-	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("request failed, no device found")
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		err = fmt.Errorf("request failed, not authorized")
 		return nil, err
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		return nil, err
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		err = fmt.Errorf("failed to read response body: %w", err)
 		return nil, err
@@ -91,7 +96,6 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 	log := logging.GetFromContext(ctx)
-
 	log.Info().Msgf("looking up properties for device %s", deviceID)
 
 	httpClient := http.Client{
@@ -102,24 +106,29 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create http request")
+		err = fmt.Errorf("failed to create http request: %w", err)
 		return nil, err
 	}
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		log.Error().Msgf("failed to retrieve information for device: %s", err.Error())
+		err = fmt.Errorf("failed to retrieve information for device: %w", err)
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		err = fmt.Errorf("request failed, not authorized")
 		return nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Error().Msgf("request failed with status code %d", resp.StatusCode)
-		return nil, fmt.Errorf("request failed, no device found")
+		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		return nil, err
 	}
 
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Error().Msgf("failed to read response body: %s", err.Error())
+		err = fmt.Errorf("failed to read response body: %w", err)
 		return nil, err
 	}
 
@@ -127,7 +136,7 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 
 	err = json.Unmarshal(respBody, result)
 	if err != nil {
-		log.Error().Msgf("failed to unmarshal response body: %s", err.Error())
+		err = fmt.Errorf("failed to unmarshal response body: %w", err)
 		return nil, err
 	}
 
