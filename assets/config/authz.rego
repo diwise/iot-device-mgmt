@@ -8,8 +8,6 @@ allow {
     input.method == "GET"
     pathstart := array.slice(input.path, 0, 3)
     pathstart == ["api", "v0", "devices"]
-
-    token.payload.azp == "diwise-frontend"
 }
 
 issuers := {"https://iam.diwise.io/realms/diwise-test"}
