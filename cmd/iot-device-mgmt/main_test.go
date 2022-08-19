@@ -12,6 +12,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/jwtauth/v5"
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
 )
@@ -59,6 +60,7 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 }
 
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
+
 	is := is.New(t)
 	log := zerolog.Logger{}
 
@@ -70,13 +72,19 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 
 	app := application.New(db)
 	router := router.New("testService")
-	api.RegisterHandlers(log, router, app)
+
+	policies := bytes.NewBufferString(opaModule)
+	api.RegisterHandlers(log, router, policies, app)
 
 	return router, is
 }
 
 func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Reader) (*http.Response, string) {
 	req, _ := http.NewRequest(method, ts.URL+path, body)
+
+	token := createJWT()
+	req.Header.Add("Authorization", "Bearer "+token)
+
 	resp, _ := http.DefaultClient.Do(req)
 	respBody, _ := io.ReadAll(resp.Body)
 	defer resp.Body.Close()
@@ -84,7 +92,37 @@ func testRequest(is *is.I, ts *httptest.Server, method, path string, body io.Rea
 	return resp, string(respBody)
 }
 
+func createJWT() string {
+	tokenAuth := jwtauth.New("HS256", []byte("secret"), nil)
+	_, tokenString, _ := tokenAuth.Encode(map[string]any{"user_id": 123, "azp": "diwise-frontend"})
+	return tokenString
+}
+
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active
 a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true
 a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe04d83f;desc-a81758fffe04d83f;true`
+
+const opaModule string = `
+package example.authz
+
+default allow := false
+
+allow {
+    is_valid_token
+
+    input.method == "GET"
+    pathstart := array.slice(input.path, 0, 3)
+    pathstart == ["api", "v0", "devices"]
+
+    token.payload.azp == "diwise-frontend"
+}
+
+is_valid_token {
+    1 == 1
+}
+
+token := {"payload": payload} {
+    [header, payload, signature] := io.jwt.decode(input.token)
+}
+`
