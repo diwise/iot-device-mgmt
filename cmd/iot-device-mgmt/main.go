@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -22,6 +23,7 @@ import (
 const serviceName string = "iot-device-mgmt"
 
 var devicesFilePath string
+var opaFilePath string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -29,11 +31,20 @@ func main() {
 	defer cleanup()
 
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
+	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	db, err := database.New(logger, devicesFilePath)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to start database")
+	db := connectToDatabaseOrDie(logger)
+
+	devicesFile, err := os.Open(devicesFilePath)
+	if err == nil {
+		defer devicesFile.Close()
+
+		logger.Info().Msgf("seeding database from %s", devicesFilePath)
+		err = db.Seed(devicesFile)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to seed database")
+		}
 	}
 
 	config := messaging.LoadConfiguration(serviceName, logger)
@@ -62,18 +73,39 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 		err := json.Unmarshal(msg.Body, &statusMessage)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
+			return
 		}
 
 		timestamp, err := time.Parse(time.RFC3339, statusMessage.Timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to parse time from status message")
+			return
 		}
 
 		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
+			return
 		}
 	}
+}
+
+func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
+	var db database.Datastore
+	var err error
+
+	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
+		db, err = database.NewDatabaseConnection(database.NewPostgreSQLConnector(logger))
+	} else {
+		logger.Info().Msg("no sql database configured, using builtin sqlite instead")
+		db, err = database.NewDatabaseConnection(database.NewSQLiteConnector(logger))
+	}
+
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+
+	return db
 }
 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext) *chi.Mux {
@@ -84,5 +116,11 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 
 	r := router.New(serviceName)
 
-	return api.RegisterHandlers(logger, r, app)
+	policies, err := os.Open(opaFilePath)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("unable to open opa policy file")
+	}
+	defer policies.Close()
+
+	return api.RegisterHandlers(logger, r, policies, app)
 }
