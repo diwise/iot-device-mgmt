@@ -1,11 +1,13 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
@@ -15,15 +17,26 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, app application.DeviceManagement) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement) *chi.Mux {
+
 	router.Get("/health", NewHealthHandler(log, app))
 
 	router.Route("/api/v0", func(r chi.Router) {
 		r.Route("/devices", func(r chi.Router) {
-			r.Get("/", queryDevicesHandler(log, app))
-			r.Post("/", createDeviceHandler(log, app))
-			r.Get("/{id}", retrieveDeviceHandler(log, app))
-			r.Patch("/{id}", patchDeviceHandler(log, app))
+			r.Group(func(r chi.Router) {
+
+				// Handle valid / invalid tokens.
+				authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
+				if err != nil {
+					log.Fatal().Err(err).Msg("failed to create api authenticator")
+				}
+				r.Use(authenticator)
+
+				r.Get("/", queryDevicesHandler(log, app))
+				r.Post("/", createDeviceHandler(log, app))
+				r.Get("/{id}", retrieveDeviceHandler(log, app))
+				r.Patch("/{id}", patchDeviceHandler(log, app))
+			})
 		})
 
 		r.Get("/environments", listEnvironments(log, app))
@@ -44,7 +57,6 @@ func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http
 
 		ctx, span := tracer.Start(r.Context(), "list-environments")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		env, err := app.ListEnvironments(ctx)
