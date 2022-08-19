@@ -71,6 +71,16 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
+	if dmc.clientCredentials != nil {
+		token, err := dmc.clientCredentials.Token(ctx)
+		if err != nil {
+			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
+			return nil, err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
+	}
+
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
@@ -128,6 +138,16 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 	if err != nil {
 		err = fmt.Errorf("failed to create http request: %w", err)
 		return nil, err
+	}
+
+	if dmc.clientCredentials != nil {
+		token, err := dmc.clientCredentials.Token(ctx)
+		if err != nil {
+			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
+			return nil, err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
 	}
 
 	resp, err := httpClient.Do(req)
