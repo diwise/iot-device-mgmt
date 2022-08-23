@@ -124,6 +124,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		Columns:   []clause.Column{{Name: "name"}},
 		DoNothing: true,
 	}).CreateInBatches([]Environment{
+		{Name: ""},
 		{Name: "air"},
 		{Name: "ground"},
 		{Name: "water"},
