@@ -19,7 +19,7 @@ var _ Datastore = &DatastoreMock{}
 //
 // 		// make and configure a mocked Datastore
 // 		mockedDatastore := &DatastoreMock{
-// 			CreateDeviceFunc: func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
+// 			CreateDeviceFunc: func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
 // 				panic("mock out the CreateDevice method")
 // 			},
 // 			GetAllFunc: func() ([]Device, error) {
@@ -51,7 +51,7 @@ var _ Datastore = &DatastoreMock{}
 // 	}
 type DatastoreMock struct {
 	// CreateDeviceFunc mocks the CreateDevice method.
-	CreateDeviceFunc func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, latitude float64, longitude float64, types []string, active bool) (Device, error)
+	CreateDeviceFunc func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error)
 
 	// GetAllFunc mocks the GetAll method.
 	GetAllFunc func() ([]Device, error)
@@ -90,6 +90,8 @@ type DatastoreMock struct {
 			Environment string
 			// SensorType is the sensorType argument value.
 			SensorType string
+			// Tenant is the tenant argument value.
+			Tenant string
 			// Latitude is the latitude argument value.
 			Latitude float64
 			// Longitude is the longitude argument value.
@@ -146,7 +148,7 @@ type DatastoreMock struct {
 }
 
 // CreateDevice calls CreateDeviceFunc.
-func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name string, description string, environment string, sensorType string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
+func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
 	if mock.CreateDeviceFunc == nil {
 		panic("DatastoreMock.CreateDeviceFunc: method is nil but Datastore.CreateDevice was just called")
 	}
@@ -157,6 +159,7 @@ func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name str
 		Description string
 		Environment string
 		SensorType  string
+		Tenant      string
 		Latitude    float64
 		Longitude   float64
 		Types       []string
@@ -168,6 +171,7 @@ func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name str
 		Description: description,
 		Environment: environment,
 		SensorType:  sensorType,
+		Tenant:      tenant,
 		Latitude:    latitude,
 		Longitude:   longitude,
 		Types:       types,
@@ -176,7 +180,7 @@ func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name str
 	mock.lockCreateDevice.Lock()
 	mock.calls.CreateDevice = append(mock.calls.CreateDevice, callInfo)
 	mock.lockCreateDevice.Unlock()
-	return mock.CreateDeviceFunc(devEUI, deviceId, name, description, environment, sensorType, latitude, longitude, types, active)
+	return mock.CreateDeviceFunc(devEUI, deviceId, name, description, environment, sensorType, tenant, latitude, longitude, types, active)
 }
 
 // CreateDeviceCalls gets all the calls that were made to CreateDevice.
@@ -189,6 +193,7 @@ func (mock *DatastoreMock) CreateDeviceCalls() []struct {
 	Description string
 	Environment string
 	SensorType  string
+	Tenant      string
 	Latitude    float64
 	Longitude   float64
 	Types       []string
@@ -201,6 +206,7 @@ func (mock *DatastoreMock) CreateDeviceCalls() []struct {
 		Description string
 		Environment string
 		SensorType  string
+		Tenant      string
 		Latitude    float64
 		Longitude   float64
 		Types       []string

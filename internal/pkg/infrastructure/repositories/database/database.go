@@ -24,7 +24,7 @@ type Datastore interface {
 	GetDeviceFromDevEUI(eui string) (Device, error)
 	GetDeviceFromID(deviceID string) (Device, error)
 	UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error)
-	CreateDevice(devEUI, deviceId, name, description, environment, sensorType string, latitude, longitude float64, types []string, active bool) (Device, error)
+	CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	GetAll() ([]Device, error)
 
@@ -173,6 +173,8 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			return fmt.Errorf("failed to parse active for device %s: %s", devEUI, err.Error())
 		}
 
+		tenant := d[10]
+
 		d := Device{
 			DevEUI:      devEUI,
 			DeviceId:    deviceID,
@@ -184,6 +186,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			Types:       types,
 			SensorType:  sensorType,
 			Active:      active,
+			Tenant:      tenant,
 		}
 
 		devices = append(devices, d)
@@ -240,7 +243,7 @@ func (s store) UpdateDevice(deviceID string, fields map[string]interface{}) (Dev
 	return s.GetDeviceFromID(deviceID)
 }
 
-func (s store) CreateDevice(devEUI, deviceId, name, description, environment, sensorType string, latitude, longitude float64, types []string, active bool) (Device, error) {
+func (s store) CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error) {
 	var env Environment
 	s.db.First(&env, "name=?", environment)
 
@@ -260,6 +263,7 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 		Active:      active,
 		Environment: env,
 		Types:       lwm2mTypes,
+		Tenant:      tenant,
 	}
 
 	err := s.db.Create(&d).Error

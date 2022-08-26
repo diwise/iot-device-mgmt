@@ -183,6 +183,11 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 	return &deviceWrapper{impl}, nil
 }
 
+//go:generate moq -rm -out ../test/device_mock.go . Device
+
+// you need to modify the generated ../test/device_mock.go
+// import "github.com/diwise/iot-device-mgmt/pkg/client"
+// change "var _ Device = &DeviceMock{}" to "var _ client.Device = &DeviceMock{}"
 type Device interface {
 	ID() string
 	Latitude() float64
@@ -191,6 +196,7 @@ type Device interface {
 	Types() []string
 	SensorType() string
 	IsActive() bool
+	Tenant() string
 }
 
 type deviceWrapper struct {
@@ -223,4 +229,8 @@ func (d *deviceWrapper) Types() []string {
 
 func (d *deviceWrapper) IsActive() bool {
 	return d.impl.Active
+}
+
+func (d *deviceWrapper) Tenant() string {
+	return d.impl.Tenant
 }
