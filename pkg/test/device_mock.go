@@ -37,6 +37,9 @@ var _ client.Device = &DeviceMock{}
 // 			SensorTypeFunc: func() string {
 // 				panic("mock out the SensorType method")
 // 			},
+// 			TenantFunc: func() string {
+// 				panic("mock out the Tenant method")
+// 			},
 // 			TypesFunc: func() []string {
 // 				panic("mock out the Types method")
 // 			},
@@ -65,6 +68,9 @@ type DeviceMock struct {
 	// SensorTypeFunc mocks the SensorType method.
 	SensorTypeFunc func() string
 
+	// TenantFunc mocks the Tenant method.
+	TenantFunc func() string
+
 	// TypesFunc mocks the Types method.
 	TypesFunc func() []string
 
@@ -88,6 +94,9 @@ type DeviceMock struct {
 		// SensorType holds details about calls to the SensorType method.
 		SensorType []struct {
 		}
+		// Tenant holds details about calls to the Tenant method.
+		Tenant []struct {
+		}
 		// Types holds details about calls to the Types method.
 		Types []struct {
 		}
@@ -98,6 +107,7 @@ type DeviceMock struct {
 	lockLatitude    sync.RWMutex
 	lockLongitude   sync.RWMutex
 	lockSensorType  sync.RWMutex
+	lockTenant      sync.RWMutex
 	lockTypes       sync.RWMutex
 }
 
@@ -254,6 +264,32 @@ func (mock *DeviceMock) SensorTypeCalls() []struct {
 	mock.lockSensorType.RLock()
 	calls = mock.calls.SensorType
 	mock.lockSensorType.RUnlock()
+	return calls
+}
+
+// Tenant calls TenantFunc.
+func (mock *DeviceMock) Tenant() string {
+	if mock.TenantFunc == nil {
+		panic("DeviceMock.TenantFunc: method is nil but Device.Tenant was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockTenant.Lock()
+	mock.calls.Tenant = append(mock.calls.Tenant, callInfo)
+	mock.lockTenant.Unlock()
+	return mock.TenantFunc()
+}
+
+// TenantCalls gets all the calls that were made to Tenant.
+// Check the length with:
+//     len(mockedDevice.TenantCalls())
+func (mock *DeviceMock) TenantCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockTenant.RLock()
+	calls = mock.calls.Tenant
+	mock.lockTenant.RUnlock()
 	return calls
 }
 

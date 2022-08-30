@@ -18,6 +18,7 @@ type Device struct {
 	SensorType   string    `json:"sensor_type"`
 	LastObserved time.Time `json:"last_observed"`
 	Active       bool      `json:"active"`
+	Tenant       string    `json:"tenant"`
 }
 
 type Environment struct {
@@ -63,5 +64,6 @@ func MapToModel(d database.Device) Device {
 		SensorType:   d.SensorType,
 		LastObserved: d.LastObserved,
 		Active:       d.Active,
+		Tenant:       d.Tenant,
 	}
 }

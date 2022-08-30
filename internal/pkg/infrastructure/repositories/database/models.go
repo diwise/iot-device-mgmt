@@ -20,6 +20,7 @@ type Device struct {
 	SensorType    string
 	LastObserved  time.Time
 	Active        bool
+	Tenant        string
 }
 
 type Lwm2mType struct {
