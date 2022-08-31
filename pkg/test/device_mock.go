@@ -15,40 +15,40 @@ var _ client.Device = &DeviceMock{}
 
 // DeviceMock is a mock implementation of Device.
 //
-// 	func TestSomethingThatUsesDevice(t *testing.T) {
+//	func TestSomethingThatUsesDevice(t *testing.T) {
 //
-// 		// make and configure a mocked Device
-// 		mockedDevice := &DeviceMock{
-// 			EnvironmentFunc: func() string {
-// 				panic("mock out the Environment method")
-// 			},
-// 			IDFunc: func() string {
-// 				panic("mock out the ID method")
-// 			},
-// 			IsActiveFunc: func() bool {
-// 				panic("mock out the IsActive method")
-// 			},
-// 			LatitudeFunc: func() float64 {
-// 				panic("mock out the Latitude method")
-// 			},
-// 			LongitudeFunc: func() float64 {
-// 				panic("mock out the Longitude method")
-// 			},
-// 			SensorTypeFunc: func() string {
-// 				panic("mock out the SensorType method")
-// 			},
-// 			TenantFunc: func() string {
-// 				panic("mock out the Tenant method")
-// 			},
-// 			TypesFunc: func() []string {
-// 				panic("mock out the Types method")
-// 			},
-// 		}
+//		// make and configure a mocked Device
+//		mockedDevice := &DeviceMock{
+//			EnvironmentFunc: func() string {
+//				panic("mock out the Environment method")
+//			},
+//			IDFunc: func() string {
+//				panic("mock out the ID method")
+//			},
+//			IsActiveFunc: func() bool {
+//				panic("mock out the IsActive method")
+//			},
+//			LatitudeFunc: func() float64 {
+//				panic("mock out the Latitude method")
+//			},
+//			LongitudeFunc: func() float64 {
+//				panic("mock out the Longitude method")
+//			},
+//			SensorTypeFunc: func() string {
+//				panic("mock out the SensorType method")
+//			},
+//			TenantFunc: func() string {
+//				panic("mock out the Tenant method")
+//			},
+//			TypesFunc: func() []string {
+//				panic("mock out the Types method")
+//			},
+//		}
 //
-// 		// use mockedDevice in code that requires Device
-// 		// and then make assertions.
+//		// use mockedDevice in code that requires Device
+//		// and then make assertions.
 //
-// 	}
+//	}
 type DeviceMock struct {
 	// EnvironmentFunc mocks the Environment method.
 	EnvironmentFunc func() string
@@ -126,7 +126,8 @@ func (mock *DeviceMock) Environment() string {
 
 // EnvironmentCalls gets all the calls that were made to Environment.
 // Check the length with:
-//     len(mockedDevice.EnvironmentCalls())
+//
+//	len(mockedDevice.EnvironmentCalls())
 func (mock *DeviceMock) EnvironmentCalls() []struct {
 } {
 	var calls []struct {
@@ -152,7 +153,8 @@ func (mock *DeviceMock) ID() string {
 
 // IDCalls gets all the calls that were made to ID.
 // Check the length with:
-//     len(mockedDevice.IDCalls())
+//
+//	len(mockedDevice.IDCalls())
 func (mock *DeviceMock) IDCalls() []struct {
 } {
 	var calls []struct {
@@ -178,7 +180,8 @@ func (mock *DeviceMock) IsActive() bool {
 
 // IsActiveCalls gets all the calls that were made to IsActive.
 // Check the length with:
-//     len(mockedDevice.IsActiveCalls())
+//
+//	len(mockedDevice.IsActiveCalls())
 func (mock *DeviceMock) IsActiveCalls() []struct {
 } {
 	var calls []struct {
@@ -204,7 +207,8 @@ func (mock *DeviceMock) Latitude() float64 {
 
 // LatitudeCalls gets all the calls that were made to Latitude.
 // Check the length with:
-//     len(mockedDevice.LatitudeCalls())
+//
+//	len(mockedDevice.LatitudeCalls())
 func (mock *DeviceMock) LatitudeCalls() []struct {
 } {
 	var calls []struct {
@@ -230,7 +234,8 @@ func (mock *DeviceMock) Longitude() float64 {
 
 // LongitudeCalls gets all the calls that were made to Longitude.
 // Check the length with:
-//     len(mockedDevice.LongitudeCalls())
+//
+//	len(mockedDevice.LongitudeCalls())
 func (mock *DeviceMock) LongitudeCalls() []struct {
 } {
 	var calls []struct {
@@ -256,7 +261,8 @@ func (mock *DeviceMock) SensorType() string {
 
 // SensorTypeCalls gets all the calls that were made to SensorType.
 // Check the length with:
-//     len(mockedDevice.SensorTypeCalls())
+//
+//	len(mockedDevice.SensorTypeCalls())
 func (mock *DeviceMock) SensorTypeCalls() []struct {
 } {
 	var calls []struct {
@@ -282,7 +288,8 @@ func (mock *DeviceMock) Tenant() string {
 
 // TenantCalls gets all the calls that were made to Tenant.
 // Check the length with:
-//     len(mockedDevice.TenantCalls())
+//
+//	len(mockedDevice.TenantCalls())
 func (mock *DeviceMock) TenantCalls() []struct {
 } {
 	var calls []struct {
@@ -308,7 +315,8 @@ func (mock *DeviceMock) Types() []string {
 
 // TypesCalls gets all the calls that were made to Types.
 // Check the length with:
-//     len(mockedDevice.TypesCalls())
+//
+//	len(mockedDevice.TypesCalls())
 func (mock *DeviceMock) TypesCalls() []struct {
 } {
 	var calls []struct {

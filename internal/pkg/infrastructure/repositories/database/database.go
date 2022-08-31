@@ -121,19 +121,6 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
-	/*
-	s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoNothing: true,
-	}).CreateInBatches([]Environment{
-		{Name: ""},
-		{Name: "air"},
-		{Name: "ground"},
-		{Name: "water"},
-		{Name: "indoors"},
-		{Name: "lifebuoy"},
-	}, 5)
-	*/
 	devices := []Device{}
 
 	for idx, d := range knownDevices {
@@ -156,7 +143,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 
 		var environment Environment
 		result := s.db.First(&environment, "name=?", d[4])
-		if errors.Is(result.Error, gorm.ErrRecordNotFound){
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			newEnvironment := Environment{Name: d[4]}
 			s.db.Create(&newEnvironment)
 			environment = newEnvironment
@@ -183,7 +170,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		var tenant Tenant
 		result = s.db.First(&tenant, "name=?", d[10])
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newTenant := Tenant{Name:d[10]}
+			newTenant := Tenant{Name: d[10]}
 			s.db.Create(&newTenant)
 			tenant = newTenant
 		}
