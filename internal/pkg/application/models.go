@@ -44,6 +44,8 @@ func MapToModels(d []database.Device) []Device {
 
 func MapToModel(d database.Device) Device {
 	env := d.Environment.Name
+	t := d.Tenant.Name
+
 	types := func(x []database.Lwm2mType) []string {
 		t := make([]string, 0)
 		for _, l := range x {
@@ -64,6 +66,6 @@ func MapToModel(d database.Device) Device {
 		SensorType:   d.SensorType,
 		LastObserved: d.LastObserved,
 		Active:       d.Active,
-		Tenant:       d.Tenant,
+		Tenant:       t,
 	}
 }

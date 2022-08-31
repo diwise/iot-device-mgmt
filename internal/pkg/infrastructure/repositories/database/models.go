@@ -20,7 +20,8 @@ type Device struct {
 	SensorType    string
 	LastObserved  time.Time
 	Active        bool
-	Tenant        string
+	TenantID      int `gorm:"foreignKey:TenantID"`
+	Tenant        Tenant
 }
 
 type Lwm2mType struct {
@@ -29,6 +30,11 @@ type Lwm2mType struct {
 }
 
 type Environment struct {
+	gorm.Model
+	Name string `gorm:"unique"`
+}
+
+type Tenant struct {
 	gorm.Model
 	Name string `gorm:"unique"`
 }
