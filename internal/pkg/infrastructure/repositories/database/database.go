@@ -2,6 +2,7 @@ package database
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -99,7 +100,7 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{})
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{})
 	if err != nil {
 		return nil, err
 	}
@@ -119,18 +120,6 @@ func (s store) Seed(seedFileReader io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
-
-	s.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoNothing: true,
-	}).CreateInBatches([]Environment{
-		{Name: ""},
-		{Name: "air"},
-		{Name: "ground"},
-		{Name: "water"},
-		{Name: "indoors"},
-		{Name: "lifebuoy"},
-	}, 5)
 
 	devices := []Device{}
 
@@ -153,7 +142,12 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		}
 
 		var environment Environment
-		s.db.First(&environment, "name=?", d[4])
+		result := s.db.First(&environment, "name=?", d[4])
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newEnvironment := Environment{Name: d[4]}
+			s.db.Create(&newEnvironment)
+			environment = newEnvironment
+		}
 
 		types := []Lwm2mType{}
 		ts := strings.Split(d[5], ",")
@@ -173,7 +167,13 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			return fmt.Errorf("failed to parse active for device %s: %s", devEUI, err.Error())
 		}
 
-		tenant := d[10]
+		var tenant Tenant
+		result = s.db.First(&tenant, "name=?", d[10])
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newTenant := Tenant{Name: d[10]}
+			s.db.Create(&newTenant)
+			tenant = newTenant
+		}
 
 		d := Device{
 			DevEUI:      devEUI,
@@ -247,6 +247,9 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 	var env Environment
 	s.db.First(&env, "name=?", environment)
 
+	var t Tenant
+	s.db.First(&tenant, "name=?", tenant)
+
 	lwm2mTypes := []Lwm2mType{}
 	for _, t := range types {
 		lwm2mTypes = append(lwm2mTypes, Lwm2mType{Type: t})
@@ -263,7 +266,7 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 		Active:      active,
 		Environment: env,
 		Types:       lwm2mTypes,
-		Tenant:      tenant,
+		Tenant:      t,
 	}
 
 	err := s.db.Create(&d).Error
