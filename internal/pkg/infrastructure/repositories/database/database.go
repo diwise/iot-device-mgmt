@@ -202,14 +202,14 @@ func (s store) Seed(seedFileReader io.Reader) error {
 
 func (s store) GetDeviceFromDevEUI(eui string) (Device, error) {
 	var d Device
-	result := s.db.Preload("Types").Preload("Environment").First(&d, "dev_eui=?", eui)
+	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "dev_eui=?", eui)
 
 	return d, result.Error
 }
 
 func (s store) GetDeviceFromID(deviceID string) (Device, error) {
 	var d Device
-	result := s.db.Preload("Types").Preload("Environment").First(&d, "device_id=?", deviceID)
+	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "device_id=?", deviceID)
 
 	return d, result.Error
 }
@@ -221,7 +221,7 @@ func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) 
 
 func (s store) GetAll() ([]Device, error) {
 	var devices []Device
-	err := s.db.Debug().Preload("Types").Preload("Environment").Find(&devices).Error
+	err := s.db.Debug().Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices).Error
 	if err != nil {
 		return nil, err
 	}
