@@ -24,6 +24,7 @@ const serviceName string = "iot-device-mgmt"
 
 var devicesFilePath string
 var opaFilePath string
+var notificationConfigPath string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -32,6 +33,7 @@ func main() {
 
 	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
+	flag.StringVar(&notificationConfigPath, "notifications", "/opt/diwise/config/notifications.yaml", "Configuration file for notifications")
 	flag.Parse()
 
 	db := connectToDatabaseOrDie(logger)
@@ -53,7 +55,17 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to init messenger")
 	}
 
-	r := createAppAndSetupRouter(logger, serviceName, db, messenger)
+	notificationConfigFile, err := os.Open(notificationConfigPath)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("configuration file for notifications not found!")
+	}
+
+	notificationConfig, err := application.LoadConfiguration(notificationConfigFile)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to load configuration")
+	}
+
+	r := createAppAndSetupRouter(logger, serviceName, db, messenger, *notificationConfig)
 
 	err = http.ListenAndServe(":8080", r)
 	if err != nil {
@@ -66,8 +78,9 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 		logger.Info().Str("body", string(msg.Body)).Msg("received message")
 
 		statusMessage := struct {
-			DeviceID  string `json:"deviceID"`
-			Timestamp string `json:"timestamp"`
+			DeviceID   string `json:"deviceID"`
+			StatusCode int    `json:"statusCode"`
+			Timestamp  string `json:"timestamp"`
 		}{}
 
 		err := json.Unmarshal(msg.Body, &statusMessage)
@@ -85,6 +98,12 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
+			return
+		}
+
+		err = app.NotifyStautsMessage(ctx, statusMessage)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to send notification")
 			return
 		}
 	}
@@ -108,8 +127,8 @@ func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	return db
 }
 
-func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext) *chi.Mux {
-	app := application.New(db)
+func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg application.Config) *chi.Mux {
+	app := application.New(db, cfg)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))

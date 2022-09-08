@@ -2,9 +2,12 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+
+	cloudevents "github.com/cloudevents/sdk-go/v2"
 )
 
 //go:generate moq -rm -out application_mock.go . DeviceManagement
@@ -17,18 +20,21 @@ type DeviceManagement interface {
 	ListAllDevices(context.Context) ([]Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
+	NotifyStautsMessage(ctx context.Context, message interface{}) error
 }
 
-func New(db database.Datastore) DeviceManagement {
+func New(db database.Datastore, cfg Config) DeviceManagement {
 	a := &app{
-		db: db,
+		db:  db,
+		cfg: cfg,
 	}
 
 	return a
 }
 
 type app struct {
-	db database.Datastore
+	db  database.Datastore
+	cfg Config
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
@@ -83,4 +89,30 @@ func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
 		return nil, err
 	}
 	return MapToEnvModels(env), nil
+}
+
+func (a *app) NotifyStautsMessage(ctx context.Context, message interface{}) error {
+	c, err := cloudevents.NewClientHTTP()
+	if err != nil {
+		return err
+	}
+
+	event := cloudevents.NewEvent()
+	event.SetSource("diwise.iot-device-mgmt")
+	event.SetType("diwise.statusmessage")
+	event.SetData(cloudevents.ApplicationJSON, message)
+
+	for _, n := range a.cfg.Notifications {
+		// filter for type
+		for _, s := range n.Subscribers {
+			// filter for entities
+			ctxWithTarget := cloudevents.ContextWithTarget(ctx, s.Endpoint)
+
+			if result := c.Send(ctxWithTarget, event); cloudevents.IsUndelivered(result) {
+				return fmt.Errorf("failed to send, %v", result)
+			}
+		}
+	}
+
+	return nil
 }

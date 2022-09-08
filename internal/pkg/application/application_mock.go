@@ -15,37 +15,40 @@ var _ DeviceManagement = &DeviceManagementMock{}
 
 // DeviceManagementMock is a mock implementation of DeviceManagement.
 //
-//	func TestSomethingThatUsesDeviceManagement(t *testing.T) {
+// 	func TestSomethingThatUsesDeviceManagement(t *testing.T) {
 //
-//		// make and configure a mocked DeviceManagement
-//		mockedDeviceManagement := &DeviceManagementMock{
-//			CreateDeviceFunc: func(contextMoqParam context.Context, device Device) error {
-//				panic("mock out the CreateDevice method")
-//			},
-//			GetDeviceFunc: func(contextMoqParam context.Context, s string) (Device, error) {
-//				panic("mock out the GetDevice method")
-//			},
-//			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (Device, error) {
-//				panic("mock out the GetDeviceFromEUI method")
-//			},
-//			ListAllDevicesFunc: func(contextMoqParam context.Context) ([]Device, error) {
-//				panic("mock out the ListAllDevices method")
-//			},
-//			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
-//				panic("mock out the ListEnvironments method")
-//			},
-//			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
-//				panic("mock out the UpdateDevice method")
-//			},
-//			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
-//				panic("mock out the UpdateLastObservedOnDevice method")
-//			},
-//		}
+// 		// make and configure a mocked DeviceManagement
+// 		mockedDeviceManagement := &DeviceManagementMock{
+// 			CreateDeviceFunc: func(contextMoqParam context.Context, device Device) error {
+// 				panic("mock out the CreateDevice method")
+// 			},
+// 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (Device, error) {
+// 				panic("mock out the GetDevice method")
+// 			},
+// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (Device, error) {
+// 				panic("mock out the GetDeviceFromEUI method")
+// 			},
+// 			ListAllDevicesFunc: func(contextMoqParam context.Context) ([]Device, error) {
+// 				panic("mock out the ListAllDevices method")
+// 			},
+// 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
+// 				panic("mock out the ListEnvironments method")
+// 			},
+// 			NotifyStautsMessageFunc: func(ctx context.Context, message interface{}) error {
+// 				panic("mock out the NotifyStautsMessage method")
+// 			},
+// 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+// 				panic("mock out the UpdateDevice method")
+// 			},
+// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
+// 				panic("mock out the UpdateLastObservedOnDevice method")
+// 			},
+// 		}
 //
-//		// use mockedDeviceManagement in code that requires DeviceManagement
-//		// and then make assertions.
+// 		// use mockedDeviceManagement in code that requires DeviceManagement
+// 		// and then make assertions.
 //
-//	}
+// 	}
 type DeviceManagementMock struct {
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(contextMoqParam context.Context, device Device) error
@@ -61,6 +64,9 @@ type DeviceManagementMock struct {
 
 	// ListEnvironmentsFunc mocks the ListEnvironments method.
 	ListEnvironmentsFunc func(contextMoqParam context.Context) ([]Environment, error)
+
+	// NotifyStautsMessageFunc mocks the NotifyStautsMessage method.
+	NotifyStautsMessageFunc func(ctx context.Context, message interface{}) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
@@ -101,6 +107,13 @@ type DeviceManagementMock struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 		}
+		// NotifyStautsMessage holds details about calls to the NotifyStautsMessage method.
+		NotifyStautsMessage []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Message is the message argument value.
+			Message interface{}
+		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -123,6 +136,7 @@ type DeviceManagementMock struct {
 	lockGetDeviceFromEUI           sync.RWMutex
 	lockListAllDevices             sync.RWMutex
 	lockListEnvironments           sync.RWMutex
+	lockNotifyStautsMessage        sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -147,8 +161,7 @@ func (mock *DeviceManagementMock) CreateDevice(contextMoqParam context.Context, 
 
 // CreateDeviceCalls gets all the calls that were made to CreateDevice.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.CreateDeviceCalls())
+//     len(mockedDeviceManagement.CreateDeviceCalls())
 func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
 	ContextMoqParam context.Context
 	Device          Device
@@ -183,8 +196,7 @@ func (mock *DeviceManagementMock) GetDevice(contextMoqParam context.Context, s s
 
 // GetDeviceCalls gets all the calls that were made to GetDevice.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.GetDeviceCalls())
+//     len(mockedDeviceManagement.GetDeviceCalls())
 func (mock *DeviceManagementMock) GetDeviceCalls() []struct {
 	ContextMoqParam context.Context
 	S               string
@@ -219,8 +231,7 @@ func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Conte
 
 // GetDeviceFromEUICalls gets all the calls that were made to GetDeviceFromEUI.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.GetDeviceFromEUICalls())
+//     len(mockedDeviceManagement.GetDeviceFromEUICalls())
 func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
 	ContextMoqParam context.Context
 	S               string
@@ -253,8 +264,7 @@ func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context
 
 // ListAllDevicesCalls gets all the calls that were made to ListAllDevices.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.ListAllDevicesCalls())
+//     len(mockedDeviceManagement.ListAllDevicesCalls())
 func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
 	ContextMoqParam context.Context
 } {
@@ -285,8 +295,7 @@ func (mock *DeviceManagementMock) ListEnvironments(contextMoqParam context.Conte
 
 // ListEnvironmentsCalls gets all the calls that were made to ListEnvironments.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.ListEnvironmentsCalls())
+//     len(mockedDeviceManagement.ListEnvironmentsCalls())
 func (mock *DeviceManagementMock) ListEnvironmentsCalls() []struct {
 	ContextMoqParam context.Context
 } {
@@ -296,6 +305,41 @@ func (mock *DeviceManagementMock) ListEnvironmentsCalls() []struct {
 	mock.lockListEnvironments.RLock()
 	calls = mock.calls.ListEnvironments
 	mock.lockListEnvironments.RUnlock()
+	return calls
+}
+
+// NotifyStautsMessage calls NotifyStautsMessageFunc.
+func (mock *DeviceManagementMock) NotifyStautsMessage(ctx context.Context, message interface{}) error {
+	if mock.NotifyStautsMessageFunc == nil {
+		panic("DeviceManagementMock.NotifyStautsMessageFunc: method is nil but DeviceManagement.NotifyStautsMessage was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Message interface{}
+	}{
+		Ctx:     ctx,
+		Message: message,
+	}
+	mock.lockNotifyStautsMessage.Lock()
+	mock.calls.NotifyStautsMessage = append(mock.calls.NotifyStautsMessage, callInfo)
+	mock.lockNotifyStautsMessage.Unlock()
+	return mock.NotifyStautsMessageFunc(ctx, message)
+}
+
+// NotifyStautsMessageCalls gets all the calls that were made to NotifyStautsMessage.
+// Check the length with:
+//     len(mockedDeviceManagement.NotifyStautsMessageCalls())
+func (mock *DeviceManagementMock) NotifyStautsMessageCalls() []struct {
+	Ctx     context.Context
+	Message interface{}
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Message interface{}
+	}
+	mock.lockNotifyStautsMessage.RLock()
+	calls = mock.calls.NotifyStautsMessage
+	mock.lockNotifyStautsMessage.RUnlock()
 	return calls
 }
 
@@ -321,8 +365,7 @@ func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID str
 
 // UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.UpdateDeviceCalls())
+//     len(mockedDeviceManagement.UpdateDeviceCalls())
 func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -359,8 +402,7 @@ func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, ti
 
 // UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
 // Check the length with:
-//
-//	len(mockedDeviceManagement.UpdateLastObservedOnDeviceCalls())
+//     len(mockedDeviceManagement.UpdateLastObservedOnDeviceCalls())
 func (mock *DeviceManagementMock) UpdateLastObservedOnDeviceCalls() []struct {
 	DeviceID  string
 	Timestamp time.Time
