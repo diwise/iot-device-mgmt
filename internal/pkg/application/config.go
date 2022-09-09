@@ -31,12 +31,13 @@ type Config struct {
 }
 
 func LoadConfiguration(data io.Reader) (*Config, error) {
+	cfg := &Config{}
+
 	buf, err := io.ReadAll(data)
 	if err != nil {
-		return nil, err
+		return cfg, err
 	}
 
-	cfg := &Config{}
 	err = yaml.Unmarshal(buf, &cfg)
 
 	return cfg, err

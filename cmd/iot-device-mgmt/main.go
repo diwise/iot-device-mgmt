@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
+	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/go-chi/chi/v5"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -55,57 +57,21 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to init messenger")
 	}
 
-	notificationConfigFile, err := os.Open(notificationConfigPath)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("configuration file for notifications not found!")
+	nCfg := &application.Config{}
+	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
+		nCfg, err = application.LoadConfiguration(nCfgFile)
+		if err != nil {
+			logger.Info().Err(err).Msg("failed to load configuration")
+		}
 	}
 
-	notificationConfig, err := application.LoadConfiguration(notificationConfigFile)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to load configuration")
-	}
+	r := createAppAndSetupRouter(logger, serviceName, db, messenger, *nCfg)
 
-	r := createAppAndSetupRouter(logger, serviceName, db, messenger, *notificationConfig)
+	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
-	err = http.ListenAndServe(":8080", r)
+	err = http.ListenAndServe(apiPort, r)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to start router")
-	}
-}
-
-func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Info().Str("body", string(msg.Body)).Msg("received message")
-
-		statusMessage := struct {
-			DeviceID   string `json:"deviceID"`
-			StatusCode int    `json:"statusCode"`
-			Timestamp  string `json:"timestamp"`
-		}{}
-
-		err := json.Unmarshal(msg.Body, &statusMessage)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
-			return
-		}
-
-		timestamp, err := time.Parse(time.RFC3339, statusMessage.Timestamp)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to parse time from status message")
-			return
-		}
-
-		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle accepted message")
-			return
-		}
-
-		err = app.NotifyStautsMessage(ctx, statusMessage)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to send notification")
-			return
-		}
 	}
 }
 
@@ -142,4 +108,36 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	defer policies.Close()
 
 	return api.RegisterHandlers(logger, r, policies, app)
+}
+
+func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
+		logger.Info().Str("body", string(msg.Body)).Msg("received message")
+
+		statusMessage := application.StatusMessage{}
+
+		err := json.Unmarshal(msg.Body, &statusMessage)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
+			return
+		}
+
+		timestamp, err := time.Parse(time.RFC3339, statusMessage.Timestamp)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to parse time from status message")
+			return
+		}
+
+		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to handle accepted message")
+			return
+		}
+
+		err = app.NotifyStatus(ctx, statusMessage)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to send notification")
+			return
+		}
+	}
 }

@@ -34,8 +34,8 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
 // 				panic("mock out the ListEnvironments method")
 // 			},
-// 			NotifyStautsMessageFunc: func(ctx context.Context, message interface{}) error {
-// 				panic("mock out the NotifyStautsMessage method")
+// 			NotifyStatusFunc: func(ctx context.Context, message StatusMessage) error {
+// 				panic("mock out the NotifyStatus method")
 // 			},
 // 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 // 				panic("mock out the UpdateDevice method")
@@ -65,8 +65,8 @@ type DeviceManagementMock struct {
 	// ListEnvironmentsFunc mocks the ListEnvironments method.
 	ListEnvironmentsFunc func(contextMoqParam context.Context) ([]Environment, error)
 
-	// NotifyStautsMessageFunc mocks the NotifyStautsMessage method.
-	NotifyStautsMessageFunc func(ctx context.Context, message interface{}) error
+	// NotifyStatusFunc mocks the NotifyStatus method.
+	NotifyStatusFunc func(ctx context.Context, message StatusMessage) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
@@ -107,12 +107,12 @@ type DeviceManagementMock struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 		}
-		// NotifyStautsMessage holds details about calls to the NotifyStautsMessage method.
-		NotifyStautsMessage []struct {
+		// NotifyStatus holds details about calls to the NotifyStatus method.
+		NotifyStatus []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Message is the message argument value.
-			Message interface{}
+			Message StatusMessage
 		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
@@ -136,7 +136,7 @@ type DeviceManagementMock struct {
 	lockGetDeviceFromEUI           sync.RWMutex
 	lockListAllDevices             sync.RWMutex
 	lockListEnvironments           sync.RWMutex
-	lockNotifyStautsMessage        sync.RWMutex
+	lockNotifyStatus               sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -308,38 +308,38 @@ func (mock *DeviceManagementMock) ListEnvironmentsCalls() []struct {
 	return calls
 }
 
-// NotifyStautsMessage calls NotifyStautsMessageFunc.
-func (mock *DeviceManagementMock) NotifyStautsMessage(ctx context.Context, message interface{}) error {
-	if mock.NotifyStautsMessageFunc == nil {
-		panic("DeviceManagementMock.NotifyStautsMessageFunc: method is nil but DeviceManagement.NotifyStautsMessage was just called")
+// NotifyStatus calls NotifyStatusFunc.
+func (mock *DeviceManagementMock) NotifyStatus(ctx context.Context, message StatusMessage) error {
+	if mock.NotifyStatusFunc == nil {
+		panic("DeviceManagementMock.NotifyStatusFunc: method is nil but DeviceManagement.NotifyStatus was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		Message interface{}
+		Message StatusMessage
 	}{
 		Ctx:     ctx,
 		Message: message,
 	}
-	mock.lockNotifyStautsMessage.Lock()
-	mock.calls.NotifyStautsMessage = append(mock.calls.NotifyStautsMessage, callInfo)
-	mock.lockNotifyStautsMessage.Unlock()
-	return mock.NotifyStautsMessageFunc(ctx, message)
+	mock.lockNotifyStatus.Lock()
+	mock.calls.NotifyStatus = append(mock.calls.NotifyStatus, callInfo)
+	mock.lockNotifyStatus.Unlock()
+	return mock.NotifyStatusFunc(ctx, message)
 }
 
-// NotifyStautsMessageCalls gets all the calls that were made to NotifyStautsMessage.
+// NotifyStatusCalls gets all the calls that were made to NotifyStatus.
 // Check the length with:
-//     len(mockedDeviceManagement.NotifyStautsMessageCalls())
-func (mock *DeviceManagementMock) NotifyStautsMessageCalls() []struct {
+//     len(mockedDeviceManagement.NotifyStatusCalls())
+func (mock *DeviceManagementMock) NotifyStatusCalls() []struct {
 	Ctx     context.Context
-	Message interface{}
+	Message StatusMessage
 } {
 	var calls []struct {
 		Ctx     context.Context
-		Message interface{}
+		Message StatusMessage
 	}
-	mock.lockNotifyStautsMessage.RLock()
-	calls = mock.calls.NotifyStautsMessage
-	mock.lockNotifyStautsMessage.RUnlock()
+	mock.lockNotifyStatus.RLock()
+	calls = mock.calls.NotifyStatus
+	mock.lockNotifyStatus.RUnlock()
 	return calls
 }
 

@@ -69,3 +69,15 @@ func MapToModel(d database.Device) Device {
 		Tenant:       t,
 	}
 }
+
+type StatusMessage struct {
+	DeviceID  string  `json:"deviceID"`
+	Error     *string `json:"error,omitempty"`
+	Status    Status  `json:"status"`
+	Timestamp string  `json:"timestamp"`
+}
+
+type Status struct {
+	Code     int      `json:"statusCode"`
+	Messages []string `json:"statusMessages,omitempty"`
+}

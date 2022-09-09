@@ -20,7 +20,7 @@ type DeviceManagement interface {
 	ListAllDevices(context.Context) ([]Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
-	NotifyStautsMessage(ctx context.Context, message interface{}) error
+	NotifyStatus(ctx context.Context, message StatusMessage) error
 }
 
 func New(db database.Datastore, cfg Config) DeviceManagement {
@@ -91,15 +91,26 @@ func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
 	return MapToEnvModels(env), nil
 }
 
-func (a *app) NotifyStautsMessage(ctx context.Context, message interface{}) error {
+func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 	c, err := cloudevents.NewClientHTTP()
 	if err != nil {
 		return err
 	}
 
 	event := cloudevents.NewEvent()
-	event.SetSource("diwise.iot-device-mgmt")
+
+	event.SetSource("github.com/diwise/iot-device-mgmt")
 	event.SetType("diwise.statusmessage")
+
+	if timestamp, err := time.Parse(time.RFC3339, message.Timestamp); err == nil {
+		event.SetID(fmt.Sprintf("%s:%d", message.DeviceID, timestamp.Unix()))
+		event.SetTime(timestamp)
+	} else {
+		t := time.Now().UTC()
+		event.SetID(fmt.Sprintf("%s:%d", message.DeviceID, t.Unix()))
+		event.SetTime(t)
+	}
+
 	event.SetData(cloudevents.ApplicationJSON, message)
 
 	for _, n := range a.cfg.Notifications {
