@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"time"
@@ -59,13 +61,17 @@ func main() {
 
 	nCfg := &application.Config{}
 	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
+		defer nCfgFile.Close()
+		
 		nCfg, err = application.LoadConfiguration(nCfgFile)
 		if err != nil {
-			logger.Info().Err(err).Msg("failed to load configuration")
+			logger.Fatal().Err(err).Msg("failed to load configuration")
 		}
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		logger.Fatal().Err(err).Msg("failed to open file")
 	}
 
-	r := createAppAndSetupRouter(logger, serviceName, db, messenger, *nCfg)
+	r := createAppAndSetupRouter(logger, serviceName, db, messenger, nCfg)
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
@@ -93,7 +99,7 @@ func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	return db
 }
 
-func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg application.Config) *chi.Mux {
+func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg *application.Config) *chi.Mux {
 	app := application.New(db, cfg)
 
 	routingKey := "device-status"

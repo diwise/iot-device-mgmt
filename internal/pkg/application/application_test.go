@@ -4,13 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 func TestConfig(t *testing.T) {
-	is, _ := setupTest(t)
+	is := setupTest(t)
 	config := strings.NewReader(`
 notifications:
   - id: qalcosonic
@@ -29,11 +27,8 @@ notifications:
 	is.Equal(cfg.Notifications[0].ID, "qalcosonic")
 }
 
-func setupTest(t *testing.T) (*is.I, DeviceManagement) {
+func setupTest(t *testing.T) *is.I {
 	is := is.New(t)
-	log := zerolog.Logger{}
-	db, _ := database.NewDatabaseConnection(database.NewSQLiteConnector(log))
-	app := New(db, Config{})
 
-	return is, app
+	return is
 }

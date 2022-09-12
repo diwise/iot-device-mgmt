@@ -2,10 +2,13 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"golang.org/x/sys/unix"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
 )
@@ -23,18 +26,24 @@ type DeviceManagement interface {
 	NotifyStatus(ctx context.Context, message StatusMessage) error
 }
 
-func New(db database.Datastore, cfg Config) DeviceManagement {
+func New(db database.Datastore, cfg *Config) DeviceManagement {
 	a := &app{
-		db:  db,
-		cfg: cfg,
+		db:          db,
+		subscribers: make(map[string][]SubscriberConfig),
+	}
+
+	if cfg != nil {
+		for _, s := range cfg.Notifications {
+			a.subscribers[s.Type] = s.Subscribers
+		}
 	}
 
 	return a
 }
 
 type app struct {
-	db  database.Datastore
-	cfg Config
+	db          database.Datastore
+	subscribers map[string][]SubscriberConfig
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
@@ -92,6 +101,12 @@ func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
 }
 
 func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
+	if s, ok := a.subscribers["diwise.statusmessage"]; !ok || len(s) == 0 {
+		return nil
+	}
+
+	var err error
+
 	c, err := cloudevents.NewClientHTTP()
 	if err != nil {
 		return err
@@ -99,31 +114,28 @@ func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 
 	event := cloudevents.NewEvent()
 
-	event.SetSource("github.com/diwise/iot-device-mgmt")
-	event.SetType("diwise.statusmessage")
-
 	if timestamp, err := time.Parse(time.RFC3339, message.Timestamp); err == nil {
 		event.SetID(fmt.Sprintf("%s:%d", message.DeviceID, timestamp.Unix()))
 		event.SetTime(timestamp)
 	} else {
-		t := time.Now().UTC()
-		event.SetID(fmt.Sprintf("%s:%d", message.DeviceID, t.Unix()))
-		event.SetTime(t)
+		return err
 	}
 
+	event.SetSource("github.com/diwise/iot-device-mgmt")
+	event.SetType("diwise.statusmessage")
 	event.SetData(cloudevents.ApplicationJSON, message)
 
-	for _, n := range a.cfg.Notifications {
-		// filter for type
-		for _, s := range n.Subscribers {
-			// filter for entities
-			ctxWithTarget := cloudevents.ContextWithTarget(ctx, s.Endpoint)
+	logger := logging.GetFromContext(ctx)
 
-			if result := c.Send(ctxWithTarget, event); cloudevents.IsUndelivered(result) {
-				return fmt.Errorf("failed to send, %v", result)
-			}
+	for _, s := range a.subscribers["diwise.statusmessage"] {
+		ctxWithTarget := cloudevents.ContextWithTarget(ctx, s.Endpoint)
+
+		result := c.Send(ctxWithTarget, event)
+		if cloudevents.IsUndelivered(result) || errors.Is(result, unix.ECONNREFUSED) {
+			logger.Error().Err(result).Msgf("faild to send event to %s", s.Endpoint)
+			err = fmt.Errorf("%w", result)
 		}
 	}
 
-	return nil
+	return err
 }
