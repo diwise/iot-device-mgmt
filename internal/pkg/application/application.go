@@ -65,7 +65,7 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, erro
 }
 
 func (a *app) ListAllDevices(ctx context.Context) ([]Device, error) {
-	devices, err := a.db.GetAll()
+	devices, err := a.db.GetAll([]string{}) //TODO: fix this, obv
 	if err != nil {
 		return nil, err
 	}
