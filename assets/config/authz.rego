@@ -30,7 +30,7 @@ is_valid_token {
 
     openid_config := metadata_discovery(token.payload.iss)
     jwks := jwks_request(openid_config.jwks_uri).raw_body
-	
+
     verified := io.jwt.verify_rs256(input.token, jwks)
     verified == true
 }
