@@ -222,7 +222,7 @@ func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) 
 func (s store) getTenantByName(tenantName string) (Tenant, error) {
 	var tenant Tenant
 
-	err := s.db.Debug().First(&tenant, "name = ?", tenantName).Error
+	err := s.db.First(&tenant, "name = ?", tenantName).Error
 	if err != nil {
 		return Tenant{}, err
 	}
@@ -241,7 +241,7 @@ func (s store) GetAll(tenants []string) ([]Device, error) {
 
 		var devices []Device
 
-		err = s.db.Debug().Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices, "tenant_id = ?", tenant.ID).Error
+		err = s.db.Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices, "tenant_id = ?", tenant.ID).Error
 		if err != nil {
 			return nil, err
 		}
