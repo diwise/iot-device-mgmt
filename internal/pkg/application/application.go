@@ -20,7 +20,7 @@ type DeviceManagement interface {
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
 	CreateDevice(context.Context, Device) error
 	GetDeviceFromEUI(context.Context, string) (Device, error)
-	ListAllDevices(context.Context) ([]Device, error)
+	ListAllDevices(context.Context, []string) ([]Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
 	NotifyStatus(ctx context.Context, message StatusMessage) error
@@ -64,7 +64,8 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, erro
 	return MapToModel(device), nil
 }
 
-func (a *app) ListAllDevices(ctx context.Context) ([]Device, error) {
+func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]Device, error) {
+	// TODO: Pass allowedTenants to GetAll when we have merged our branches
 	devices, err := a.db.GetAll()
 	if err != nil {
 		return nil, err

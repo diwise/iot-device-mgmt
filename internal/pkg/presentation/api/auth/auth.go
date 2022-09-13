@@ -12,6 +12,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+type tenantsContextKey struct {
+	name string
+}
+
+var allowedTenantsCtxKey = &tenantsContextKey{"allowed-tenants"}
+
 func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Reader) (func(http.Handler) http.Handler, error) {
 
 	module, err := io.ReadAll(policies)
@@ -58,7 +64,18 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Re
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			} else {
-				result, ok := results[0].Bindings["x"].(bool)
+
+				binding := results[0].Bindings["x"]
+
+				// If authz fails we will get back a single bool. Check for that first.
+				allowed, ok := binding.(bool)
+				if ok && !allowed {
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+
+				// If authz succeeds we should expect a result object here
+				result, ok := binding.(map[string]any)
 
 				if !ok {
 					err = errors.New("unexpected result type")
@@ -67,16 +84,38 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Re
 					return
 				}
 
-				if !result {
-					logger.Info().Msgf("opa result: %+v", results)
+				anyt, ok1 := result["tenants"]
+				t, ok2 := anyt.([]any)
 
-					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				if !ok1 || !ok2 {
+					err = errors.New("bad response from authz policy engine")
+					logger.Error().Err(err).Msg("opa error")
+					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
+
+				tenants := make([]string, len(t))
+				for idx, tenant := range t {
+					tenants[idx] = tenant.(string)
+				}
+
+				ctx := context.WithValue(r.Context(), allowedTenantsCtxKey, tenants)
+				r = r.WithContext(ctx)
 			}
 
 			// Token is authenticated, pass it through
 			next.ServeHTTP(w, r)
 		})
 	}, nil
+}
+
+// GetAllowedTenantsFromContext extracts the names of allowed tenants, if any, from the provided context
+func GetAllowedTenantsFromContext(ctx context.Context) []string {
+	tenants, ok := ctx.Value(allowedTenantsCtxKey).([]string)
+
+	if !ok {
+		return []string{}
+	}
+
+	return tenants
 }

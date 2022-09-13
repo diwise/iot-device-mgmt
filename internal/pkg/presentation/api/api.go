@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 
@@ -155,6 +156,8 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
 		ctx, span := tracer.Start(r.Context(), "query-devices")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
@@ -163,7 +166,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 
 		devEUI := r.URL.Query().Get("devEUI")
 		if devEUI == "" {
-			devices, err := app.ListAllDevices(ctx)
+			devices, err := app.ListAllDevices(ctx, allowedTenants)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("unable to fetch all devices")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -178,6 +181,14 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+
+			if notInAllowedTenants(device.Tenant, allowedTenants) {
+				err = fmt.Errorf("client not allowed to access tenant %s", device.Tenant)
+				requestLogger.Error().Err(err).Msg("not authorized")
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
 			deviceArray = append(deviceArray, device)
 			requestLogger.Info().Msgf("returning information about device %s", device.DeviceId)
 		}
@@ -199,6 +210,8 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement)
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
 		ctx, span := tracer.Start(r.Context(), "get-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
@@ -207,6 +220,13 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement)
 		device, err := app.GetDevice(ctx, deviceID)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("device not found")
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if notInAllowedTenants(device.Tenant, allowedTenants) {
+			err = fmt.Errorf("client not allowed to access tenant %s", device.Tenant)
+			requestLogger.Error().Err(err).Msg("not authorized")
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -224,4 +244,14 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement)
 		w.WriteHeader(http.StatusOK)
 		w.Write(bytes)
 	}
+}
+
+func notInAllowedTenants(tenant string, allowedTenants []string) bool {
+	for _, t := range allowedTenants {
+		if t == tenant {
+			return false
+		}
+	}
+
+	return true
 }

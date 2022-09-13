@@ -1,13 +1,21 @@
+#
+# Use https://play.openpolicyagent.org for easier editing/validation of this policy file
+#
+
 package example.authz
 
 default allow := false
 
-allow {
+allow = response {
     is_valid_token
 
     input.method == "GET"
     pathstart := array.slice(input.path, 0, 3)
     pathstart == ["api", "v0", "devices"]
+
+    response := {
+        "tenants": token.payload.tenants
+    }
 }
 
 issuers := {"https://iam.diwise.io/realms/diwise-test"}
@@ -36,5 +44,5 @@ is_valid_token {
 }
 
 token := {"payload": payload} {
-    [header, payload, signature] := io.jwt.decode(input.token)
+    [_, payload, _] := io.jwt.decode(input.token)
 }
