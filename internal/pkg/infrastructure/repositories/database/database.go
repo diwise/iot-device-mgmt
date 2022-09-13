@@ -27,7 +27,7 @@ type Datastore interface {
 	UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error)
 	CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
-	GetAll() ([]Device, error)
+	GetAll(tenants []string) ([]Device, error)
 
 	ListEnvironments() ([]Environment, error)
 
@@ -219,14 +219,37 @@ func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) 
 	return result.Error
 }
 
-func (s store) GetAll() ([]Device, error) {
-	var devices []Device
-	err := s.db.Debug().Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices).Error
+func (s store) getTenantByName(tenantName string) (Tenant, error) {
+	var tenant Tenant
+
+	err := s.db.Debug().First(&tenant, "name = ?", tenantName).Error
 	if err != nil {
-		return nil, err
+		return Tenant{}, err
 	}
 
-	return devices, err
+	return tenant, nil
+}
+
+func (s store) GetAll(tenants []string) ([]Device, error) {
+	var deviceList []Device
+
+	for _, t := range tenants {
+		tenant, err := s.getTenantByName(t)
+		if err != nil {
+			return nil, err
+		}
+
+		var devices []Device
+
+		err = s.db.Debug().Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices, "tenant_id = ?", tenant.ID).Error
+		if err != nil {
+			return nil, err
+		}
+
+		deviceList = append(deviceList, devices...)
+	}
+
+	return deviceList, nil
 }
 
 func (s store) UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error) {

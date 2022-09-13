@@ -65,8 +65,8 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, erro
 }
 
 func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]Device, error) {
-	// TODO: Pass allowedTenants to GetAll when we have merged our branches
-	devices, err := a.db.GetAll()
+
+	devices, err := a.db.GetAll(allowedTenants)
 	if err != nil {
 		return nil, err
 	}
