@@ -219,22 +219,22 @@ func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) 
 	return result.Error
 }
 
-func (s store) getTenantByName(tenantName string) (Tenant, error) {
+func (s store) getTenantByName(tenantName string) (*Tenant, error) {
 	var tenant Tenant
 
 	err := s.db.First(&tenant, "name = ?", tenantName).Error
 	if err != nil {
-		return Tenant{}, err
+		return nil, err
 	}
 
-	return tenant, nil
+	return &tenant, nil
 }
 
-func (s store) GetAll(tenants []string) ([]Device, error) {
+func (s store) GetAll(tenantNames []string) ([]Device, error) {
 	var deviceList []Device
 
-	for _, t := range tenants {
-		tenant, err := s.getTenantByName(t)
+	for _, name := range tenantNames {
+		tenant, err := s.getTenantByName(name)
 		if err != nil {
 			return nil, err
 		}
