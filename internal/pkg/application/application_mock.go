@@ -28,7 +28,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (Device, error) {
 // 				panic("mock out the GetDeviceFromEUI method")
 // 			},
-// 			ListAllDevicesFunc: func(contextMoqParam context.Context) ([]Device, error) {
+// 			ListAllDevicesFunc: func(contextMoqParam context.Context, strings []string) ([]Device, error) {
 // 				panic("mock out the ListAllDevices method")
 // 			},
 // 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
@@ -60,7 +60,7 @@ type DeviceManagementMock struct {
 	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (Device, error)
 
 	// ListAllDevicesFunc mocks the ListAllDevices method.
-	ListAllDevicesFunc func(contextMoqParam context.Context) ([]Device, error)
+	ListAllDevicesFunc func(contextMoqParam context.Context, strings []string) ([]Device, error)
 
 	// ListEnvironmentsFunc mocks the ListEnvironments method.
 	ListEnvironmentsFunc func(contextMoqParam context.Context) ([]Environment, error)
@@ -101,6 +101,8 @@ type DeviceManagementMock struct {
 		ListAllDevices []struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
+			// Strings is the strings argument value.
+			Strings []string
 		}
 		// ListEnvironments holds details about calls to the ListEnvironments method.
 		ListEnvironments []struct {
@@ -247,19 +249,21 @@ func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
 }
 
 // ListAllDevices calls ListAllDevicesFunc.
-func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context) ([]Device, error) {
+func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context, strings []string) ([]Device, error) {
 	if mock.ListAllDevicesFunc == nil {
 		panic("DeviceManagementMock.ListAllDevicesFunc: method is nil but DeviceManagement.ListAllDevices was just called")
 	}
 	callInfo := struct {
 		ContextMoqParam context.Context
+		Strings         []string
 	}{
 		ContextMoqParam: contextMoqParam,
+		Strings:         strings,
 	}
 	mock.lockListAllDevices.Lock()
 	mock.calls.ListAllDevices = append(mock.calls.ListAllDevices, callInfo)
 	mock.lockListAllDevices.Unlock()
-	return mock.ListAllDevicesFunc(contextMoqParam)
+	return mock.ListAllDevicesFunc(contextMoqParam, strings)
 }
 
 // ListAllDevicesCalls gets all the calls that were made to ListAllDevices.
@@ -267,9 +271,11 @@ func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context
 //     len(mockedDeviceManagement.ListAllDevicesCalls())
 func (mock *DeviceManagementMock) ListAllDevicesCalls() []struct {
 	ContextMoqParam context.Context
+	Strings         []string
 } {
 	var calls []struct {
 		ContextMoqParam context.Context
+		Strings         []string
 	}
 	mock.lockListAllDevices.RLock()
 	calls = mock.calls.ListAllDevices
