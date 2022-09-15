@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/open-policy-agent/opa/rego"
 	"github.com/rs/zerolog"
+	"go.opentelemetry.io/otel"
 )
 
 type tenantsContextKey struct {
@@ -17,6 +19,8 @@ type tenantsContextKey struct {
 }
 
 var allowedTenantsCtxKey = &tenantsContextKey{"allowed-tenants"}
+
+var tracer = otel.Tracer("iot-device-mgmt/authz")
 
 func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Reader) (func(http.Handler) http.Handler, error) {
 
@@ -36,9 +40,16 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Re
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			var err error
+
+			_, span := tracer.Start(r.Context(), "check-auth")
+			defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
 			token := r.Header.Get("Authorization")
 
 			if token == "" || !strings.HasPrefix(token, "Bearer ") {
+				err = errors.New("authorization header missing")
+				logger.Info().Msg(err.Error())
 				http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 				return
 			}
@@ -70,6 +81,8 @@ func NewAuthenticator(ctx context.Context, logger zerolog.Logger, policies io.Re
 				// If authz fails we will get back a single bool. Check for that first.
 				allowed, ok := binding.(bool)
 				if ok && !allowed {
+					err = errors.New("authorization failed")
+					logger.Warn().Msg(err.Error())
 					http.Error(w, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
