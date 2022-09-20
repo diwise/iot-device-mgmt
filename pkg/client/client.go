@@ -208,11 +208,11 @@ func (d *deviceWrapper) ID() string {
 }
 
 func (d *deviceWrapper) Latitude() float64 {
-	return d.impl.Latitude
+	return d.impl.Location.Latitude
 }
 
 func (d *deviceWrapper) Longitude() float64 {
-	return d.impl.Longitude
+	return d.impl.Location.Longitude
 }
 
 func (d *deviceWrapper) Environment() string {

@@ -11,14 +11,20 @@ type Device struct {
 	DeviceId     string    `json:"deviceID"`
 	Name         string    `json:"name"`
 	Description  string    `json:"description"`
-	Latitude     float64   `json:"latitude"`
-	Longitude    float64   `json:"longitude"`
+	Location     Location  `json:"location"`
 	Environment  string    `json:"environment"`
 	Types        []string  `json:"types"`
 	SensorType   string    `json:"sensor_type"`
 	LastObserved time.Time `json:"last_observed"`
 	Active       bool      `json:"active"`
 	Tenant       string    `json:"tenant"`
+	Status       Status    `json:"status"`
+}
+
+type Location struct {
+	Latitude  float64 `json:"latitude"`
+	Longitude float64 `json:"longitude"`
+	Altitue   float64 `json:"altitude"`
 }
 
 type Environment struct {
@@ -55,18 +61,24 @@ func MapToModel(d database.Device) Device {
 	}
 
 	return Device{
-		DevEUI:       d.DevEUI,
-		DeviceId:     d.DeviceId,
-		Name:         d.Name,
-		Description:  d.Description,
-		Latitude:     d.Latitude,
-		Longitude:    d.Longitude,
+		DevEUI:      d.DevEUI,
+		DeviceId:    d.DeviceId,
+		Name:        d.Name,
+		Description: d.Description,
+		Location: Location{
+			Latitude:  d.Latitude,
+			Longitude: d.Longitude,
+		},
 		Environment:  env,
 		Types:        types(d.Types),
 		SensorType:   d.SensorType,
 		LastObserved: d.LastObserved,
 		Active:       d.Active,
 		Tenant:       t,
+		Status: Status{
+			Code:     0,
+			Messages: []string{},
+		},
 	}
 }
 

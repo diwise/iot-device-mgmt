@@ -89,7 +89,7 @@ func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[stri
 }
 
 func (a *app) CreateDevice(ctx context.Context, d Device) error {
-	_, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Latitude, d.Longitude, d.Types, d.Active)
+	_, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
 	return err
 }
 
