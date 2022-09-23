@@ -3,7 +3,7 @@ module github.com/diwise/iot-device-mgmt
 go 1.18
 
 require (
-	github.com/diwise/messaging-golang v0.0.0-20220413073613-1dcf3cdf0dcd
+	github.com/diwise/messaging-golang v0.0.0-20220923095330-874218800e05
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/matryer/is v1.4.0
 	github.com/riandyrn/otelchi v0.4.0
@@ -21,6 +21,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.3.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.34.0
 	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
+	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/sqlite v1.3.6
 )
 
@@ -66,7 +67,6 @@ require (
 	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/crypto v0.0.0-20220622213112-05595931fe9d // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
 
 require (
@@ -83,7 +83,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.9.0 // indirect
 	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
 	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8 // indirect
+	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20220711200234-e2551ce405a2 // indirect
 	google.golang.org/grpc v1.48.0 // indirect
