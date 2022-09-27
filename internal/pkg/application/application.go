@@ -1,7 +1,9 @@
 package application
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -24,6 +26,7 @@ type DeviceManagement interface {
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
 	NotifyStatus(ctx context.Context, message StatusMessage) error
+	RegisterClient(ctx context.Context, client *Client) error
 }
 
 func New(db database.Datastore, cfg *Config) DeviceManagement {
@@ -44,6 +47,7 @@ func New(db database.Datastore, cfg *Config) DeviceManagement {
 type app struct {
 	db          database.Datastore
 	subscribers map[string][]SubscriberConfig
+	clients     []*Client
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
@@ -80,11 +84,30 @@ func (a *app) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) e
 		return err
 	}
 
+	a.broadcastToClients(Event{Type: "LastObservedUpdated"})
+
+	return nil
+}
+
+func (a *app) broadcastToClients(evt Event) error {
+
+	for _, c := range a.clients {
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.Encode(evt)
+		fmt.Fprintf(*c.Writer, "data: %v\n\n", buf.String())
+	}
+
 	return nil
 }
 
 func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 	d, err := a.db.UpdateDevice(deviceID, fields)
+
+	if err == nil {
+		a.broadcastToClients(Event{Type: "deviceUpdated"})
+	}
+
 	return MapToModel(d), err
 }
 
@@ -139,4 +162,10 @@ func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 	}
 
 	return err
+}
+
+func (a *app) RegisterClient(ctx context.Context, client *Client) error {
+	a.clients = append(a.clients, client)
+
+	return nil
 }

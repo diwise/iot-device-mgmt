@@ -37,6 +37,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			NotifyStatusFunc: func(ctx context.Context, message StatusMessage) error {
 // 				panic("mock out the NotifyStatus method")
 // 			},
+// 			RegisterClientFunc: func(ctx context.Context, client *Client) error {
+// 				panic("mock out the RegisterClient method")
+// 			},
 // 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 // 				panic("mock out the UpdateDevice method")
 // 			},
@@ -67,6 +70,9 @@ type DeviceManagementMock struct {
 
 	// NotifyStatusFunc mocks the NotifyStatus method.
 	NotifyStatusFunc func(ctx context.Context, message StatusMessage) error
+
+	// RegisterClientFunc mocks the RegisterClient method.
+	RegisterClientFunc func(ctx context.Context, client *Client) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
@@ -116,6 +122,13 @@ type DeviceManagementMock struct {
 			// Message is the message argument value.
 			Message StatusMessage
 		}
+		// RegisterClient holds details about calls to the RegisterClient method.
+		RegisterClient []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Client is the client argument value.
+			Client *Client
+		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -139,6 +152,7 @@ type DeviceManagementMock struct {
 	lockListAllDevices             sync.RWMutex
 	lockListEnvironments           sync.RWMutex
 	lockNotifyStatus               sync.RWMutex
+	lockRegisterClient             sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -346,6 +360,41 @@ func (mock *DeviceManagementMock) NotifyStatusCalls() []struct {
 	mock.lockNotifyStatus.RLock()
 	calls = mock.calls.NotifyStatus
 	mock.lockNotifyStatus.RUnlock()
+	return calls
+}
+
+// RegisterClient calls RegisterClientFunc.
+func (mock *DeviceManagementMock) RegisterClient(ctx context.Context, client *Client) error {
+	if mock.RegisterClientFunc == nil {
+		panic("DeviceManagementMock.RegisterClientFunc: method is nil but DeviceManagement.RegisterClient was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Client *Client
+	}{
+		Ctx:    ctx,
+		Client: client,
+	}
+	mock.lockRegisterClient.Lock()
+	mock.calls.RegisterClient = append(mock.calls.RegisterClient, callInfo)
+	mock.lockRegisterClient.Unlock()
+	return mock.RegisterClientFunc(ctx, client)
+}
+
+// RegisterClientCalls gets all the calls that were made to RegisterClient.
+// Check the length with:
+//     len(mockedDeviceManagement.RegisterClientCalls())
+func (mock *DeviceManagementMock) RegisterClientCalls() []struct {
+	Ctx    context.Context
+	Client *Client
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Client *Client
+	}
+	mock.lockRegisterClient.RLock()
+	calls = mock.calls.RegisterClient
+	mock.lockRegisterClient.RUnlock()
 	return calls
 }
 

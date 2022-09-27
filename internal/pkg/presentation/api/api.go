@@ -1,11 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
@@ -23,24 +25,24 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 	router.Get("/health", NewHealthHandler(log, app))
 
 	router.Route("/api/v0", func(r chi.Router) {
-		r.Route("/devices", func(r chi.Router) {
-			r.Group(func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			// Handle valid / invalid tokens.
+			authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to create api authenticator")
+			}
+			r.Use(authenticator)
 
-				// Handle valid / invalid tokens.
-				authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
-				if err != nil {
-					log.Fatal().Err(err).Msg("failed to create api authenticator")
-				}
-				r.Use(authenticator)
-
+			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", queryDevicesHandler(log, app))
 				r.Post("/", createDeviceHandler(log, app))
 				r.Get("/{id}", retrieveDeviceHandler(log, app))
 				r.Patch("/{id}", patchDeviceHandler(log, app))
 			})
-		})
 
-		r.Get("/environments", listEnvironments(log, app))
+			r.Get("/events", sseHandler(log, app))
+			r.Get("/environments", listEnvironments(log, app))
+		})
 	})
 
 	return router
@@ -243,6 +245,39 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement)
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(bytes)
+	}
+}
+
+func sseHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		client := application.NewClient(r.RemoteAddr, allowedTenants)
+
+		app.RegisterClient(r.Context(), client)
+
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.Header().Set("Cache-Control", "no-cache")
+		w.Header().Set("Connection", "keep-alive")
+
+		timeout := time.After(1 * time.Second)
+		select {
+		case ev := <-client.Evt():
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.Encode(ev)
+			fmt.Fprintf(w, "data: %v\n\n", buf.String())
+			fmt.Printf("data: %v\n", buf.String())
+		case <-timeout:
+			fmt.Fprintf(w, ": nothing to sent\n\n")
+		}
+
+		var buf bytes.Buffer
+		enc := json.NewEncoder(&buf)
+		enc.Encode(&application.Event{Type: "clientConnected"})
+		fmt.Fprintf(w, "data: %v\n\n", buf.String())
 	}
 }
 
