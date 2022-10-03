@@ -77,8 +77,6 @@ func main() {
 
 	r := createAppAndSetupRouter(logger, serviceName, db, messenger, nCfg, s)
 
-	r.Mount("/events/", s)
-
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
 	err = http.ListenAndServe(apiPort, r)
@@ -119,7 +117,8 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, app)
+
+	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }
 
 func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {

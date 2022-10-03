@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -18,7 +19,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement, sseServer *sse.Server) *chi.Mux {
 
 	router.Get("/health", NewHealthHandler(log, app))
 
@@ -41,6 +42,8 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 			r.Get("/environments", listEnvironments(log, app))
 		})
 	})
+
+	router.Mount("/events/", sseServer)
 
 	return router
 }

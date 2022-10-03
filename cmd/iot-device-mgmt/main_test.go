@@ -101,7 +101,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)
-	api.RegisterHandlers(log, router, policies, app)
+	api.RegisterHandlers(log, router, policies, app, nil)
 
 	return router, is
 }
