@@ -97,7 +97,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	err = db.Seed(bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
 
-	app := application.New(db, nil)
+	app := application.New(db, nil, nil)
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)

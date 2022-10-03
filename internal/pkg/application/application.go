@@ -1,13 +1,13 @@
 package application
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
+	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"golang.org/x/sys/unix"
@@ -23,16 +23,16 @@ type DeviceManagement interface {
 	CreateDevice(context.Context, Device) error
 	GetDeviceFromEUI(context.Context, string) (Device, error)
 	ListAllDevices(context.Context, []string) ([]Device, error)
-	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
+	UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
 	NotifyStatus(ctx context.Context, message StatusMessage) error
-	RegisterClient(ctx context.Context, client *Client) error
 }
 
-func New(db database.Datastore, cfg *Config) DeviceManagement {
+func New(db database.Datastore, cfg *Config, sseServer *sse.Server) DeviceManagement {
 	a := &app{
 		db:          db,
 		subscribers: make(map[string][]SubscriberConfig),
+		sse:         sseServer,
 	}
 
 	if cfg != nil {
@@ -47,7 +47,7 @@ func New(db database.Datastore, cfg *Config) DeviceManagement {
 type app struct {
 	db          database.Datastore
 	subscribers map[string][]SubscriberConfig
-	clients     []*Client
+	sse         *sse.Server
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
@@ -78,42 +78,40 @@ func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]De
 	return MapToModels(devices), nil
 }
 
-func (a *app) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+func (a *app) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error {
 	err := a.db.UpdateLastObservedOnDevice(deviceID, timestamp)
 	if err != nil {
 		return err
 	}
 
-	a.broadcastToClients(Event{Type: "LastObservedUpdated"})
-
-	return nil
-}
-
-func (a *app) broadcastToClients(evt Event) error {
-
-	for _, c := range a.clients {
-		var buf bytes.Buffer
-		enc := json.NewEncoder(&buf)
-		enc.Encode(evt)
-		fmt.Fprintf(*c.Writer, "data: %v\n\n", buf.String())
+	d, err := a.GetDevice(ctx, deviceID)
+	if err != nil {
+		return err
 	}
 
-	return nil
+	return a.sendMessage("lastObservedUpdated", d)
 }
 
 func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 	d, err := a.db.UpdateDevice(deviceID, fields)
 
-	if err == nil {
-		a.broadcastToClients(Event{Type: "deviceUpdated"})
+	if err != nil {
+		return Device{}, err
 	}
 
-	return MapToModel(d), err
+	m := MapToModel(d)
+
+	return m, a.sendMessage("deviceUpdated", m)
 }
 
 func (a *app) CreateDevice(ctx context.Context, d Device) error {
-	_, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
-	return err
+	device, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
+
+	if err != nil {
+		return err
+	}
+
+	return a.sendMessage("deviceCreated", MapToModel(device))
 }
 
 func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
@@ -164,8 +162,14 @@ func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 	return err
 }
 
-func (a *app) RegisterClient(ctx context.Context, client *Client) error {
-	a.clients = append(a.clients, client)
+func (a *app) sendMessage(event string, v any) error {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	message := sse.NewMessage("", string(b), event)
+	a.sse.SendMessage("", message)
 
 	return nil
 }

@@ -9,9 +9,9 @@ default allow := false
 allow = response {
     is_valid_token
 
-    input.method == "GET"
-    pathstart := array.slice(input.path, 0, 3)
-    pathstart == ["api", "v0", "devices"]
+    #input.method == "GET"
+    pathstart := array.slice(input.path, 0, 2)
+    pathstart == ["api", "v0"]
 
     response := {
         "tenants": token.payload.tenants

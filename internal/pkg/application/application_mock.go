@@ -37,13 +37,10 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			NotifyStatusFunc: func(ctx context.Context, message StatusMessage) error {
 // 				panic("mock out the NotifyStatus method")
 // 			},
-// 			RegisterClientFunc: func(ctx context.Context, client *Client) error {
-// 				panic("mock out the RegisterClient method")
-// 			},
 // 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 // 				panic("mock out the UpdateDevice method")
 // 			},
-// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
+// 			UpdateLastObservedOnDeviceFunc: func(ctx context.Context, deviceID string, timestamp time.Time) error {
 // 				panic("mock out the UpdateLastObservedOnDevice method")
 // 			},
 // 		}
@@ -71,14 +68,11 @@ type DeviceManagementMock struct {
 	// NotifyStatusFunc mocks the NotifyStatus method.
 	NotifyStatusFunc func(ctx context.Context, message StatusMessage) error
 
-	// RegisterClientFunc mocks the RegisterClient method.
-	RegisterClientFunc func(ctx context.Context, client *Client) error
-
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
-	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
+	UpdateLastObservedOnDeviceFunc func(ctx context.Context, deviceID string, timestamp time.Time) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -122,13 +116,6 @@ type DeviceManagementMock struct {
 			// Message is the message argument value.
 			Message StatusMessage
 		}
-		// RegisterClient holds details about calls to the RegisterClient method.
-		RegisterClient []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Client is the client argument value.
-			Client *Client
-		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -140,6 +127,8 @@ type DeviceManagementMock struct {
 		}
 		// UpdateLastObservedOnDevice holds details about calls to the UpdateLastObservedOnDevice method.
 		UpdateLastObservedOnDevice []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Timestamp is the timestamp argument value.
@@ -152,7 +141,6 @@ type DeviceManagementMock struct {
 	lockListAllDevices             sync.RWMutex
 	lockListEnvironments           sync.RWMutex
 	lockNotifyStatus               sync.RWMutex
-	lockRegisterClient             sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -363,41 +351,6 @@ func (mock *DeviceManagementMock) NotifyStatusCalls() []struct {
 	return calls
 }
 
-// RegisterClient calls RegisterClientFunc.
-func (mock *DeviceManagementMock) RegisterClient(ctx context.Context, client *Client) error {
-	if mock.RegisterClientFunc == nil {
-		panic("DeviceManagementMock.RegisterClientFunc: method is nil but DeviceManagement.RegisterClient was just called")
-	}
-	callInfo := struct {
-		Ctx    context.Context
-		Client *Client
-	}{
-		Ctx:    ctx,
-		Client: client,
-	}
-	mock.lockRegisterClient.Lock()
-	mock.calls.RegisterClient = append(mock.calls.RegisterClient, callInfo)
-	mock.lockRegisterClient.Unlock()
-	return mock.RegisterClientFunc(ctx, client)
-}
-
-// RegisterClientCalls gets all the calls that were made to RegisterClient.
-// Check the length with:
-//     len(mockedDeviceManagement.RegisterClientCalls())
-func (mock *DeviceManagementMock) RegisterClientCalls() []struct {
-	Ctx    context.Context
-	Client *Client
-} {
-	var calls []struct {
-		Ctx    context.Context
-		Client *Client
-	}
-	mock.lockRegisterClient.RLock()
-	calls = mock.calls.RegisterClient
-	mock.lockRegisterClient.RUnlock()
-	return calls
-}
-
 // UpdateDevice calls UpdateDeviceFunc.
 func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 	if mock.UpdateDeviceFunc == nil {
@@ -438,31 +391,35 @@ func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
 }
 
 // UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
-func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error {
 	if mock.UpdateLastObservedOnDeviceFunc == nil {
 		panic("DeviceManagementMock.UpdateLastObservedOnDeviceFunc: method is nil but DeviceManagement.UpdateLastObservedOnDevice was just called")
 	}
 	callInfo := struct {
+		Ctx       context.Context
 		DeviceID  string
 		Timestamp time.Time
 	}{
+		Ctx:       ctx,
 		DeviceID:  deviceID,
 		Timestamp: timestamp,
 	}
 	mock.lockUpdateLastObservedOnDevice.Lock()
 	mock.calls.UpdateLastObservedOnDevice = append(mock.calls.UpdateLastObservedOnDevice, callInfo)
 	mock.lockUpdateLastObservedOnDevice.Unlock()
-	return mock.UpdateLastObservedOnDeviceFunc(deviceID, timestamp)
+	return mock.UpdateLastObservedOnDeviceFunc(ctx, deviceID, timestamp)
 }
 
 // UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
 // Check the length with:
 //     len(mockedDeviceManagement.UpdateLastObservedOnDeviceCalls())
 func (mock *DeviceManagementMock) UpdateLastObservedOnDeviceCalls() []struct {
+	Ctx       context.Context
 	DeviceID  string
 	Timestamp time.Time
 } {
 	var calls []struct {
+		Ctx       context.Context
 		DeviceID  string
 		Timestamp time.Time
 	}
