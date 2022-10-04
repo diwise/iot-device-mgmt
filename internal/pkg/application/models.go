@@ -32,28 +32,6 @@ type Environment struct {
 	Name string `json:"name"`
 }
 
-type Client struct {
-	name    string
-	tenants []string
-	events  chan *Event
-}
-
-func NewClient(name string, tenants []string) *Client {
-	return &Client{
-		name:    name,
-		tenants: tenants,
-		events:  make(chan *Event, 10),
-	}
-}
-func (c *Client) Evt() chan *Event {
-	return c.events
-}
-
-type Event struct {
-	Type string `json:"eventType"`
-	User uint
-}
-
 func MapToEnvModels(environments []database.Environment) []Environment {
 	env := make([]Environment, 0)
 	for _, e := range environments {
