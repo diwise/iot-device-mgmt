@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -18,29 +19,29 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement, sseServer *sse.Server) *chi.Mux {
 
 	router.Get("/health", NewHealthHandler(log, app))
 
 	router.Route("/api/v0", func(r chi.Router) {
-		r.Route("/devices", func(r chi.Router) {
-			r.Group(func(r chi.Router) {
+		r.Group(func(r chi.Router) {
+			// Handle valid / invalid tokens.
+			authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
+			if err != nil {
+				log.Fatal().Err(err).Msg("failed to create api authenticator")
+			}
+			r.Use(authenticator)
 
-				// Handle valid / invalid tokens.
-				authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
-				if err != nil {
-					log.Fatal().Err(err).Msg("failed to create api authenticator")
-				}
-				r.Use(authenticator)
-
+			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", queryDevicesHandler(log, app))
 				r.Post("/", createDeviceHandler(log, app))
 				r.Get("/{id}", retrieveDeviceHandler(log, app))
 				r.Patch("/{id}", patchDeviceHandler(log, app))
 			})
-		})
 
-		r.Get("/environments", listEnvironments(log, app))
+			r.Get("/environments", listEnvironments(log, app))
+		})
+		r.Mount("/events", sseServer)
 	})
 
 	return router

@@ -70,6 +70,7 @@ require (
 )
 
 require (
+	github.com/alexandrevicenzi/go-sse v1.6.0
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cloudevents/sdk-go/v2 v2.11.0
 	github.com/diwise/service-chassis v0.0.0-20220609153321-22f72f7f5e21
