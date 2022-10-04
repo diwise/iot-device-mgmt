@@ -40,7 +40,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
 // 				panic("mock out the UpdateDevice method")
 // 			},
-// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
+// 			UpdateLastObservedOnDeviceFunc: func(ctx context.Context, deviceID string, timestamp time.Time) error {
 // 				panic("mock out the UpdateLastObservedOnDevice method")
 // 			},
 // 		}
@@ -72,7 +72,7 @@ type DeviceManagementMock struct {
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
-	UpdateLastObservedOnDeviceFunc func(deviceID string, timestamp time.Time) error
+	UpdateLastObservedOnDeviceFunc func(ctx context.Context, deviceID string, timestamp time.Time) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -127,6 +127,8 @@ type DeviceManagementMock struct {
 		}
 		// UpdateLastObservedOnDevice holds details about calls to the UpdateLastObservedOnDevice method.
 		UpdateLastObservedOnDevice []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Timestamp is the timestamp argument value.
@@ -389,31 +391,35 @@ func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
 }
 
 // UpdateLastObservedOnDevice calls UpdateLastObservedOnDeviceFunc.
-func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
+func (mock *DeviceManagementMock) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error {
 	if mock.UpdateLastObservedOnDeviceFunc == nil {
 		panic("DeviceManagementMock.UpdateLastObservedOnDeviceFunc: method is nil but DeviceManagement.UpdateLastObservedOnDevice was just called")
 	}
 	callInfo := struct {
+		Ctx       context.Context
 		DeviceID  string
 		Timestamp time.Time
 	}{
+		Ctx:       ctx,
 		DeviceID:  deviceID,
 		Timestamp: timestamp,
 	}
 	mock.lockUpdateLastObservedOnDevice.Lock()
 	mock.calls.UpdateLastObservedOnDevice = append(mock.calls.UpdateLastObservedOnDevice, callInfo)
 	mock.lockUpdateLastObservedOnDevice.Unlock()
-	return mock.UpdateLastObservedOnDeviceFunc(deviceID, timestamp)
+	return mock.UpdateLastObservedOnDeviceFunc(ctx, deviceID, timestamp)
 }
 
 // UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
 // Check the length with:
 //     len(mockedDeviceManagement.UpdateLastObservedOnDeviceCalls())
 func (mock *DeviceManagementMock) UpdateLastObservedOnDeviceCalls() []struct {
+	Ctx       context.Context
 	DeviceID  string
 	Timestamp time.Time
 } {
 	var calls []struct {
+		Ctx       context.Context
 		DeviceID  string
 		Timestamp time.Time
 	}

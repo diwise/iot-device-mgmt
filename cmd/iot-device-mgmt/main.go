@@ -11,6 +11,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
@@ -62,7 +63,7 @@ func main() {
 	nCfg := &application.Config{}
 	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
 		defer nCfgFile.Close()
-		
+
 		nCfg, err = application.LoadConfiguration(nCfgFile)
 		if err != nil {
 			logger.Fatal().Err(err).Msg("failed to load configuration")
@@ -71,7 +72,10 @@ func main() {
 		logger.Fatal().Err(err).Msg("failed to open file")
 	}
 
-	r := createAppAndSetupRouter(logger, serviceName, db, messenger, nCfg)
+	s := sse.NewServer(nil)
+	defer s.Shutdown()
+
+	r := createAppAndSetupRouter(logger, serviceName, db, messenger, nCfg, s)
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
@@ -99,8 +103,8 @@ func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	return db
 }
 
-func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg *application.Config) *chi.Mux {
-	app := application.New(db, cfg)
+func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg *application.Config, sseServer *sse.Server) *chi.Mux {
+	app := application.New(db, cfg, sseServer)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
@@ -113,7 +117,8 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, app)
+
+	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }
 
 func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {
@@ -134,7 +139,7 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 			return
 		}
 
-		err = app.UpdateLastObservedOnDevice(statusMessage.DeviceID, timestamp)
+		err = app.UpdateLastObservedOnDevice(ctx, statusMessage.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
 			return
