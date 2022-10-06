@@ -82,12 +82,14 @@ func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
 // NewSQLiteConnector opens a connection to a local sqlite database
 func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 	return func() (*gorm.DB, zerolog.Logger, error) {
-		db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{
+		db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
 			Logger: logger.Default.LogMode(logger.Silent),
 		})
 
 		if err == nil {
 			db.Exec("PRAGMA foreign_keys = ON")
+			sqldb, _ := db.DB()
+			sqldb.SetMaxOpenConns(1)
 		}
 
 		return db, log, err

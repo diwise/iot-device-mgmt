@@ -3,7 +3,9 @@ package database
 import (
 	"bytes"
 	"io"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
@@ -25,6 +27,35 @@ func TestThatGetAllRetrievesByTenantNames(t *testing.T) {
 	devs, err = db.GetAll([]string{"default", "notdefault"})
 	is.NoErr(err)
 	is.Equal(len(devs), 2)
+}
+
+func TestConcurrentAccess(t *testing.T) {
+	testData := bytes.NewBuffer([]byte(devices))
+	is, db := testSetup(t, testData)
+
+	const numThreads int = 100
+
+	var wg sync.WaitGroup
+
+	wg.Add(numThreads)
+
+	accessor := func() {
+		defer wg.Done()
+
+		for i := 0; i < 100; i++ {
+			err := db.UpdateLastObservedOnDevice("a81758fffe06bfa3", time.Now().UTC())
+			if err != nil {
+				is.NoErr(err)
+				return
+			}
+		}
+	}
+
+	for t := 0; t < numThreads; t++ {
+		go accessor()
+	}
+
+	wg.Wait()
 }
 
 func testSetup(t *testing.T, testData io.Reader) (*is.I, Datastore) {
