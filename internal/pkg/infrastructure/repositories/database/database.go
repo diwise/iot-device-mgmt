@@ -321,6 +321,9 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			s.logger.Err(result.Error).Msg("could not create new status message")
 			return fmt.Errorf("could not create new status message, %w", result.Error)
 		}
+
+		s.logger.Info().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+
 		return nil
 	}
 
@@ -335,9 +338,11 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			s.logger.Err(result.Error).Msg("could not save status message")
 			return fmt.Errorf("could not save status message, %w", result.Error)
 		}
-	}
 
-	s.logger.Info().Msgf("status set for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+		s.logger.Info().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+	} else {
+		s.logger.Info().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
+	}
 
 	return nil
 }
