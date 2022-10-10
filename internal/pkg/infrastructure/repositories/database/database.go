@@ -309,16 +309,16 @@ func (s store) ListEnvironments() ([]Environment, error) {
 }
 
 func (s store) SetStatusIfChanged(sm Status) error {
-	var latest Status
-
-	result := s.db.Order("timestamp desc").Limit(1).Find(&latest, &Status{DeviceID: sm.DeviceID})
-	if result.Error != nil {
-		return fmt.Errorf("could not find status message, %w", result.Error)
+	latest, err := s.GetLatestStatus(sm.DeviceID)
+	if err != nil {
+		s.logger.Err(err).Msg("could not find status message")
+		return fmt.Errorf("could not find status message, %w", err)
 	}
 
-	if result.RowsAffected == 0 {
+	if latest.Timestamp == "" {
 		result := s.db.Create(&sm)
 		if result.Error != nil {
+			s.logger.Err(result.Error).Msg("could not create new status message")
 			return fmt.Errorf("could not create new status message, %w", result.Error)
 		}
 		return nil
@@ -332,22 +332,26 @@ func (s store) SetStatusIfChanged(sm Status) error {
 
 		result := s.db.Save(&latest)
 		if result.Error != nil {
+			s.logger.Err(result.Error).Msg("could not save status message")
 			return fmt.Errorf("could not save status message, %w", result.Error)
 		}
 	}
+
+	s.logger.Info().Msgf("status set for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 
 	return nil
 }
 
 func (s store) GetLatestStatus(deviceID string) (Status, error) {
-	sm := Status{
+	latest := Status{
 		DeviceID: deviceID,
 	}
 
-	result := s.db.Order("timestamp desc").Limit(1).Find(&sm, Status{DeviceID: deviceID})
+	result := s.db.Order("timestamp desc").Limit(1).Find(&latest, &Status{DeviceID: deviceID})
 	if result.Error != nil {
-		return sm, fmt.Errorf("could not fetch status message, %w", result.Error)
+		s.logger.Err(result.Error).Msg("could not fetch latest status message")
+		return latest, fmt.Errorf("could not fetch status message, %w", result.Error)
 	}
 
-	return sm, nil
+	return latest, nil
 }
