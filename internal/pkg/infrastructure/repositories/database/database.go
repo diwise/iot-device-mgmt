@@ -28,6 +28,8 @@ type Datastore interface {
 	CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
 	GetAll(tenants []string) ([]Device, error)
+	SetStatusIfChanged(status Status) error
+	GetLatestStatus(deviceID string) (Status, error)
 
 	ListEnvironments() ([]Environment, error)
 
@@ -102,7 +104,7 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{})
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{}, &Status{})
 	if err != nil {
 		return nil, err
 	}
@@ -304,4 +306,57 @@ func (s store) ListEnvironments() ([]Environment, error) {
 	err := s.db.Find(&env).Error
 
 	return env, err
+}
+
+func (s store) SetStatusIfChanged(sm Status) error {
+	latest, err := s.GetLatestStatus(sm.DeviceID)
+	if err != nil {
+		s.logger.Err(err).Msg("could not find status message")
+		return fmt.Errorf("could not find status message, %w", err)
+	}
+
+	if latest.Timestamp == "" {
+		result := s.db.Create(&sm)
+		if result.Error != nil {
+			s.logger.Err(result.Error).Msg("could not create new status message")
+			return fmt.Errorf("could not create new status message, %w", result.Error)
+		}
+
+		s.logger.Info().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+
+		return nil
+	}
+
+	if sm.BatteryLevel != latest.BatteryLevel || sm.Messages != latest.Messages || sm.Status != latest.Status {
+		latest.BatteryLevel = sm.BatteryLevel
+		latest.Messages = sm.Messages
+		latest.Status = sm.Status
+		latest.Timestamp = sm.Timestamp
+
+		result := s.db.Save(&latest)
+		if result.Error != nil {
+			s.logger.Err(result.Error).Msg("could not save status message")
+			return fmt.Errorf("could not save status message, %w", result.Error)
+		}
+
+		s.logger.Info().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+	} else {
+		s.logger.Info().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
+	}
+
+	return nil
+}
+
+func (s store) GetLatestStatus(deviceID string) (Status, error) {
+	latest := Status{
+		DeviceID: deviceID,
+	}
+
+	result := s.db.Order("timestamp desc").Limit(1).Find(&latest, &Status{DeviceID: deviceID})
+	if result.Error != nil {
+		s.logger.Err(result.Error).Msg("could not fetch latest status message")
+		return latest, fmt.Errorf("could not fetch status message, %w", result.Error)
+	}
+
+	return latest, nil
 }

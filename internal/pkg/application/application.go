@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alexandrevicenzi/go-sse"
@@ -25,7 +26,8 @@ type DeviceManagement interface {
 	ListAllDevices(context.Context, []string) ([]Device, error)
 	UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
-	NotifyStatus(ctx context.Context, message StatusMessage) error
+	NotifyStatus(ctx context.Context, deviceID string, message Status) error
+	SetStatusIfChanged(ctx context.Context, deviceID string, message Status) error
 }
 
 func New(db database.Datastore, cfg *Config, sseServer *sse.Server) DeviceManagement {
@@ -56,7 +58,9 @@ func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
 		return Device{}, err
 	}
 
-	return MapToModel(device), nil
+	sm, _ := a.db.GetLatestStatus(device.DeviceId)
+
+	return MapToModel(device, sm), nil
 }
 
 func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, error) {
@@ -65,7 +69,9 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, erro
 		return Device{}, err
 	}
 
-	return MapToModel(device), nil
+	sm, _ := a.db.GetLatestStatus(device.DeviceId)
+
+	return MapToModel(device, sm), nil
 }
 
 func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]Device, error) {
@@ -75,7 +81,14 @@ func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]De
 		return nil, err
 	}
 
-	return MapToModels(devices), nil
+	models := make([]Device, 0)
+
+	for _, d := range devices {
+		sm, _ := a.db.GetLatestStatus(d.DeviceId) // TODO: select n+1
+		models = append(models, MapToModel(d, sm))
+	}
+
+	return models, nil
 }
 
 func (a *app) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error {
@@ -99,7 +112,7 @@ func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[stri
 		return Device{}, err
 	}
 
-	m := MapToModel(d)
+	m := MapToModel(d, database.Status{})
 
 	return m, a.sendMessage("deviceUpdated", m)
 }
@@ -111,7 +124,7 @@ func (a *app) CreateDevice(ctx context.Context, d Device) error {
 		return err
 	}
 
-	return a.sendMessage("deviceCreated", MapToModel(device))
+	return a.sendMessage("deviceCreated", MapToModel(device, database.Status{}))
 }
 
 func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
@@ -122,7 +135,7 @@ func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
 	return MapToEnvModels(env), nil
 }
 
-func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
+func (a *app) NotifyStatus(ctx context.Context, deviceID string, message Status) error {
 	if s, ok := a.subscribers["diwise.statusmessage"]; !ok || len(s) == 0 {
 		return nil
 	}
@@ -135,17 +148,30 @@ func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 	}
 
 	event := cloudevents.NewEvent()
-
 	if timestamp, err := time.Parse(time.RFC3339, message.Timestamp); err == nil {
-		event.SetID(fmt.Sprintf("%s:%d", message.DeviceID, timestamp.Unix()))
+		event.SetID(fmt.Sprintf("%s:%d", deviceID, timestamp.Unix()))
 		event.SetTime(timestamp)
 	} else {
 		return err
 	}
 
+	eventData := struct {
+		DeviceID     string   `json:"deviceID"`
+		BatteryLevel int      `json:"batteryLevel"`
+		Status       int      `json:"statusCode"`
+		Messages     []string `json:"statusMessages"`
+		Timestamp    string   `json:"timestamp"`
+	}{
+		DeviceID:     deviceID,
+		BatteryLevel: message.BatteryLevel,
+		Status:       message.Code,
+		Messages:     message.Messages,
+		Timestamp:    message.Timestamp,
+	}
+
 	event.SetSource("github.com/diwise/iot-device-mgmt")
 	event.SetType("diwise.statusmessage")
-	event.SetData(cloudevents.ApplicationJSON, message)
+	event.SetData(cloudevents.ApplicationJSON, eventData)
 
 	logger := logging.GetFromContext(ctx)
 
@@ -160,6 +186,19 @@ func (a *app) NotifyStatus(ctx context.Context, message StatusMessage) error {
 	}
 
 	return err
+}
+
+func (a app) SetStatusIfChanged(ctx context.Context, deviceID string, message Status) error {
+
+	s := database.Status{
+		DeviceID:     deviceID,
+		BatteryLevel: message.BatteryLevel,
+		Status:       message.Code,
+		Messages:     strings.Join(message.Messages, ","),
+		Timestamp:    message.Timestamp,
+	}
+
+	return a.db.SetStatusIfChanged(s)
 }
 
 func (a *app) sendMessage(event string, v any) error {

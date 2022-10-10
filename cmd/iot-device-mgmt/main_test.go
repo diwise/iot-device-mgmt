@@ -49,7 +49,7 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"statusCode":0}}]`)
+	is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""}}]`)
 }
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
@@ -61,7 +61,7 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"statusCode":0}}`)
+	is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""}}`)
 }
 
 func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {

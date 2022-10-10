@@ -1,6 +1,7 @@
 package application
 
 import (
+	"strings"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
@@ -40,15 +41,7 @@ func MapToEnvModels(environments []database.Environment) []Environment {
 	return env
 }
 
-func MapToModels(d []database.Device) []Device {
-	devices := make([]Device, 0)
-	for _, db := range d {
-		devices = append(devices, MapToModel(db))
-	}
-	return devices
-}
-
-func MapToModel(d database.Device) Device {
+func MapToModel(d database.Device, s database.Status) Device {
 	env := d.Environment.Name
 	t := d.Tenant.Name
 
@@ -60,7 +53,7 @@ func MapToModel(d database.Device) Device {
 		return t
 	}
 
-	return Device{
+	dev := Device{
 		DevEUI:      d.DevEUI,
 		DeviceId:    d.DeviceId,
 		Name:        d.Name,
@@ -76,20 +69,22 @@ func MapToModel(d database.Device) Device {
 		Active:       d.Active,
 		Tenant:       t,
 		Status: Status{
-			Code:     0,
-			Messages: []string{},
+			BatteryLevel: s.BatteryLevel,
+			Code:         s.Status,
+			Timestamp:    s.Timestamp,
 		},
 	}
-}
 
-type StatusMessage struct {
-	DeviceID  string  `json:"deviceID"`
-	Error     *string `json:"error,omitempty"`
-	Status    Status  `json:"status"`
-	Timestamp string  `json:"timestamp"`
+	if len(s.Messages) > 0 {
+		dev.Status.Messages = strings.Split(s.Messages, ",")
+	}
+
+	return dev
 }
 
 type Status struct {
-	Code     int      `json:"statusCode"`
-	Messages []string `json:"statusMessages,omitempty"`
+	BatteryLevel int      `json:"batteryLevel"`
+	Code         int      `json:"statusCode"`
+	Messages     []string `json:"statusMessages,omitempty"`
+	Timestamp    string   `json:"timestamp"`
 }

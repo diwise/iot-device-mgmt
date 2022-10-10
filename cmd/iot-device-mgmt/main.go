@@ -117,7 +117,6 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	}
 	defer policies.Close()
 
-
 	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }
 
@@ -125,27 +124,46 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger.Info().Str("body", string(msg.Body)).Msg("received message")
 
-		statusMessage := application.StatusMessage{}
+		s := struct {
+			DeviceID     string   `json:"deviceID"`
+			BatteryLevel int      `json:"batteryLevel"`
+			Code         int      `json:"statusCode"`
+			Messages     []string `json:"statusMessages,omitempty"`
+			Timestamp    string   `json:"timestamp"`
+		}{}
 
-		err := json.Unmarshal(msg.Body, &statusMessage)
+		err := json.Unmarshal(msg.Body, &s)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
 			return
 		}
 
-		timestamp, err := time.Parse(time.RFC3339, statusMessage.Timestamp)
+		timestamp, err := time.Parse(time.RFC3339, s.Timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to parse time from status message")
 			return
 		}
 
-		err = app.UpdateLastObservedOnDevice(ctx, statusMessage.DeviceID, timestamp)
+		err = app.UpdateLastObservedOnDevice(ctx, s.DeviceID, timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle accepted message")
 			return
 		}
 
-		err = app.NotifyStatus(ctx, statusMessage)
+		a := application.Status{
+			BatteryLevel: s.BatteryLevel,
+			Code: s.Code,
+			Messages: s.Messages,
+			Timestamp: s.Timestamp,
+		}
+
+		err = app.SetStatusIfChanged(ctx, s.DeviceID, a)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to store status")
+			return
+		}
+
+		err = app.NotifyStatus(ctx, s.DeviceID, a)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to send notification")
 			return

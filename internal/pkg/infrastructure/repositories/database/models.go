@@ -38,3 +38,11 @@ type Tenant struct {
 	gorm.Model
 	Name string `gorm:"unique"`
 }
+
+type Status struct {
+	DeviceID     string `gorm:"primaryKey;column:device_id"`
+	BatteryLevel int
+	Status       int
+	Messages     string
+	Timestamp    string `gorm:"primaryKey"`
+}

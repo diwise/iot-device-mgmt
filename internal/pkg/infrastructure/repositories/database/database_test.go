@@ -58,6 +58,71 @@ func TestConcurrentAccess(t *testing.T) {
 	wg.Wait()
 }
 
+func TestSetStatusIfChanged_NewStatus(t *testing.T) {
+	is, db := testSetup(t, bytes.NewBuffer([]byte(devices)))
+
+	sm := Status{
+		DeviceID:     "intern-a81758fffe06bfa3",
+		BatteryLevel: 100,
+		Status:       0,
+		Messages:     "",
+		Timestamp:    time.Now().Format(time.RFC3339Nano),
+	}
+
+	err := db.SetStatusIfChanged(sm)
+	is.NoErr(err)
+}
+
+func TestSetStatusIfChanged_UpdateStatus(t *testing.T) {
+	is, db := testSetup(t, bytes.NewBuffer([]byte(devices)))
+
+	sm := Status{
+		DeviceID:     "intern-a81758fffe06bfa3",
+		BatteryLevel: 100,
+		Status:       0,
+		Messages:     "",
+		Timestamp:    time.Now().Format(time.RFC3339Nano),
+	}
+
+	err := db.SetStatusIfChanged(sm)
+	is.NoErr(err)
+
+	sm.BatteryLevel = 98
+	sm.Timestamp = time.Now().Format(time.RFC3339Nano)
+	err = db.SetStatusIfChanged(sm)
+	is.NoErr(err)
+}
+
+func TestGetStatus(t *testing.T) {
+	is, db := testSetup(t, bytes.NewBuffer([]byte(devices)))
+
+	sm := Status{
+		DeviceID:     "intern-a81758fffe06bfa3",
+		BatteryLevel: 100,
+		Status:       0,
+		Messages:     "",
+		Timestamp:    time.Now().Format(time.RFC3339Nano),
+	}
+
+	err := db.SetStatusIfChanged(sm)
+	is.NoErr(err)
+
+	sm2, err := db.GetLatestStatus("intern-a81758fffe06bfa3")
+	is.NoErr(err)
+
+	is.Equal(sm.DeviceID, sm2.DeviceID)
+	is.Equal(100, sm2.BatteryLevel)
+
+	sm.BatteryLevel = 98
+	sm.Timestamp = time.Now().Format(time.RFC3339Nano)
+	err = db.SetStatusIfChanged(sm)
+	is.NoErr(err)
+
+	sm3, err := db.GetLatestStatus("intern-a81758fffe06bfa3")
+	is.NoErr(err)
+	is.Equal(98, sm3.BatteryLevel)
+}
+
 func testSetup(t *testing.T, testData io.Reader) (*is.I, Datastore) {
 	is := is.New(t)
 	log := zerolog.Logger{}
