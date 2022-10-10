@@ -31,11 +31,17 @@ var _ Datastore = &DatastoreMock{}
 // 			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
 // 				panic("mock out the GetDeviceFromID method")
 // 			},
+// 			GetLatestStatusFunc: func(deviceID string) (Status, error) {
+// 				panic("mock out the GetLatestStatus method")
+// 			},
 // 			ListEnvironmentsFunc: func() ([]Environment, error) {
 // 				panic("mock out the ListEnvironments method")
 // 			},
 // 			SeedFunc: func(r io.Reader) error {
 // 				panic("mock out the Seed method")
+// 			},
+// 			SetStatusIfChangedFunc: func(status Status) error {
+// 				panic("mock out the SetStatusIfChanged method")
 // 			},
 // 			UpdateDeviceFunc: func(deviceID string, fields map[string]interface{}) (Device, error) {
 // 				panic("mock out the UpdateDevice method")
@@ -62,11 +68,17 @@ type DatastoreMock struct {
 	// GetDeviceFromIDFunc mocks the GetDeviceFromID method.
 	GetDeviceFromIDFunc func(deviceID string) (Device, error)
 
+	// GetLatestStatusFunc mocks the GetLatestStatus method.
+	GetLatestStatusFunc func(deviceID string) (Status, error)
+
 	// ListEnvironmentsFunc mocks the ListEnvironments method.
 	ListEnvironmentsFunc func() ([]Environment, error)
 
 	// SeedFunc mocks the Seed method.
 	SeedFunc func(r io.Reader) error
+
+	// SetStatusIfChangedFunc mocks the SetStatusIfChanged method.
+	SetStatusIfChangedFunc func(status Status) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(deviceID string, fields map[string]interface{}) (Device, error)
@@ -116,6 +128,11 @@ type DatastoreMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 		}
+		// GetLatestStatus holds details about calls to the GetLatestStatus method.
+		GetLatestStatus []struct {
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+		}
 		// ListEnvironments holds details about calls to the ListEnvironments method.
 		ListEnvironments []struct {
 		}
@@ -123,6 +140,11 @@ type DatastoreMock struct {
 		Seed []struct {
 			// R is the r argument value.
 			R io.Reader
+		}
+		// SetStatusIfChanged holds details about calls to the SetStatusIfChanged method.
+		SetStatusIfChanged []struct {
+			// Status is the status argument value.
+			Status Status
 		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
@@ -143,8 +165,10 @@ type DatastoreMock struct {
 	lockGetAll                     sync.RWMutex
 	lockGetDeviceFromDevEUI        sync.RWMutex
 	lockGetDeviceFromID            sync.RWMutex
+	lockGetLatestStatus            sync.RWMutex
 	lockListEnvironments           sync.RWMutex
 	lockSeed                       sync.RWMutex
+	lockSetStatusIfChanged         sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -313,6 +337,37 @@ func (mock *DatastoreMock) GetDeviceFromIDCalls() []struct {
 	return calls
 }
 
+// GetLatestStatus calls GetLatestStatusFunc.
+func (mock *DatastoreMock) GetLatestStatus(deviceID string) (Status, error) {
+	if mock.GetLatestStatusFunc == nil {
+		panic("DatastoreMock.GetLatestStatusFunc: method is nil but Datastore.GetLatestStatus was just called")
+	}
+	callInfo := struct {
+		DeviceID string
+	}{
+		DeviceID: deviceID,
+	}
+	mock.lockGetLatestStatus.Lock()
+	mock.calls.GetLatestStatus = append(mock.calls.GetLatestStatus, callInfo)
+	mock.lockGetLatestStatus.Unlock()
+	return mock.GetLatestStatusFunc(deviceID)
+}
+
+// GetLatestStatusCalls gets all the calls that were made to GetLatestStatus.
+// Check the length with:
+//     len(mockedDatastore.GetLatestStatusCalls())
+func (mock *DatastoreMock) GetLatestStatusCalls() []struct {
+	DeviceID string
+} {
+	var calls []struct {
+		DeviceID string
+	}
+	mock.lockGetLatestStatus.RLock()
+	calls = mock.calls.GetLatestStatus
+	mock.lockGetLatestStatus.RUnlock()
+	return calls
+}
+
 // ListEnvironments calls ListEnvironmentsFunc.
 func (mock *DatastoreMock) ListEnvironments() ([]Environment, error) {
 	if mock.ListEnvironmentsFunc == nil {
@@ -367,6 +422,37 @@ func (mock *DatastoreMock) SeedCalls() []struct {
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed
 	mock.lockSeed.RUnlock()
+	return calls
+}
+
+// SetStatusIfChanged calls SetStatusIfChangedFunc.
+func (mock *DatastoreMock) SetStatusIfChanged(status Status) error {
+	if mock.SetStatusIfChangedFunc == nil {
+		panic("DatastoreMock.SetStatusIfChangedFunc: method is nil but Datastore.SetStatusIfChanged was just called")
+	}
+	callInfo := struct {
+		Status Status
+	}{
+		Status: status,
+	}
+	mock.lockSetStatusIfChanged.Lock()
+	mock.calls.SetStatusIfChanged = append(mock.calls.SetStatusIfChanged, callInfo)
+	mock.lockSetStatusIfChanged.Unlock()
+	return mock.SetStatusIfChangedFunc(status)
+}
+
+// SetStatusIfChangedCalls gets all the calls that were made to SetStatusIfChanged.
+// Check the length with:
+//     len(mockedDatastore.SetStatusIfChangedCalls())
+func (mock *DatastoreMock) SetStatusIfChangedCalls() []struct {
+	Status Status
+} {
+	var calls []struct {
+		Status Status
+	}
+	mock.lockSetStatusIfChanged.RLock()
+	calls = mock.calls.SetStatusIfChanged
+	mock.lockSetStatusIfChanged.RUnlock()
 	return calls
 }
 
