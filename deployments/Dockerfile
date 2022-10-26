@@ -10,8 +10,6 @@ RUN go mod download
 
 COPY . .
 
-RUN go test -v ./...
-
 WORKDIR /app/cmd/iot-device-mgmt
 
 RUN GOOS=linux GOARCH=amd64 go build
