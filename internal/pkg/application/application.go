@@ -10,6 +10,7 @@ import (
 
 	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"golang.org/x/sys/unix"
 
@@ -19,15 +20,15 @@ import (
 //go:generate moq -rm -out application_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	GetDevice(context.Context, string) (Device, error)
-	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
-	CreateDevice(context.Context, Device) error
-	GetDeviceFromEUI(context.Context, string) (Device, error)
-	ListAllDevices(context.Context, []string) ([]Device, error)
+	GetDevice(context.Context, string) (types.Device, error)
+	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
+	CreateDevice(context.Context, types.Device) error
+	GetDeviceFromEUI(context.Context, string) (types.Device, error)
+	ListAllDevices(context.Context, []string) ([]types.Device, error)
 	UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error
 	ListEnvironments(context.Context) ([]Environment, error)
-	NotifyStatus(ctx context.Context, deviceID string, message Status) error
-	SetStatusIfChanged(ctx context.Context, deviceID string, message Status) error
+	NotifyStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error
+	SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error
 }
 
 func New(db database.Datastore, cfg *Config, sseServer *sse.Server) DeviceManagement {
@@ -52,10 +53,10 @@ type app struct {
 	sse         *sse.Server
 }
 
-func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
+func (a *app) GetDevice(ctx context.Context, deviceID string) (types.Device, error) {
 	device, err := a.db.GetDeviceFromID(deviceID)
 	if err != nil {
-		return Device{}, err
+		return types.Device{}, err
 	}
 
 	sm, _ := a.db.GetLatestStatus(device.DeviceId)
@@ -63,10 +64,10 @@ func (a *app) GetDevice(ctx context.Context, deviceID string) (Device, error) {
 	return MapToModel(device, sm), nil
 }
 
-func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, error) {
+func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (types.Device, error) {
 	device, err := a.db.GetDeviceFromDevEUI(devEUI)
 	if err != nil {
-		return Device{}, err
+		return types.Device{}, err
 	}
 
 	sm, _ := a.db.GetLatestStatus(device.DeviceId)
@@ -74,14 +75,14 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (Device, erro
 	return MapToModel(device, sm), nil
 }
 
-func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]Device, error) {
+func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]types.Device, error) {
 
 	devices, err := a.db.GetAll(allowedTenants)
 	if err != nil {
 		return nil, err
 	}
 
-	models := make([]Device, 0)
+	models := make([]types.Device, 0)
 
 	for _, d := range devices {
 		sm, _ := a.db.GetLatestStatus(d.DeviceId) // TODO: select n+1
@@ -105,11 +106,11 @@ func (a *app) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, t
 	return a.sendMessage("lastObservedUpdated", d)
 }
 
-func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
 	d, err := a.db.UpdateDevice(deviceID, fields)
 
 	if err != nil {
-		return Device{}, err
+		return types.Device{}, err
 	}
 
 	m := MapToModel(d, database.Status{})
@@ -117,7 +118,7 @@ func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[stri
 	return m, a.sendMessage("deviceUpdated", m)
 }
 
-func (a *app) CreateDevice(ctx context.Context, d Device) error {
+func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
 	device, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
 
 	if err != nil {
@@ -135,7 +136,7 @@ func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
 	return MapToEnvModels(env), nil
 }
 
-func (a *app) NotifyStatus(ctx context.Context, deviceID string, message Status) error {
+func (a *app) NotifyStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 	if s, ok := a.subscribers["diwise.statusmessage"]; !ok || len(s) == 0 {
 		return nil
 	}
@@ -188,7 +189,7 @@ func (a *app) NotifyStatus(ctx context.Context, deviceID string, message Status)
 	return err
 }
 
-func (a app) SetStatusIfChanged(ctx context.Context, deviceID string, message Status) error {
+func (a app) SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 
 	s := database.Status{
 		DeviceID:     deviceID,

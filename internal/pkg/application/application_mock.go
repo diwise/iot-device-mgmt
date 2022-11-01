@@ -7,6 +7,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -19,28 +21,28 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 // 		// make and configure a mocked DeviceManagement
 // 		mockedDeviceManagement := &DeviceManagementMock{
-// 			CreateDeviceFunc: func(contextMoqParam context.Context, device Device) error {
+// 			CreateDeviceFunc: func(contextMoqParam context.Context, device types.Device) error {
 // 				panic("mock out the CreateDevice method")
 // 			},
-// 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (Device, error) {
+// 			GetDeviceFunc: func(contextMoqParam context.Context, s string) (types.Device, error) {
 // 				panic("mock out the GetDevice method")
 // 			},
-// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (Device, error) {
+// 			GetDeviceFromEUIFunc: func(contextMoqParam context.Context, s string) (types.Device, error) {
 // 				panic("mock out the GetDeviceFromEUI method")
 // 			},
-// 			ListAllDevicesFunc: func(contextMoqParam context.Context, strings []string) ([]Device, error) {
+// 			ListAllDevicesFunc: func(contextMoqParam context.Context, strings []string) ([]types.Device, error) {
 // 				panic("mock out the ListAllDevices method")
 // 			},
 // 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
 // 				panic("mock out the ListEnvironments method")
 // 			},
-// 			NotifyStatusFunc: func(ctx context.Context, deviceID string, message Status) error {
+// 			NotifyStatusFunc: func(ctx context.Context, deviceID string, message types.Status) error {
 // 				panic("mock out the NotifyStatus method")
 // 			},
-// 			SetStatusIfChangedFunc: func(ctx context.Context, deviceID string, message Status) error {
+// 			SetStatusIfChangedFunc: func(ctx context.Context, deviceID string, message types.Status) error {
 // 				panic("mock out the SetStatusIfChanged method")
 // 			},
-// 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+// 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
 // 				panic("mock out the UpdateDevice method")
 // 			},
 // 			UpdateLastObservedOnDeviceFunc: func(ctx context.Context, deviceID string, timestamp time.Time) error {
@@ -54,28 +56,28 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 	}
 type DeviceManagementMock struct {
 	// CreateDeviceFunc mocks the CreateDevice method.
-	CreateDeviceFunc func(contextMoqParam context.Context, device Device) error
+	CreateDeviceFunc func(contextMoqParam context.Context, device types.Device) error
 
 	// GetDeviceFunc mocks the GetDevice method.
-	GetDeviceFunc func(contextMoqParam context.Context, s string) (Device, error)
+	GetDeviceFunc func(contextMoqParam context.Context, s string) (types.Device, error)
 
 	// GetDeviceFromEUIFunc mocks the GetDeviceFromEUI method.
-	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (Device, error)
+	GetDeviceFromEUIFunc func(contextMoqParam context.Context, s string) (types.Device, error)
 
 	// ListAllDevicesFunc mocks the ListAllDevices method.
-	ListAllDevicesFunc func(contextMoqParam context.Context, strings []string) ([]Device, error)
+	ListAllDevicesFunc func(contextMoqParam context.Context, strings []string) ([]types.Device, error)
 
 	// ListEnvironmentsFunc mocks the ListEnvironments method.
 	ListEnvironmentsFunc func(contextMoqParam context.Context) ([]Environment, error)
 
 	// NotifyStatusFunc mocks the NotifyStatus method.
-	NotifyStatusFunc func(ctx context.Context, deviceID string, message Status) error
+	NotifyStatusFunc func(ctx context.Context, deviceID string, message types.DeviceStatus) error
 
 	// SetStatusIfChangedFunc mocks the SetStatusIfChanged method.
-	SetStatusIfChangedFunc func(ctx context.Context, deviceID string, message Status) error
+	SetStatusIfChangedFunc func(ctx context.Context, deviceID string, message types.DeviceStatus) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
-	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error)
+	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
 
 	// UpdateLastObservedOnDeviceFunc mocks the UpdateLastObservedOnDevice method.
 	UpdateLastObservedOnDeviceFunc func(ctx context.Context, deviceID string, timestamp time.Time) error
@@ -87,7 +89,7 @@ type DeviceManagementMock struct {
 			// ContextMoqParam is the contextMoqParam argument value.
 			ContextMoqParam context.Context
 			// Device is the device argument value.
-			Device Device
+			Device types.Device
 		}
 		// GetDevice holds details about calls to the GetDevice method.
 		GetDevice []struct {
@@ -122,7 +124,7 @@ type DeviceManagementMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Message is the message argument value.
-			Message Status
+			Message types.DeviceStatus
 		}
 		// SetStatusIfChanged holds details about calls to the SetStatusIfChanged method.
 		SetStatusIfChanged []struct {
@@ -131,7 +133,7 @@ type DeviceManagementMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Message is the message argument value.
-			Message Status
+			Message types.DeviceStatus
 		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
@@ -164,13 +166,13 @@ type DeviceManagementMock struct {
 }
 
 // CreateDevice calls CreateDeviceFunc.
-func (mock *DeviceManagementMock) CreateDevice(contextMoqParam context.Context, device Device) error {
+func (mock *DeviceManagementMock) CreateDevice(contextMoqParam context.Context, device types.Device) error {
 	if mock.CreateDeviceFunc == nil {
 		panic("DeviceManagementMock.CreateDeviceFunc: method is nil but DeviceManagement.CreateDevice was just called")
 	}
 	callInfo := struct {
 		ContextMoqParam context.Context
-		Device          Device
+		Device          types.Device
 	}{
 		ContextMoqParam: contextMoqParam,
 		Device:          device,
@@ -186,11 +188,11 @@ func (mock *DeviceManagementMock) CreateDevice(contextMoqParam context.Context, 
 //     len(mockedDeviceManagement.CreateDeviceCalls())
 func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
 	ContextMoqParam context.Context
-	Device          Device
+	Device          types.Device
 } {
 	var calls []struct {
 		ContextMoqParam context.Context
-		Device          Device
+		Device          types.Device
 	}
 	mock.lockCreateDevice.RLock()
 	calls = mock.calls.CreateDevice
@@ -199,7 +201,7 @@ func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
 }
 
 // GetDevice calls GetDeviceFunc.
-func (mock *DeviceManagementMock) GetDevice(contextMoqParam context.Context, s string) (Device, error) {
+func (mock *DeviceManagementMock) GetDevice(contextMoqParam context.Context, s string) (types.Device, error) {
 	if mock.GetDeviceFunc == nil {
 		panic("DeviceManagementMock.GetDeviceFunc: method is nil but DeviceManagement.GetDevice was just called")
 	}
@@ -234,7 +236,7 @@ func (mock *DeviceManagementMock) GetDeviceCalls() []struct {
 }
 
 // GetDeviceFromEUI calls GetDeviceFromEUIFunc.
-func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Context, s string) (Device, error) {
+func (mock *DeviceManagementMock) GetDeviceFromEUI(contextMoqParam context.Context, s string) (types.Device, error) {
 	if mock.GetDeviceFromEUIFunc == nil {
 		panic("DeviceManagementMock.GetDeviceFromEUIFunc: method is nil but DeviceManagement.GetDeviceFromEUI was just called")
 	}
@@ -269,7 +271,7 @@ func (mock *DeviceManagementMock) GetDeviceFromEUICalls() []struct {
 }
 
 // ListAllDevices calls ListAllDevicesFunc.
-func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context, strings []string) ([]Device, error) {
+func (mock *DeviceManagementMock) ListAllDevices(contextMoqParam context.Context, strings []string) ([]types.Device, error) {
 	if mock.ListAllDevicesFunc == nil {
 		panic("DeviceManagementMock.ListAllDevicesFunc: method is nil but DeviceManagement.ListAllDevices was just called")
 	}
@@ -335,14 +337,14 @@ func (mock *DeviceManagementMock) ListEnvironmentsCalls() []struct {
 }
 
 // NotifyStatus calls NotifyStatusFunc.
-func (mock *DeviceManagementMock) NotifyStatus(ctx context.Context, deviceID string, message Status) error {
+func (mock *DeviceManagementMock) NotifyStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 	if mock.NotifyStatusFunc == nil {
 		panic("DeviceManagementMock.NotifyStatusFunc: method is nil but DeviceManagement.NotifyStatus was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Message  Status
+		Message  types.DeviceStatus
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
@@ -360,12 +362,12 @@ func (mock *DeviceManagementMock) NotifyStatus(ctx context.Context, deviceID str
 func (mock *DeviceManagementMock) NotifyStatusCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Message  Status
+	Message  types.DeviceStatus
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Message  Status
+		Message  types.DeviceStatus
 	}
 	mock.lockNotifyStatus.RLock()
 	calls = mock.calls.NotifyStatus
@@ -374,14 +376,14 @@ func (mock *DeviceManagementMock) NotifyStatusCalls() []struct {
 }
 
 // SetStatusIfChanged calls SetStatusIfChangedFunc.
-func (mock *DeviceManagementMock) SetStatusIfChanged(ctx context.Context, deviceID string, message Status) error {
+func (mock *DeviceManagementMock) SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 	if mock.SetStatusIfChangedFunc == nil {
 		panic("DeviceManagementMock.SetStatusIfChangedFunc: method is nil but DeviceManagement.SetStatusIfChanged was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Message  Status
+		Message  types.DeviceStatus
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
@@ -399,12 +401,12 @@ func (mock *DeviceManagementMock) SetStatusIfChanged(ctx context.Context, device
 func (mock *DeviceManagementMock) SetStatusIfChangedCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Message  Status
+	Message  types.DeviceStatus
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Message  Status
+		Message  types.DeviceStatus
 	}
 	mock.lockSetStatusIfChanged.RLock()
 	calls = mock.calls.SetStatusIfChanged
@@ -413,7 +415,7 @@ func (mock *DeviceManagementMock) SetStatusIfChangedCalls() []struct {
 }
 
 // UpdateDevice calls UpdateDeviceFunc.
-func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (Device, error) {
+func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
 	if mock.UpdateDeviceFunc == nil {
 		panic("DeviceManagementMock.UpdateDeviceFunc: method is nil but DeviceManagement.UpdateDevice was just called")
 	}

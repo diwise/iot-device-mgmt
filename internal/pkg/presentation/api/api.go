@@ -10,6 +10,7 @@ import (
 	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
@@ -96,7 +97,7 @@ func createDeviceHandler(log zerolog.Logger, app application.DeviceManagement) h
 			return
 		}
 
-		var d application.Device
+		var d types.Device
 		err = json.Unmarshal(body, &d)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to unmarshal body")
@@ -163,7 +164,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		deviceArray := []application.Device{}
+		deviceArray := []types.Device{}
 
 		devEUI := r.URL.Query().Get("devEUI")
 		if devEUI == "" {

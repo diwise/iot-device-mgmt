@@ -8,11 +8,11 @@ require (
 	github.com/matryer/is v1.4.0
 	github.com/riandyrn/otelchi v0.4.0
 	github.com/rs/cors v1.8.2
-	github.com/rs/zerolog v1.27.0
-	go.opentelemetry.io/otel v1.9.0
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.8.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.8.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.8.0 // indirect
+	github.com/rs/zerolog v1.28.0
+	go.opentelemetry.io/otel v1.11.1
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.11.1 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.11.1 // indirect
+	go.opentelemetry.io/otel/sdk v1.11.1 // indirect
 )
 
 require (
@@ -20,7 +20,7 @@ require (
 	github.com/open-policy-agent/opa v0.43.0
 	github.com/rabbitmq/amqp091-go v1.3.4
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.34.0
-	golang.org/x/oauth2 v0.0.0-20220411215720-9780585627b5
+	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
 	gopkg.in/yaml.v2 v2.4.0
 	gorm.io/driver/sqlite v1.3.6
 )
@@ -50,8 +50,8 @@ require (
 	github.com/lestrrat-go/iter v1.0.1 // indirect
 	github.com/lestrrat-go/jwx v1.2.6 // indirect
 	github.com/lestrrat-go/option v1.0.0 // indirect
-	github.com/mattn/go-colorable v0.1.12 // indirect
-	github.com/mattn/go-isatty v0.0.14 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/mattn/go-sqlite3 v1.14.12 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
@@ -73,22 +73,22 @@ require (
 	github.com/alexandrevicenzi/go-sse v1.6.0
 	github.com/cenkalti/backoff/v4 v4.1.3 // indirect
 	github.com/cloudevents/sdk-go/v2 v2.11.0
-	github.com/diwise/service-chassis v0.0.0-20220609153321-22f72f7f5e21
+	github.com/diwise/service-chassis v0.0.0-20221025192458-3038fdabe7c7
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/go-logr/logr v1.2.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
-	github.com/grpc-ecosystem/grpc-gateway/v2 v2.10.3 // indirect
+	github.com/grpc-ecosystem/grpc-gateway/v2 v2.12.0 // indirect
 	go.opentelemetry.io/contrib v1.8.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.8.0 // indirect
-	go.opentelemetry.io/otel/trace v1.9.0 // indirect
-	go.opentelemetry.io/proto/otlp v0.18.0 // indirect
-	golang.org/x/net v0.0.0-20220708220712-1185a9018129 // indirect
-	golang.org/x/sys v0.0.0-20220715151400-c0bba94af5f8
-	golang.org/x/text v0.3.7 // indirect
-	google.golang.org/genproto v0.0.0-20220711200234-e2551ce405a2 // indirect
-	google.golang.org/grpc v1.48.0 // indirect
-	google.golang.org/protobuf v1.28.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/internal/retry v1.11.1 // indirect
+	go.opentelemetry.io/otel/trace v1.11.1 // indirect
+	go.opentelemetry.io/proto/otlp v0.19.0 // indirect
+	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/sys v0.1.0
+	golang.org/x/text v0.4.0 // indirect
+	google.golang.org/genproto v0.0.0-20221025140454-527a21cfbd71 // indirect
+	google.golang.org/grpc v1.50.1 // indirect
+	google.golang.org/protobuf v1.28.1 // indirect
 	gorm.io/driver/postgres v1.3.8
 	gorm.io/gorm v1.23.8
 )

@@ -7,7 +7,7 @@ import (
 	"io"
 	"net/http"
 
-	models "github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
@@ -103,7 +103,7 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	impls := []models.Device{}
+	impls := []types.Device{}
 
 	err = json.Unmarshal(respBody, &impls)
 	if err != nil {
@@ -172,7 +172,7 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		return nil, err
 	}
 
-	impl := &models.Device{}
+	impl := &types.Device{}
 
 	err = json.Unmarshal(respBody, impl)
 	if err != nil {
@@ -200,7 +200,7 @@ type Device interface {
 }
 
 type deviceWrapper struct {
-	impl *models.Device
+	impl *types.Device
 }
 
 func (d *deviceWrapper) ID() string {

@@ -16,6 +16,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
@@ -150,11 +151,11 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.Devi
 			return
 		}
 
-		a := application.Status{
+		a := types.DeviceStatus{
 			BatteryLevel: s.BatteryLevel,
-			Code: s.Code,
-			Messages: s.Messages,
-			Timestamp: s.Timestamp,
+			Code:         s.Code,
+			Messages:     s.Messages,
+			Timestamp:    s.Timestamp,
 		}
 
 		err = app.SetStatusIfChanged(ctx, s.DeviceID, a)
