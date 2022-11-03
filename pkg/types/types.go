@@ -20,7 +20,7 @@ type Device struct {
 type Location struct {
 	Latitude  float64 `json:"latitude"`
 	Longitude float64 `json:"longitude"`
-	Altitue   float64 `json:"altitude"`
+	Altitude  float64 `json:"altitude"`
 }
 
 type DeviceStatus struct {
