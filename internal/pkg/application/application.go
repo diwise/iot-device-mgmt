@@ -172,7 +172,10 @@ func (a *app) NotifyStatus(ctx context.Context, deviceID string, message types.D
 
 	event.SetSource("github.com/diwise/iot-device-mgmt")
 	event.SetType("diwise.statusmessage")
-	event.SetData(cloudevents.ApplicationJSON, eventData)
+	err = event.SetData(cloudevents.ApplicationJSON, eventData)
+	if err != nil {
+		return err
+	}
 
 	logger := logging.GetFromContext(ctx)
 
@@ -189,7 +192,7 @@ func (a *app) NotifyStatus(ctx context.Context, deviceID string, message types.D
 	return err
 }
 
-func (a app) SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error {
+func (a *app) SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 
 	s := database.Status{
 		DeviceID:     deviceID,
