@@ -77,7 +77,7 @@ func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (types.Device
 
 func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]types.Device, error) {
 
-	devices, err := a.db.GetAll(allowedTenants)
+	devices, err := a.db.GetAll(allowedTenants...)
 	if err != nil {
 		return nil, err
 	}

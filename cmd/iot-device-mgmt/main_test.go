@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"

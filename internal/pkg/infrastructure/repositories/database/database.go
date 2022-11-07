@@ -27,7 +27,7 @@ type Datastore interface {
 	UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error)
 	CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
-	GetAll(tenants []string) ([]Device, error)
+	GetAll(tenants ...string) ([]Device, error)
 	SetStatusIfChanged(status Status) error
 	GetLatestStatus(deviceID string) (Status, error)
 
@@ -99,7 +99,7 @@ func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 }
 
 func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
-	impl, logger, err := connect()
+	impl, log, err := connect()
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +111,7 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 
 	return &store{
 		db:     impl,
-		logger: logger,
+		logger: log,
 	}, nil
 }
 
@@ -125,7 +125,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
-	devices := []Device{}
+	var devices []Device
 
 	for idx, d := range knownDevices {
 		if idx == 0 {
@@ -153,7 +153,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			environment = newEnvironment
 		}
 
-		types := []Lwm2mType{}
+		var types []Lwm2mType
 		ts := strings.Split(d[5], ",")
 
 		for _, t := range ts {
@@ -179,6 +179,11 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			tenant = newTenant
 		}
 
+		var intervall int = 3600
+		if intervall, err = strconv.Atoi(d[11]); err != nil {
+			intervall = 3600
+		}
+
 		d := Device{
 			DevEUI:      devEUI,
 			DeviceId:    deviceID,
@@ -191,6 +196,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			SensorType:  sensorType,
 			Active:      active,
 			Tenant:      tenant,
+			Intervall:   intervall,
 		}
 
 		devices = append(devices, d)
@@ -234,7 +240,19 @@ func (s store) getTenantByName(tenantName string) (*Tenant, error) {
 	return &tenant, nil
 }
 
-func (s store) GetAll(tenantNames []string) ([]Device, error) {
+func (s store) getAllTenants() []string {
+	var tenants []Tenant
+	if err := s.db.Find(&tenants); err != nil {
+		var tenantNames []string
+		for _, t := range tenants {
+			tenantNames = append(tenantNames, t.Name)
+		}
+		return tenantNames
+	}
+	return []string{}
+}
+
+func (s store) GetAll(tenantNames ...string) ([]Device, error) {
 	var deviceList []Device
 
 	for _, name := range tenantNames {
@@ -277,7 +295,7 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 	var t Tenant
 	s.db.First(&tenant, "name=?", tenant)
 
-	lwm2mTypes := []Lwm2mType{}
+	var lwm2mTypes []Lwm2mType
 	for _, t := range types {
 		lwm2mTypes = append(lwm2mTypes, Lwm2mType{Type: t})
 	}

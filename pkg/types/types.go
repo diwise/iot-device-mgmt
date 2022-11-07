@@ -15,6 +15,7 @@ type Device struct {
 	Active       bool         `json:"active"`
 	Tenant       string       `json:"tenant"`
 	Status       DeviceStatus `json:"status"`
+	Intervall    int          `json:"intervall"`
 }
 
 type Location struct {
@@ -29,3 +30,7 @@ type DeviceStatus struct {
 	Messages     []string `json:"statusMessages,omitempty"`
 	Timestamp    string   `json:"timestamp"`
 }
+
+const StatusOK = 0
+const StatusWarning = 1
+const StatusError = 2

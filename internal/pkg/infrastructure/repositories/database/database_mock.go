@@ -22,7 +22,7 @@ var _ Datastore = &DatastoreMock{}
 // 			CreateDeviceFunc: func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
 // 				panic("mock out the CreateDevice method")
 // 			},
-// 			GetAllFunc: func(tenants []string) ([]Device, error) {
+// 			GetAllFunc: func(tenants ...string) ([]Device, error) {
 // 				panic("mock out the GetAll method")
 // 			},
 // 			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
@@ -60,7 +60,7 @@ type DatastoreMock struct {
 	CreateDeviceFunc func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error)
 
 	// GetAllFunc mocks the GetAll method.
-	GetAllFunc func(tenants []string) ([]Device, error)
+	GetAllFunc func(tenants ...string) ([]Device, error)
 
 	// GetDeviceFromDevEUIFunc mocks the GetDeviceFromDevEUI method.
 	GetDeviceFromDevEUIFunc func(eui string) (Device, error)
@@ -245,7 +245,7 @@ func (mock *DatastoreMock) CreateDeviceCalls() []struct {
 }
 
 // GetAll calls GetAllFunc.
-func (mock *DatastoreMock) GetAll(tenants []string) ([]Device, error) {
+func (mock *DatastoreMock) GetAll(tenants ...string) ([]Device, error) {
 	if mock.GetAllFunc == nil {
 		panic("DatastoreMock.GetAllFunc: method is nil but Datastore.GetAll was just called")
 	}
@@ -257,7 +257,7 @@ func (mock *DatastoreMock) GetAll(tenants []string) ([]Device, error) {
 	mock.lockGetAll.Lock()
 	mock.calls.GetAll = append(mock.calls.GetAll, callInfo)
 	mock.lockGetAll.Unlock()
-	return mock.GetAllFunc(tenants)
+	return mock.GetAllFunc(tenants...)
 }
 
 // GetAllCalls gets all the calls that were made to GetAll.

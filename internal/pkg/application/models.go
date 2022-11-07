@@ -52,6 +52,7 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 			Code:         s.Status,
 			Timestamp:    s.Timestamp,
 		},
+		Intervall: d.Intervall,
 	}
 
 	if len(s.Messages) > 0 {

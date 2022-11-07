@@ -20,11 +20,11 @@ func TestThatGetAllRetrievesByTenantNames(t *testing.T) {
 	testData := bytes.NewBuffer([]byte(devices))
 	is, db := testSetup(t, testData)
 
-	devs, err := db.GetAll([]string{"default"})
+	devs, err := db.GetAll("default")
 	is.NoErr(err)
 	is.Equal(len(devs), 1)
 
-	devs, err = db.GetAll([]string{"default", "notdefault"})
+	devs, err = db.GetAll("default", "notdefault")
 	is.NoErr(err)
 	is.Equal(len(devs), 2)
 }

@@ -164,7 +164,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		deviceArray := []types.Device{}
+		var deviceArray []types.Device
 
 		devEUI := r.URL.Query().Get("devEUI")
 		if devEUI == "" {
