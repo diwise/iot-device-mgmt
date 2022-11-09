@@ -12,6 +12,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/rs/zerolog"
 	"golang.org/x/sys/unix"
 
 	cloudevents "github.com/cloudevents/sdk-go/v2"
@@ -20,6 +21,8 @@ import (
 //go:generate moq -rm -out application_mock.go . DeviceManagement
 
 type DeviceManagement interface {
+	Start()
+
 	GetDevice(context.Context, string) (types.Device, error)
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
 	CreateDevice(context.Context, types.Device) error
@@ -31,11 +34,12 @@ type DeviceManagement interface {
 	SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error
 }
 
-func New(db database.Datastore, cfg *Config, sseServer *sse.Server) DeviceManagement {
+func New(db database.Datastore, cfg *Config, sseServer *sse.Server, log zerolog.Logger) DeviceManagement {
 	a := &app{
 		db:          db,
 		subscribers: make(map[string][]SubscriberConfig),
 		sse:         sseServer,
+		log:         log,
 	}
 
 	if cfg != nil {
@@ -44,13 +48,21 @@ func New(db database.Datastore, cfg *Config, sseServer *sse.Server) DeviceManage
 		}
 	}
 
+	a.w = NewWatchdog(a, a.db, a.log)
+
 	return a
 }
 
 type app struct {
+	log         zerolog.Logger
 	db          database.Datastore
 	subscribers map[string][]SubscriberConfig
 	sse         *sse.Server
+	w           Watchdog
+}
+
+func (a *app) Start() {
+	a.w.Start()
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (types.Device, error) {

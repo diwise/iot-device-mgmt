@@ -5,10 +5,9 @@ package application
 
 import (
 	"context"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 	"time"
-
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -36,11 +35,14 @@ var _ DeviceManagement = &DeviceManagementMock{}
 // 			ListEnvironmentsFunc: func(contextMoqParam context.Context) ([]Environment, error) {
 // 				panic("mock out the ListEnvironments method")
 // 			},
-// 			NotifyStatusFunc: func(ctx context.Context, deviceID string, message types.Status) error {
+// 			NotifyStatusFunc: func(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 // 				panic("mock out the NotifyStatus method")
 // 			},
-// 			SetStatusIfChangedFunc: func(ctx context.Context, deviceID string, message types.Status) error {
+// 			SetStatusIfChangedFunc: func(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 // 				panic("mock out the SetStatusIfChanged method")
+// 			},
+// 			StartFunc: func()  {
+// 				panic("mock out the Start method")
 // 			},
 // 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
 // 				panic("mock out the UpdateDevice method")
@@ -75,6 +77,9 @@ type DeviceManagementMock struct {
 
 	// SetStatusIfChangedFunc mocks the SetStatusIfChanged method.
 	SetStatusIfChangedFunc func(ctx context.Context, deviceID string, message types.DeviceStatus) error
+
+	// StartFunc mocks the Start method.
+	StartFunc func()
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
@@ -135,6 +140,9 @@ type DeviceManagementMock struct {
 			// Message is the message argument value.
 			Message types.DeviceStatus
 		}
+		// Start holds details about calls to the Start method.
+		Start []struct {
+		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -161,6 +169,7 @@ type DeviceManagementMock struct {
 	lockListEnvironments           sync.RWMutex
 	lockNotifyStatus               sync.RWMutex
 	lockSetStatusIfChanged         sync.RWMutex
+	lockStart                      sync.RWMutex
 	lockUpdateDevice               sync.RWMutex
 	lockUpdateLastObservedOnDevice sync.RWMutex
 }
@@ -411,6 +420,32 @@ func (mock *DeviceManagementMock) SetStatusIfChangedCalls() []struct {
 	mock.lockSetStatusIfChanged.RLock()
 	calls = mock.calls.SetStatusIfChanged
 	mock.lockSetStatusIfChanged.RUnlock()
+	return calls
+}
+
+// Start calls StartFunc.
+func (mock *DeviceManagementMock) Start() {
+	if mock.StartFunc == nil {
+		panic("DeviceManagementMock.StartFunc: method is nil but DeviceManagement.Start was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockStart.Lock()
+	mock.calls.Start = append(mock.calls.Start, callInfo)
+	mock.lockStart.Unlock()
+	mock.StartFunc()
+}
+
+// StartCalls gets all the calls that were made to Start.
+// Check the length with:
+//     len(mockedDeviceManagement.StartCalls())
+func (mock *DeviceManagementMock) StartCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockStart.RLock()
+	calls = mock.calls.Start
+	mock.lockStart.RUnlock()
 	return calls
 }
 

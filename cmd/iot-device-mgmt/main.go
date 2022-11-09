@@ -6,7 +6,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	"io/fs"
 	"net/http"
 	"os"
@@ -106,10 +105,7 @@ func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 }
 
 func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg *application.Config, sseServer *sse.Server) *chi.Mux {
-	app := application.New(db, cfg, sseServer)
-
-	wd := watchdog.New(app, logger)
-	wd.Start()
+	app := application.New(db, cfg, sseServer, logger)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
@@ -121,6 +117,8 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 		logger.Fatal().Err(err).Msg("unable to open opa policy file")
 	}
 	defer policies.Close()
+
+	app.Start()
 
 	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }

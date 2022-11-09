@@ -30,7 +30,7 @@ type Datastore interface {
 	GetAll(tenants ...string) ([]Device, error)
 	SetStatusIfChanged(status Status) error
 	GetLatestStatus(deviceID string) (Status, error)
-
+	GetAllTenants() []string
 	ListEnvironments() ([]Environment, error)
 
 	Seed(r io.Reader) error
@@ -240,7 +240,7 @@ func (s store) getTenantByName(tenantName string) (*Tenant, error) {
 	return &tenant, nil
 }
 
-func (s store) getAllTenants() []string {
+func (s store) GetAllTenants() []string {
 	var tenants []Tenant
 	if err := s.db.Find(&tenants); err != nil {
 		var tenantNames []string
@@ -340,7 +340,7 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			return fmt.Errorf("could not create new status message, %w", result.Error)
 		}
 
-		s.logger.Info().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+		s.logger.Debug().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 
 		return nil
 	}
@@ -357,9 +357,9 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			return fmt.Errorf("could not save status message, %w", result.Error)
 		}
 
-		s.logger.Info().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+		s.logger.Debug().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 	} else {
-		s.logger.Info().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
+		s.logger.Debug().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
 	}
 
 	return nil

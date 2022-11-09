@@ -25,6 +25,9 @@ var _ Datastore = &DatastoreMock{}
 // 			GetAllFunc: func(tenants ...string) ([]Device, error) {
 // 				panic("mock out the GetAll method")
 // 			},
+// 			GetAllTenantsFunc: func() []string {
+// 				panic("mock out the GetAllTenants method")
+// 			},
 // 			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
 // 				panic("mock out the GetDeviceFromDevEUI method")
 // 			},
@@ -61,6 +64,9 @@ type DatastoreMock struct {
 
 	// GetAllFunc mocks the GetAll method.
 	GetAllFunc func(tenants ...string) ([]Device, error)
+
+	// GetAllTenantsFunc mocks the GetAllTenants method.
+	GetAllTenantsFunc func() []string
 
 	// GetDeviceFromDevEUIFunc mocks the GetDeviceFromDevEUI method.
 	GetDeviceFromDevEUIFunc func(eui string) (Device, error)
@@ -118,6 +124,9 @@ type DatastoreMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// GetAllTenants holds details about calls to the GetAllTenants method.
+		GetAllTenants []struct {
+		}
 		// GetDeviceFromDevEUI holds details about calls to the GetDeviceFromDevEUI method.
 		GetDeviceFromDevEUI []struct {
 			// Eui is the eui argument value.
@@ -163,6 +172,7 @@ type DatastoreMock struct {
 	}
 	lockCreateDevice               sync.RWMutex
 	lockGetAll                     sync.RWMutex
+	lockGetAllTenants              sync.RWMutex
 	lockGetDeviceFromDevEUI        sync.RWMutex
 	lockGetDeviceFromID            sync.RWMutex
 	lockGetLatestStatus            sync.RWMutex
@@ -272,6 +282,32 @@ func (mock *DatastoreMock) GetAllCalls() []struct {
 	mock.lockGetAll.RLock()
 	calls = mock.calls.GetAll
 	mock.lockGetAll.RUnlock()
+	return calls
+}
+
+// GetAllTenants calls GetAllTenantsFunc.
+func (mock *DatastoreMock) GetAllTenants() []string {
+	if mock.GetAllTenantsFunc == nil {
+		panic("DatastoreMock.GetAllTenantsFunc: method is nil but Datastore.GetAllTenants was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockGetAllTenants.Lock()
+	mock.calls.GetAllTenants = append(mock.calls.GetAllTenants, callInfo)
+	mock.lockGetAllTenants.Unlock()
+	return mock.GetAllTenantsFunc()
+}
+
+// GetAllTenantsCalls gets all the calls that were made to GetAllTenants.
+// Check the length with:
+//     len(mockedDatastore.GetAllTenantsCalls())
+func (mock *DatastoreMock) GetAllTenantsCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockGetAllTenants.RLock()
+	calls = mock.calls.GetAllTenants
+	mock.lockGetAllTenants.RUnlock()
 	return calls
 }
 
