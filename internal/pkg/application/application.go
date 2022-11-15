@@ -2,94 +2,118 @@ package application
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/alexandrevicenzi/go-sse"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/webevents"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/rs/zerolog"
-	"golang.org/x/sys/unix"
-
-	cloudevents "github.com/cloudevents/sdk-go/v2"
 )
 
-//go:generate moq -rm -out application_mock.go . DeviceManagement
+//go:generate moq -rm -out application_mock.go . App
 
-type DeviceManagement interface {
+type App interface {
 	Start()
+	Stop()
+	Handle(ctx context.Context, ds types.DeviceStatus) error
 
-	GetDevice(context.Context, string) (types.Device, error)
+	GetDevice(ctx context.Context, deviceID string) (types.Device, error)
+	GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error)
+	GetDevices(ctx context.Context, tenants []string) ([]types.Device, error)
+	CreateDevice(ctx context.Context, device types.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
-	CreateDevice(context.Context, types.Device) error
-	GetDeviceFromEUI(context.Context, string) (types.Device, error)
-	ListAllDevices(context.Context, []string) ([]types.Device, error)
-	UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error
-	ListEnvironments(context.Context) ([]Environment, error)
-	NotifyStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error
-	SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error
-}
 
-func New(db database.Datastore, cfg *Config, sseServer *sse.Server, log zerolog.Logger) DeviceManagement {
-	a := &app{
-		db:          db,
-		subscribers: make(map[string][]SubscriberConfig),
-		sse:         sseServer,
-		log:         log,
-	}
+	SetStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error
 
-	if cfg != nil {
-		for _, s := range cfg.Notifications {
-			a.subscribers[s.Type] = s.Subscribers
-		}
-	}
-
-	a.w = NewWatchdog(a, a.db, a.log)
-
-	return a
+	GetTenants(ctx context.Context) ([]string, error)
+	GetEnvironments(ctx context.Context) ([]types.Environment, error)
 }
 
 type app struct {
-	log         zerolog.Logger
-	db          database.Datastore
-	subscribers map[string][]SubscriberConfig
-	sse         *sse.Server
-	w           Watchdog
+	store       database.Datastore
+	eventSender events.EventSender
+	webEvents   webevents.WebEvents
 }
 
-func (a *app) Start() {
-	a.w.Start()
+func New(s database.Datastore, e events.EventSender, we webevents.WebEvents) App {
+	return &app{
+		store:       s,
+		eventSender: e,
+		webEvents:   we,
+	}
+}
+
+func (a *app) Start() {}
+func (a *app) Stop() {
+	a.webEvents.Shutdown()
+}
+
+func (a *app) Handle(ctx context.Context, ds types.DeviceStatus) error {
+	log := logging.GetFromContext(ctx)
+	deviceID := ds.DeviceID
+	timestamp, err := time.Parse(time.RFC3339Nano, ds.Timestamp)
+	if err != nil {
+		return fmt.Errorf("unable to parse timestamp from deviceStatus, %w", err)
+	}
+
+	err = a.store.UpdateLastObservedOnDevice(deviceID, timestamp)
+	if err != nil {
+		return fmt.Errorf("could not update last observed on device %s, %w", deviceID, err)
+	}
+	err = a.store.SetStatusIfChanged(MapStatus(ds))
+	if err != nil {
+		return fmt.Errorf("could not update status for device %s %w", deviceID, err)
+	}
+
+	d, err := a.GetDevice(ctx, deviceID)
+	if err != nil {
+		return fmt.Errorf("could not fetch device %s from datastore, %w", deviceID, err)
+	}
+	err = a.webEvents.Publish("lastObservedUpdated", d)
+	if err != nil {
+		log.Error().Err(err).Msgf("could not publish web event for device %s", deviceID)
+	}
+	err = a.eventSender.Send(ctx, deviceID, ds)
+	if err != nil {
+		return fmt.Errorf("could not send status event for device %s, %w", deviceID, err)
+	}
+
+	return nil
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (types.Device, error) {
-	device, err := a.db.GetDeviceFromID(deviceID)
+	d, err := a.store.GetDeviceFromID(deviceID)
 	if err != nil {
 		return types.Device{}, err
 	}
 
-	sm, _ := a.db.GetLatestStatus(device.DeviceId)
-
-	return MapToModel(device, sm), nil
-}
-
-func (a *app) GetDeviceFromEUI(ctx context.Context, devEUI string) (types.Device, error) {
-	device, err := a.db.GetDeviceFromDevEUI(devEUI)
+	status, err := a.store.GetLatestStatus(deviceID)
 	if err != nil {
 		return types.Device{}, err
 	}
 
-	sm, _ := a.db.GetLatestStatus(device.DeviceId)
-
-	return MapToModel(device, sm), nil
+	return MapToModel(d, status), nil
 }
 
-func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]types.Device, error) {
+func (a *app) GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error) {
+	d, err := a.store.GetDeviceFromDevEUI(eui)
+	if err != nil {
+		return types.Device{}, err
+	}
 
-	devices, err := a.db.GetAll(allowedTenants...)
+	status, err := a.store.GetLatestStatus(d.DeviceId)
+	if err != nil {
+		return types.Device{}, err
+	}
+
+	return MapToModel(d, status), nil
+}
+
+func (a *app) GetDevices(ctx context.Context, tenants []string) ([]types.Device, error) {
+	devices, err := a.store.GetAll(tenants...)
 	if err != nil {
 		return nil, err
 	}
@@ -97,115 +121,62 @@ func (a *app) ListAllDevices(ctx context.Context, allowedTenants []string) ([]ty
 	models := make([]types.Device, 0)
 
 	for _, d := range devices {
-		sm, _ := a.db.GetLatestStatus(d.DeviceId) // TODO: select n+1
-		models = append(models, MapToModel(d, sm))
+		status, err := a.store.GetLatestStatus(d.DeviceId)
+		if err != nil {
+			return nil, err
+		}
+		models = append(models, MapToModel(d, status))
 	}
 
 	return models, nil
 }
 
-func (a *app) UpdateLastObservedOnDevice(ctx context.Context, deviceID string, timestamp time.Time) error {
-	err := a.db.UpdateLastObservedOnDevice(deviceID, timestamp)
+func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
+	device, err := a.store.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
 	if err != nil {
 		return err
 	}
 
-	d, err := a.GetDevice(ctx, deviceID)
+	err = a.webEvents.Publish("deviceCreated", MapToModel(device, database.Status{}))
 	if err != nil {
-		return err
+		log := logging.GetFromContext(ctx)
+		log.Error().Err(err).Msg("could not publish web event")
 	}
 
-	return a.sendMessage("lastObservedUpdated", d)
+	return nil
 }
 
 func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
-	d, err := a.db.UpdateDevice(deviceID, fields)
-
+	device, err := a.store.UpdateDevice(deviceID, fields)
 	if err != nil {
 		return types.Device{}, err
 	}
 
-	m := MapToModel(d, database.Status{})
+	m := MapToModel(device, database.Status{})
 
-	return m, a.sendMessage("deviceUpdated", m)
-}
-
-func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
-	device, err := a.db.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
-
+	err = a.webEvents.Publish("deviceUpdated", MapToModel(device, database.Status{}))
 	if err != nil {
-		return err
+		log := logging.GetFromContext(ctx)
+		log.Error().Err(err).Msg("could not publish web event")
 	}
 
-	return a.sendMessage("deviceCreated", MapToModel(device, database.Status{}))
+	return m, nil
 }
 
-func (a *app) ListEnvironments(context.Context) ([]Environment, error) {
-	env, err := a.db.ListEnvironments()
+func (a *app) GetTenants(ctx context.Context) ([]string, error) {
+	t := a.store.GetAllTenants()
+	return t, nil
+}
+
+func (a *app) GetEnvironments(ctx context.Context) ([]types.Environment, error) {
+	e, err := a.store.ListEnvironments()
 	if err != nil {
 		return nil, err
 	}
-	return MapToEnvModels(env), nil
+	return MapToEnvModels(e), nil
 }
 
-func (a *app) NotifyStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error {
-	if s, ok := a.subscribers["diwise.statusmessage"]; !ok || len(s) == 0 {
-		return nil
-	}
-
-	var err error
-
-	c, err := cloudevents.NewClientHTTP()
-	if err != nil {
-		return err
-	}
-
-	event := cloudevents.NewEvent()
-	if timestamp, err := time.Parse(time.RFC3339, message.Timestamp); err == nil {
-		event.SetID(fmt.Sprintf("%s:%d", deviceID, timestamp.Unix()))
-		event.SetTime(timestamp)
-	} else {
-		return err
-	}
-
-	eventData := struct {
-		DeviceID     string   `json:"deviceID"`
-		BatteryLevel int      `json:"batteryLevel"`
-		Status       int      `json:"statusCode"`
-		Messages     []string `json:"statusMessages"`
-		Timestamp    string   `json:"timestamp"`
-	}{
-		DeviceID:     deviceID,
-		BatteryLevel: message.BatteryLevel,
-		Status:       message.Code,
-		Messages:     message.Messages,
-		Timestamp:    message.Timestamp,
-	}
-
-	event.SetSource("github.com/diwise/iot-device-mgmt")
-	event.SetType("diwise.statusmessage")
-	err = event.SetData(cloudevents.ApplicationJSON, eventData)
-	if err != nil {
-		return err
-	}
-
-	logger := logging.GetFromContext(ctx)
-
-	for _, s := range a.subscribers["diwise.statusmessage"] {
-		ctxWithTarget := cloudevents.ContextWithTarget(ctx, s.Endpoint)
-
-		result := c.Send(ctxWithTarget, event)
-		if cloudevents.IsUndelivered(result) || errors.Is(result, unix.ECONNREFUSED) {
-			logger.Error().Err(result).Msgf("faild to send event to %s", s.Endpoint)
-			err = fmt.Errorf("%w", result)
-		}
-	}
-
-	return err
-}
-
-func (a *app) SetStatusIfChanged(ctx context.Context, deviceID string, message types.DeviceStatus) error {
-
+func (a *app) SetStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 	s := database.Status{
 		DeviceID:     deviceID,
 		BatteryLevel: message.BatteryLevel,
@@ -214,17 +185,5 @@ func (a *app) SetStatusIfChanged(ctx context.Context, deviceID string, message t
 		Timestamp:    message.Timestamp,
 	}
 
-	return a.db.SetStatusIfChanged(s)
-}
-
-func (a *app) sendMessage(event string, v any) error {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return err
-	}
-
-	message := sse.NewMessage("", string(b), event)
-	a.sse.SendMessage("", message)
-
-	return nil
+	return a.store.SetStatusIfChanged(s)
 }

@@ -24,7 +24,13 @@ type Location struct {
 	Altitude  float64 `json:"altitude"`
 }
 
+type Environment struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
 type DeviceStatus struct {
+	DeviceID     string   `json:"deviceID,omitempty"`
 	BatteryLevel int      `json:"batteryLevel"`
 	Code         int      `json:"statusCode"`
 	Messages     []string `json:"statusMessages,omitempty"`

@@ -1,11 +1,11 @@
-package application
+package watchdog
 
 import (
 	"context"
 	"math"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/rs/zerolog"
 )
@@ -17,15 +17,13 @@ type Watchdog interface {
 type watchdogImpl struct {
 	done chan bool
 	log  zerolog.Logger
-	app  DeviceManagement
-	db   database.Datastore
+	app  application.App
 }
 
-func NewWatchdog(app DeviceManagement, db database.Datastore, log zerolog.Logger) Watchdog {
+func New(app application.App, log zerolog.Logger) Watchdog {
 	w := &watchdogImpl{
 		log:  log,
 		app:  app,
-		db:   db,
 		done: make(chan bool),
 	}
 
@@ -49,7 +47,11 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 			return
 		default:
 			ctx := context.Background()
-			devices, err := w.app.ListAllDevices(ctx, w.db.GetAllTenants())
+			tennants, err := w.app.GetTenants(ctx)
+			if err != nil {
+				w.log.Error().Err(err).Msg("could not fetch tennats")
+			}
+			devices, err := w.app.GetDevices(ctx, tennants)
 			if err != nil {
 				w.log.Error().Err(err).Msg("could not list all devices")
 			}
@@ -58,7 +60,7 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 
 			for _, d := range devices {
 				if d.LastObserved.Before(time.Now().UTC().Add(-time.Duration(d.Intervall) * time.Second)) {
-					err = w.app.SetStatusIfChanged(ctx, d.DeviceId, types.DeviceStatus{
+					err = w.app.SetStatus(ctx, d.DeviceId, types.DeviceStatus{
 						BatteryLevel: 0,
 						Code:         types.StatusWarning,
 						Messages:     nil,

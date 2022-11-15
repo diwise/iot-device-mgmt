@@ -20,9 +20,11 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.DeviceManagement, sseServer *sse.Server) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.App, sseServer *sse.Server) *chi.Mux {
 
-	router.Get("/health", NewHealthHandler(log, app))
+	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 
 	router.Route("/api/v0", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
@@ -48,13 +50,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 	return router
 }
 
-func NewHealthHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
-func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+func listEnvironments(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -62,7 +58,7 @@ func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		env, err := app.ListEnvironments(ctx)
+		env, err := app.GetEnvironments(ctx)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to list environments")
 			w.WriteHeader(http.StatusInternalServerError)
@@ -82,7 +78,7 @@ func listEnvironments(log zerolog.Logger, app application.DeviceManagement) http
 	}
 }
 
-func createDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+func createDeviceHandler(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -117,7 +113,7 @@ func createDeviceHandler(log zerolog.Logger, app application.DeviceManagement) h
 	}
 }
 
-func patchDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+func patchDeviceHandler(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -154,7 +150,7 @@ func patchDeviceHandler(log zerolog.Logger, app application.DeviceManagement) ht
 	}
 }
 
-func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+func queryDevicesHandler(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -168,7 +164,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 
 		devEUI := r.URL.Query().Get("devEUI")
 		if devEUI == "" {
-			devices, err := app.ListAllDevices(ctx, allowedTenants)
+			devices, err := app.GetDevices(ctx, allowedTenants)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("unable to fetch all devices")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -177,7 +173,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 			deviceArray = append(deviceArray, devices...)
 			requestLogger.Info().Msgf("returning information about %d devices", len(devices))
 		} else {
-			device, err := app.GetDeviceFromEUI(ctx, devEUI)
+			device, err := app.GetDeviceByEUI(ctx, devEUI)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("device not found")
 				w.WriteHeader(http.StatusNotFound)
@@ -208,7 +204,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.DeviceManagement) h
 	}
 }
 
-func retrieveDeviceHandler(log zerolog.Logger, app application.DeviceManagement) http.HandlerFunc {
+func retrieveDeviceHandler(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 

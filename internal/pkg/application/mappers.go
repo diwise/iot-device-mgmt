@@ -7,15 +7,20 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
-type Environment struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
+func MapStatus(status types.DeviceStatus) database.Status {
+	return database.Status{
+		DeviceID:     status.DeviceID,
+		BatteryLevel: status.BatteryLevel,
+		Status:       status.Code,
+		Messages:     strings.Join(status.Messages, ","),
+		Timestamp:    status.Timestamp,
+	}
 }
 
-func MapToEnvModels(environments []database.Environment) []Environment {
-	env := make([]Environment, 0)
+func MapToEnvModels(environments []database.Environment) []types.Environment {
+	env := make([]types.Environment, 0)
 	for _, e := range environments {
-		env = append(env, Environment{ID: e.ID, Name: e.Name})
+		env = append(env, types.Environment{ID: e.ID, Name: e.Name})
 	}
 	return env
 }
