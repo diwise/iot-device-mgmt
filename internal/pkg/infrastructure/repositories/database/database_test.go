@@ -11,9 +11,9 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const devices string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default
-a81758fffe05e6fb;intern-a81758fffe05e6fb;62.39160;17.30723;;urn:oma:lwm2m:ext:3428;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;notdefault
+const devices string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;intervall
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60
+a81758fffe05e6fb;intern-a81758fffe05e6fb;62.39160;17.30723;;urn:oma:lwm2m:ext:3428;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;notdefault;60
 `
 
 func TestThatGetAllRetrievesByTenantNames(t *testing.T) {
