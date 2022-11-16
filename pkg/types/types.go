@@ -29,9 +29,10 @@ type Environment struct {
 }
 
 type SensorType struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	Interval int    `json:"interval"`
+	ID          uint   `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Interval    int    `json:"interval"`
 }
 
 type DeviceStatus struct {

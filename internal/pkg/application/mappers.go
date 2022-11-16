@@ -35,9 +35,10 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 			return e.Type
 		}),
 		SensorType: types.SensorType{
-			ID:       d.SensorType.ID,
-			Name:     d.SensorType.Name,
-			Interval: d.SensorType.Interval,
+			ID:          d.SensorType.ID,
+			Name:        d.SensorType.Name,
+			Description: d.SensorType.Description,
+			Interval:    d.SensorType.Interval,
 		},
 		LastObserved: d.LastObserved,
 		Active:       d.Active,

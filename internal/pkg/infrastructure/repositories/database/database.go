@@ -124,15 +124,17 @@ func (s store) Seed(key string, seedFileReader io.Reader) error {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
-	if strings.Contains(strings.ToLower(key), "devices") {
+	key = strings.ToLower(key)
+
+	if strings.Contains(key, "devices") {
 		return seedDevices(s, data)
 	}
 
-	if strings.Contains(strings.ToLower(key), "sensortype") {
+	if strings.Contains(key, "sensortype") {
 		return seedSensorTypes(s, data)
 	}
 
-	if strings.Contains(strings.ToLower(key), "environment") {
+	if strings.Contains(key, "environment") {
 		return seedEnvironment(s, data)
 	}
 
@@ -173,14 +175,16 @@ func seedSensorTypes(s store, data [][]string) error {
 		}
 
 		name := strings.ToLower(d[0])
+		desc := d[1]
 		var interval int = 3600
-		if interval, err = strconv.Atoi(d[1]); err != nil {
+		if interval, err = strconv.Atoi(d[2]); err != nil {
 			interval = 3600
 		}
 
 		sensorTypes = append(sensorTypes, SensorType{
-			Name:     name,
-			Interval: interval,
+			Name:        name,
+			Description: desc,
+			Interval:    interval,
 		})
 	}
 
@@ -284,28 +288,28 @@ func seedDevices(s store, data [][]string) error {
 }
 
 func (s store) GetDeviceFromDevEUI(eui string) (Device, error) {
-	var d Device
-	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "dev_eui=?", eui)
-
-	return d, result.Error
+	return getDevice(s, eui, "dev_eui")
 }
 
 func (s store) GetDeviceFromID(deviceID string) (Device, error) {
-	var d Device
-	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "device_id=?", deviceID)
+	return getDevice(s, deviceID, "device_id")
+}
 
+func getDevice(s store, id, column string) (Device, error) {
+	var d Device
+	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").Preload("SensorType").First(&d, column+"=?", id)
 	return d, result.Error
 }
 
 func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
-	result := s.db.Model(&Device{}).Where("device_id = ?", deviceID).Update("last_observed", timestamp)
+	result := s.db.Model(&Device{}).Where("device_id=?", deviceID).Update("last_observed", timestamp)
 	return result.Error
 }
 
-func (s store) getTenantByName(tenantName string) (*Tenant, error) {
+func getTenantByName(s store, tenantName string) (*Tenant, error) {
 	var tenant Tenant
 
-	err := s.db.First(&tenant, "name = ?", tenantName).Error
+	err := s.db.First(&tenant, "name=?", tenantName).Error
 	if err != nil {
 		return nil, err
 	}
@@ -329,14 +333,14 @@ func (s store) GetAll(tenantNames ...string) ([]Device, error) {
 	var deviceList []Device
 
 	for _, name := range tenantNames {
-		tenant, err := s.getTenantByName(name)
+		tenant, err := getTenantByName(s, name)
 		if err != nil {
 			return nil, err
 		}
 
 		var devices []Device
 
-		err = s.db.Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices, "tenant_id = ?", tenant.ID).Error
+		err = s.db.Preload("Types").Preload("Environment").Preload("Tenant").Preload("SensorType").Find(&devices, "tenant_id=?", tenant.ID).Error
 		if err != nil {
 			return nil, err
 		}
