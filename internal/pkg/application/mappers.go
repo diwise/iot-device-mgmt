@@ -17,25 +17,9 @@ func MapStatus(status types.DeviceStatus) database.Status {
 	}
 }
 
-func MapToEnvModels(environments []database.Environment) []types.Environment {
-	env := make([]types.Environment, 0)
-	for _, e := range environments {
-		env = append(env, types.Environment{ID: e.ID, Name: e.Name})
-	}
-	return env
-}
-
 func MapToModel(d database.Device, s database.Status) types.Device {
 	env := d.Environment.Name
 	t := d.Tenant.Name
-
-	lwm2mTypes := func(x []database.Lwm2mType) []string {
-		t := make([]string, 0)
-		for _, l := range x {
-			t = append(t, l.Type)
-		}
-		return t
-	}
 
 	dev := types.Device{
 		DevEUI:      d.DevEUI,
@@ -47,7 +31,9 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 			Longitude: d.Longitude,
 		},
 		Environment: env,
-		Types:       lwm2mTypes(d.Types),
+		Types: MapTo(d.Types, func(e database.Lwm2mType) string {
+			return e.Type
+		}),
 		SensorType: types.SensorType{
 			ID:       d.SensorType.ID,
 			Name:     d.SensorType.Name,
@@ -68,4 +54,12 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 	}
 
 	return dev
+}
+
+func MapTo[TFrom any, TTo any](data []TFrom, f func(TFrom) TTo) []TTo {
+	result := make([]TTo, 0)
+	for _, v := range data {
+		result = append(result, f(v))
+	}
+	return result
 }

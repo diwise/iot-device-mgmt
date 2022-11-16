@@ -169,11 +169,14 @@ func (a *app) GetTenants(ctx context.Context) ([]string, error) {
 }
 
 func (a *app) GetEnvironments(ctx context.Context) ([]types.Environment, error) {
-	e, err := a.store.ListEnvironments()
+	environments, err := a.store.ListEnvironments()
 	if err != nil {
 		return nil, err
 	}
-	return MapToEnvModels(e), nil
+
+	return MapTo(environments, func(e database.Environment) types.Environment {
+		return types.Environment{ID: e.ID, Name: e.Name}
+	}), nil
 }
 
 func (a *app) SetStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error {
