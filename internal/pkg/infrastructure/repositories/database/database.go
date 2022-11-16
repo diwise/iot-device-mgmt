@@ -104,7 +104,7 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{}, &Status{})
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{}, &Status{}, &SensorType{})
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +160,18 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			types = append(types, Lwm2mType{Type: t})
 		}
 
-		sensorType := d[6]
+		var intervall int = 3600
+		if intervall, err = strconv.Atoi(d[11]); err != nil {
+			intervall = 3600
+		}
+
+		var sensorType SensorType
+		result = s.db.First(&sensorType, "name=?", d[6])
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newSensorType := SensorType{Name: d[6], Interval: intervall}
+			s.db.Create(&newSensorType)
+			sensorType = newSensorType
+		}
 
 		name := d[7]
 
@@ -179,11 +190,6 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			tenant = newTenant
 		}
 
-		var intervall int = 3600
-		if intervall, err = strconv.Atoi(d[11]); err != nil {
-			intervall = 3600
-		}
-
 		d := Device{
 			DevEUI:      devEUI,
 			DeviceId:    deviceID,
@@ -196,7 +202,6 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			SensorType:  sensorType,
 			Active:      active,
 			Tenant:      tenant,
-			Intervall:   intervall,
 		}
 
 		devices = append(devices, d)
@@ -295,6 +300,9 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 	var t Tenant
 	s.db.First(&tenant, "name=?", tenant)
 
+	var st SensorType
+	s.db.First(&st, "name=?", sensorType)
+
 	var lwm2mTypes []Lwm2mType
 	for _, t := range types {
 		lwm2mTypes = append(lwm2mTypes, Lwm2mType{Type: t})
@@ -305,7 +313,7 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 		DeviceId:    deviceId,
 		Name:        name,
 		Description: description,
-		SensorType:  sensorType,
+		SensorType:  st,
 		Latitude:    latitude,
 		Longitude:   longitude,
 		Active:      active,

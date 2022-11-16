@@ -39,16 +39,20 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 
 	dev := types.Device{
 		DevEUI:      d.DevEUI,
-		DeviceId:    d.DeviceId,
+		DeviceID:    d.DeviceId,
 		Name:        d.Name,
 		Description: d.Description,
 		Location: types.Location{
 			Latitude:  d.Latitude,
 			Longitude: d.Longitude,
 		},
-		Environment:  env,
-		Types:        lwm2mTypes(d.Types),
-		SensorType:   d.SensorType,
+		Environment: env,
+		Types:       lwm2mTypes(d.Types),
+		SensorType: types.SensorType{
+			ID:       d.SensorType.ID,
+			Name:     d.SensorType.Name,
+			Interval: d.SensorType.Interval,
+		},
 		LastObserved: d.LastObserved,
 		Active:       d.Active,
 		Tenant:       t,
@@ -57,7 +61,6 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 			Code:         s.Status,
 			Timestamp:    s.Timestamp,
 		},
-		Intervall: d.Intervall,
 	}
 
 	if len(s.Messages) > 0 {

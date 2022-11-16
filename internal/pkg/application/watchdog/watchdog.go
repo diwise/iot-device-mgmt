@@ -59,15 +59,15 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 			sleepForSeconds := DefaultTimespan
 
 			for _, d := range devices {
-				if d.LastObserved.Before(time.Now().UTC().Add(-time.Duration(d.Intervall) * time.Second)) {
-					err = w.app.SetStatus(ctx, d.DeviceId, types.DeviceStatus{
+				if d.LastObserved.Before(time.Now().UTC().Add(-time.Duration(d.SensorType.Interval) * time.Second)) {
+					err = w.app.SetStatus(ctx, d.DeviceID, types.DeviceStatus{
 						BatteryLevel: 0,
 						Code:         types.StatusWarning,
 						Messages:     nil,
 						Timestamp:    time.Now().UTC().Format(time.RFC3339Nano),
 					})
 					if err != nil {
-						w.log.Error().Err(err).Msgf("could not set status for deviceID %s", d.DeviceId)
+						w.log.Error().Err(err).Msgf("could not set status for deviceID %s", d.DeviceID)
 					}
 				}
 
@@ -95,7 +95,7 @@ func timeToNextTime(d types.Device, now time.Time) int {
 		t = d.LastObserved
 	}
 
-	next := t.Add(time.Duration(d.Intervall) * time.Second)
+	next := t.Add(time.Duration(d.SensorType.Interval) * time.Second)
 	n := int(math.Floor(next.Sub(now).Seconds()))
 
 	if n < 0 {

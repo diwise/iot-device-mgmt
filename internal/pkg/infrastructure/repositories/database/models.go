@@ -17,12 +17,12 @@ type Device struct {
 	EnvironmentID int `gorm:"foreignKey:EnvironmentID"`
 	Environment   Environment
 	Types         []Lwm2mType `gorm:"foreignKey:device_id"`
-	SensorType    string
+	SensorTypeID  int `gorm:"foreignKey:SensorTypeID"`
+	SensorType    SensorType
 	LastObserved  time.Time
 	Active        bool
 	TenantID      int `gorm:"foreignKey:TenantID"`
-	Tenant        Tenant
-	Intervall     int
+	Tenant        Tenant	
 }
 
 type Lwm2mType struct {
@@ -38,6 +38,12 @@ type Environment struct {
 type Tenant struct {
 	gorm.Model
 	Name string `gorm:"unique"`
+}
+
+type SensorType struct {
+	gorm.Model
+	Name     string `gorm:"unique"`
+	Interval int
 }
 
 type Status struct {

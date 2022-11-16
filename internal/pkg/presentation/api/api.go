@@ -188,7 +188,7 @@ func queryDevicesHandler(log zerolog.Logger, app application.App) http.HandlerFu
 			}
 
 			deviceArray = append(deviceArray, device)
-			requestLogger.Info().Msgf("returning information about device %s", device.DeviceId)
+			requestLogger.Info().Msgf("returning information about device %s", device.DeviceID)
 		}
 
 		bytes, err := json.Marshal(&deviceArray)
@@ -236,7 +236,7 @@ func retrieveDeviceHandler(log zerolog.Logger, app application.App) http.Handler
 			return
 		}
 
-		requestLogger.Info().Msgf("returning information about device %s (%s)", device.DeviceId, deviceID)
+		requestLogger.Info().Msgf("returning information about device %s (%s)", device.DeviceID, deviceID)
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

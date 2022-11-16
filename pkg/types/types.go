@@ -4,18 +4,17 @@ import "time"
 
 type Device struct {
 	DevEUI       string       `json:"devEUI"`
-	DeviceId     string       `json:"deviceID"`
+	DeviceID     string       `json:"deviceID"`
 	Name         string       `json:"name"`
 	Description  string       `json:"description"`
 	Location     Location     `json:"location"`
 	Environment  string       `json:"environment"`
 	Types        []string     `json:"types"`
-	SensorType   string       `json:"sensor_type"`
-	LastObserved time.Time    `json:"last_observed"`
+	SensorType   SensorType   `json:"sensorType"`
+	LastObserved time.Time    `json:"lastObserved"`
 	Active       bool         `json:"active"`
 	Tenant       string       `json:"tenant"`
 	Status       DeviceStatus `json:"status"`
-	Intervall    int          `json:"intervall"`
 }
 
 type Location struct {
@@ -29,6 +28,12 @@ type Environment struct {
 	Name string `json:"name"`
 }
 
+type SensorType struct {
+	ID       uint   `json:"id"`
+	Name     string `json:"name"`
+	Interval int    `json:"interval"`
+}
+
 type DeviceStatus struct {
 	DeviceID     string   `json:"deviceID,omitempty"`
 	BatteryLevel int      `json:"batteryLevel"`
@@ -37,6 +42,7 @@ type DeviceStatus struct {
 	Timestamp    string   `json:"timestamp"`
 }
 
+const StatusUnknown = -1
 const StatusOK = 0
 const StatusWarning = 1
 const StatusError = 2

@@ -132,7 +132,7 @@ func (a *app) GetDevices(ctx context.Context, tenants []string) ([]types.Device,
 }
 
 func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
-	device, err := a.store.CreateDevice(d.DevEUI, d.DeviceId, d.Name, d.Description, d.Environment, d.SensorType, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
+	device, err := a.store.CreateDevice(d.DevEUI, d.DeviceID, d.Name, d.Description, d.Environment, d.SensorType.Name, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
 	if err != nil {
 		return err
 	}
