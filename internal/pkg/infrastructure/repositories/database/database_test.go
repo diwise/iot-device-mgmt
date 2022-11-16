@@ -129,7 +129,7 @@ func testSetup(t *testing.T, testData io.Reader) (*is.I, Datastore) {
 	db, err := NewDatabaseConnection(NewSQLiteConnector(log))
 	is.NoErr(err)
 
-	db.Seed(testData)
+	db.Seed("devices.csv", testData)
 	is.NoErr(err)
 
 	return is, db

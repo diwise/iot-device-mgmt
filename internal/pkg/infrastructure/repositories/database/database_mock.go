@@ -40,7 +40,7 @@ var _ Datastore = &DatastoreMock{}
 //			ListEnvironmentsFunc: func() ([]Environment, error) {
 //				panic("mock out the ListEnvironments method")
 //			},
-//			SeedFunc: func(r io.Reader) error {
+//			SeedFunc: func(key string, r io.Reader) error {
 //				panic("mock out the Seed method")
 //			},
 //			SetStatusIfChangedFunc: func(status Status) error {
@@ -81,7 +81,7 @@ type DatastoreMock struct {
 	ListEnvironmentsFunc func() ([]Environment, error)
 
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(r io.Reader) error
+	SeedFunc func(key string, r io.Reader) error
 
 	// SetStatusIfChangedFunc mocks the SetStatusIfChanged method.
 	SetStatusIfChangedFunc func(status Status) error
@@ -147,6 +147,8 @@ type DatastoreMock struct {
 		}
 		// Seed holds details about calls to the Seed method.
 		Seed []struct {
+			// Key is the key argument value.
+			Key string
 			// R is the r argument value.
 			R io.Reader
 		}
@@ -438,19 +440,21 @@ func (mock *DatastoreMock) ListEnvironmentsCalls() []struct {
 }
 
 // Seed calls SeedFunc.
-func (mock *DatastoreMock) Seed(r io.Reader) error {
+func (mock *DatastoreMock) Seed(key string, r io.Reader) error {
 	if mock.SeedFunc == nil {
 		panic("DatastoreMock.SeedFunc: method is nil but Datastore.Seed was just called")
 	}
 	callInfo := struct {
-		R io.Reader
+		Key string
+		R   io.Reader
 	}{
-		R: r,
+		Key: key,
+		R:   r,
 	}
 	mock.lockSeed.Lock()
 	mock.calls.Seed = append(mock.calls.Seed, callInfo)
 	mock.lockSeed.Unlock()
-	return mock.SeedFunc(r)
+	return mock.SeedFunc(key, r)
 }
 
 // SeedCalls gets all the calls that were made to Seed.
@@ -458,10 +462,12 @@ func (mock *DatastoreMock) Seed(r io.Reader) error {
 //
 //	len(mockedDatastore.SeedCalls())
 func (mock *DatastoreMock) SeedCalls() []struct {
-	R io.Reader
+	Key string
+	R   io.Reader
 } {
 	var calls []struct {
-		R io.Reader
+		Key string
+		R   io.Reader
 	}
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed

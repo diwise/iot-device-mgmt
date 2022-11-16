@@ -9,6 +9,9 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"path"
+	"path/filepath"
+	"sort"
 
 	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
@@ -30,7 +33,7 @@ import (
 
 const serviceName string = "iot-device-mgmt"
 
-var devicesFilePath string
+var dataDir string
 var opaFilePath string
 var notificationConfigPath string
 
@@ -39,7 +42,7 @@ func main() {
 	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
+	flag.StringVar(&dataDir, "devices", "/opt/diwise/config/data", "A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.StringVar(&notificationConfigPath, "notifications", "/opt/diwise/config/notifications.yaml", "Configuration file for notifications")
 	flag.Parse()
@@ -84,14 +87,26 @@ func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
-	devicesFile, err := os.Open(devicesFilePath)
-	if err == nil {
-		defer devicesFile.Close()
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		logger.Fatal().Err(err).Msg("directory does not exists!")
+	}
 
-		logger.Info().Msgf("seeding database from %s", devicesFilePath)
-		err = db.Seed(devicesFile)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to seed database")
+	files, err := filepath.Glob(dataDir + "/*.csv")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("no data files found!")
+	}
+
+	sort.Strings(files)
+
+	for _, f := range files {
+		dataFile, err := os.Open(f)
+		if err == nil {
+			defer dataFile.Close()
+			logger.Debug().Msgf("Seeding %s", path.Base(dataFile.Name()))
+			err = db.Seed(path.Base(dataFile.Name()), dataFile)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("failed to seed database")
+			}
 		}
 	}
 

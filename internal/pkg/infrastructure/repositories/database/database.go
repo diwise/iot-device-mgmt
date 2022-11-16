@@ -33,7 +33,7 @@ type Datastore interface {
 	GetAllTenants() []string
 	ListEnvironments() ([]Environment, error)
 
-	Seed(r io.Reader) error
+	Seed(key string, r io.Reader) error
 }
 
 type store struct {
@@ -115,19 +115,87 @@ func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
 	}, nil
 }
 
-func (s store) Seed(seedFileReader io.Reader) error {
-
+func (s store) Seed(key string, seedFileReader io.Reader) error {
 	r := csv.NewReader(seedFileReader)
 	r.Comma = ';'
 
-	knownDevices, err := r.ReadAll()
+	data, err := r.ReadAll()
 	if err != nil {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
+	if strings.Contains(strings.ToLower(key), "devices") {
+		return seedDevices(s, data)
+	}
+
+	if strings.Contains(strings.ToLower(key), "sensortype") {
+		return seedSensorTypes(s, data)
+	}
+
+	if strings.Contains(strings.ToLower(key), "environment") {
+		return seedEnvironment(s, data)
+	}
+
+	return fmt.Errorf("could not seed database from %s", key)
+}
+
+func seedEnvironment(s store, data [][]string) error {
+	var environments []Environment
+
+	for idx, d := range data {
+		if idx == 0 {
+			// Skip the CSV header
+			continue
+		}
+
+		name := strings.ToLower(d[0])
+		environments = append(environments, Environment{
+			Name: name,
+		})
+	}
+
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		UpdateAll: true,
+	}).Create(environments)
+
+	return result.Error
+}
+
+func seedSensorTypes(s store, data [][]string) error {
+	var err error
+	var sensorTypes []SensorType
+
+	for idx, d := range data {
+		if idx == 0 {
+			// Skip the CSV header
+			continue
+		}
+
+		name := strings.ToLower(d[0])
+		var interval int = 3600
+		if interval, err = strconv.Atoi(d[1]); err != nil {
+			interval = 3600
+		}
+
+		sensorTypes = append(sensorTypes, SensorType{
+			Name:     name,
+			Interval: interval,
+		})
+	}
+
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		UpdateAll: true,
+	}).Create(sensorTypes)
+
+	return result.Error
+}
+
+func seedDevices(s store, data [][]string) error {
 	var devices []Device
 
-	for idx, d := range knownDevices {
+	for idx, d := range data {
 		if idx == 0 {
 			// Skip the CSV header
 			continue
@@ -166,9 +234,9 @@ func (s store) Seed(seedFileReader io.Reader) error {
 		}
 
 		var sensorType SensorType
-		result = s.db.First(&sensorType, "name=?", d[6])
+		result = s.db.First(&sensorType, "name=?", strings.ToLower(d[6]))
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newSensorType := SensorType{Name: d[6], Interval: intervall}
+			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: intervall}
 			s.db.Create(&newSensorType)
 			sensorType = newSensorType
 		}
