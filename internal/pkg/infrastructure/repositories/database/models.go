@@ -23,6 +23,7 @@ type Device struct {
 	Active        bool
 	TenantID      int `gorm:"foreignKey:TenantID"`
 	Tenant        Tenant
+	Interval      int
 }
 
 type Lwm2mType struct {

@@ -42,7 +42,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 				r.Patch("/{id}", patchDeviceHandler(log, app))
 			})
 
-			r.Get("/environments", listEnvironments(log, app))
+			r.Get("/environments", getEnvironments(log, app))
 		})
 		r.Mount("/events", sseServer)
 	})
@@ -50,11 +50,11 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 	return router
 }
 
-func listEnvironments(log zerolog.Logger, app application.App) http.HandlerFunc {
+func getEnvironments(log zerolog.Logger, app application.App) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		ctx, span := tracer.Start(r.Context(), "list-environments")
+		ctx, span := tracer.Start(r.Context(), "get-environments")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 

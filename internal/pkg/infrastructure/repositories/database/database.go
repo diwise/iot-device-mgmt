@@ -138,7 +138,7 @@ func (s store) Seed(key string, seedFileReader io.Reader) error {
 		return seedEnvironment(s, data)
 	}
 
-	return fmt.Errorf("could not seed database from %s", key)
+	return nil
 }
 
 func seedEnvironment(s store, data [][]string) error {
@@ -274,6 +274,7 @@ func seedDevices(s store, data [][]string) error {
 			SensorType:  sensorType,
 			Active:      active,
 			Tenant:      tenant,
+			Interval:    intervall,
 		}
 
 		devices = append(devices, d)
@@ -409,7 +410,6 @@ func (s store) ListEnvironments() ([]Environment, error) {
 func (s store) SetStatusIfChanged(sm Status) error {
 	latest, err := s.GetLatestStatus(sm.DeviceID)
 	if err != nil {
-		s.logger.Err(err).Msg("could not find status message")
 		return fmt.Errorf("could not find status message, %w", err)
 	}
 
@@ -426,8 +426,13 @@ func (s store) SetStatusIfChanged(sm Status) error {
 	}
 
 	if sm.BatteryLevel != latest.BatteryLevel || sm.Messages != latest.Messages || sm.Status != latest.Status {
-		latest.BatteryLevel = sm.BatteryLevel
-		latest.Messages = sm.Messages
+		if sm.BatteryLevel > 0 && sm.BatteryLevel != latest.BatteryLevel {
+			latest.BatteryLevel = sm.BatteryLevel
+		}
+		if sm.Messages != "" && sm.Messages != latest.Messages {
+			latest.Messages = sm.Messages
+		}
+
 		latest.Status = sm.Status
 		latest.Timestamp = sm.Timestamp
 
@@ -452,7 +457,6 @@ func (s store) GetLatestStatus(deviceID string) (Status, error) {
 
 	result := s.db.Order("timestamp desc").Limit(1).Find(&latest, &Status{DeviceID: deviceID})
 	if result.Error != nil {
-		s.logger.Err(result.Error).Msg("could not fetch latest status message")
 		return latest, fmt.Errorf("could not fetch status message, %w", result.Error)
 	}
 

@@ -96,6 +96,8 @@ func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 		logger.Fatal().Err(err).Msg("no data files found!")
 	}
 
+	logger.Debug().Msgf("found %d files in %s", len(files), dataDir)
+
 	sort.Strings(files)
 
 	for _, f := range files {

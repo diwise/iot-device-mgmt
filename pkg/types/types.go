@@ -15,6 +15,7 @@ type Device struct {
 	Active       bool         `json:"active"`
 	Tenant       string       `json:"tenant"`
 	Status       DeviceStatus `json:"status"`
+	Interval     int          `json:"interval"`
 }
 
 type Location struct {
