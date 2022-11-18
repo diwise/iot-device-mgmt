@@ -172,6 +172,8 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		return nil, err
 	}
 
+	log.Debug().Msgf("response from iot-device-mgmt: %s", string(respBody))
+
 	impl := &types.Device{}
 
 	err = json.Unmarshal(respBody, impl)
