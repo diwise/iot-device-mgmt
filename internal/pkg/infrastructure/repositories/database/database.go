@@ -217,6 +217,10 @@ func seedDevices(s store, data [][]string) error {
 			return fmt.Errorf("failed to parse longitude for device %s: %s", devEUI, err.Error())
 		}
 
+		if lat == 0 || lon == 0 {
+			s.logger.Debug().Msgf("devEUI: %s, lat: %f, lon: %f", devEUI, lat, lon)
+		}
+
 		var environment Environment
 		result := s.db.First(&environment, "name=?", d[4])
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -444,7 +448,7 @@ func (s store) SetStatusIfChanged(sm Status) error {
 
 		s.logger.Debug().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 	} else {
-		s.logger.Debug().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
+		s.logger.Debug().Msgf("status NOT changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
 	}
 
 	return nil

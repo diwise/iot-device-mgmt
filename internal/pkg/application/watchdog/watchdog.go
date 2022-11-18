@@ -47,11 +47,11 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 			return
 		default:
 			ctx := context.Background()
-			tennants, err := w.app.GetTenants(ctx)
+			tenants, err := w.app.GetTenants(ctx)
 			if err != nil {
 				w.log.Error().Err(err).Msg("could not fetch tennats")
 			}
-			devices, err := w.app.GetDevices(ctx, tennants)
+			devices, err := w.app.GetDevices(ctx, tenants)
 			if err != nil {
 				w.log.Error().Err(err).Msg("could not list all devices")
 			}
