@@ -217,10 +217,6 @@ func seedDevices(s store, data [][]string) error {
 			return fmt.Errorf("failed to parse longitude for device %s: %s", devEUI, err.Error())
 		}
 
-		if lat == 0 || lon == 0 {
-			s.logger.Debug().Msgf("devEUI: %s, lat: %f, lon: %f", devEUI, lat, lon)
-		}
-
 		var environment Environment
 		result := s.db.First(&environment, "name=?", d[4])
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
@@ -236,15 +232,15 @@ func seedDevices(s store, data [][]string) error {
 			types = append(types, Lwm2mType{Type: t})
 		}
 
-		var intervall int = 3600
-		if intervall, err = strconv.Atoi(d[11]); err != nil {
-			intervall = 3600
+		var interval int = 3600
+		if interval, err = strconv.Atoi(d[11]); err != nil {
+			interval = 3600
 		}
 
 		var sensorType SensorType
 		result = s.db.First(&sensorType, "name=?", strings.ToLower(d[6]))
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: intervall}
+			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: interval}
 			s.db.Create(&newSensorType)
 			sensorType = newSensorType
 		}
@@ -278,7 +274,7 @@ func seedDevices(s store, data [][]string) error {
 			SensorType:  sensorType,
 			Active:      active,
 			Tenant:      tenant,
-			Interval:    intervall,
+			Interval:    interval,
 		}
 
 		devices = append(devices, d)

@@ -48,12 +48,22 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 		default:
 			ctx := context.Background()
 			tenants, err := w.app.GetTenants(ctx)
-			if err != nil {
-				w.log.Error().Err(err).Msg("could not fetch tennats")
+			if err != nil || len(tenants) == 0 {
+				if err != nil {
+					w.log.Error().Err(err).Msg("failed to fetch tenats")
+				}
+				if len(tenants) == 0 {
+					w.log.Error().Err(err).Msg("found 0 tenats")
+				}
+				w.done <- true
+				return
 			}
+			
 			devices, err := w.app.GetDevices(ctx, tenants)
 			if err != nil {
-				w.log.Error().Err(err).Msg("could not list all devices")
+				w.log.Error().Err(err).Msg("could not fetch devices!")
+				w.done <- true
+				return
 			}
 
 			sleepForSeconds := DefaultTimespan
@@ -88,13 +98,12 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 	}
 }
 
-const ZeroDateTime = -62135596800 // 0000-00-00T00:00:00Z
 const DefaultTimespan = 3600
 
 func timeToNextTime(d types.Device, now time.Time) int {
 	var t time.Time
 
-	if d.LastObserved.Unix() == ZeroDateTime {
+	if d.LastObserved.IsZero() {
 		t = time.Now().UTC()
 	} else {
 		t = d.LastObserved

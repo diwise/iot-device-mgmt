@@ -88,7 +88,7 @@ func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	}
 
 	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
-		logger.Fatal().Err(err).Msg("directory does not exists!")
+		logger.Fatal().Err(err).Msgf("directory %s does not exists! Unable to load data", dataDir)
 	}
 
 	files, err := filepath.Glob(dataDir + "/*.csv")
@@ -136,7 +136,7 @@ func loadEventSenderConfig(logger zerolog.Logger) *events.Config {
 
 		return nCfg
 	} else if !errors.Is(err, fs.ErrNotExist) {
-		logger.Fatal().Err(err).Msg("failed to open file")
+		logger.Fatal().Err(err).Msgf("failed to open configuration file %s", notificationConfigPath)
 	}
 	return nil
 }
