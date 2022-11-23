@@ -84,7 +84,7 @@ func (e *eventSender) Send(ctx context.Context, deviceID string, message types.D
 
 		result := c.Send(ctxWithTarget, event)
 		if cloudevents.IsUndelivered(result) || errors.Is(result, unix.ECONNREFUSED) {
-			logger.Error().Err(result).Msgf("faild to send event to %s", s.Endpoint)
+			logger.Error().Err(result).Msgf("failed to send event to %s", s.Endpoint)
 			err = fmt.Errorf("%w", result)
 		}
 	}
