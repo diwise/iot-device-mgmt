@@ -50,10 +50,10 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 			tenants, err := w.app.GetTenants(ctx)
 			if err != nil || len(tenants) == 0 {
 				if err != nil {
-					w.log.Error().Err(err).Msg("failed to fetch tenats")
+					w.log.Error().Err(err).Msg("failed to fetch tenants")
 				}
 				if len(tenants) == 0 {
-					w.log.Error().Err(err).Msg("found 0 tenats")
+					w.log.Error().Err(err).Msg("found 0 tenants")
 				}
 				w.done <- true
 				return
