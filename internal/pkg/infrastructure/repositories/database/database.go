@@ -27,13 +27,13 @@ type Datastore interface {
 	UpdateDevice(deviceID string, fields map[string]interface{}) (Device, error)
 	CreateDevice(devEUI, deviceId, name, description, environment, sensorType, tenant string, latitude, longitude float64, types []string, active bool) (Device, error)
 	UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error
-	GetAll(tenants []string) ([]Device, error)
+	GetAll(tenants ...string) ([]Device, error)
 	SetStatusIfChanged(status Status) error
 	GetLatestStatus(deviceID string) (Status, error)
-
+	GetAllTenants() []string
 	ListEnvironments() ([]Environment, error)
 
-	Seed(r io.Reader) error
+	Seed(key string, r io.Reader) error
 }
 
 type store struct {
@@ -99,35 +99,107 @@ func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 }
 
 func NewDatabaseConnection(connect ConnectorFunc) (Datastore, error) {
-	impl, logger, err := connect()
+	impl, log, err := connect()
 	if err != nil {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{}, &Status{})
+	err = impl.AutoMigrate(&Device{}, &Lwm2mType{}, &Environment{}, &Tenant{}, &Status{}, &SensorType{})
 	if err != nil {
 		return nil, err
 	}
 
 	return &store{
 		db:     impl,
-		logger: logger,
+		logger: log,
 	}, nil
 }
 
-func (s store) Seed(seedFileReader io.Reader) error {
-
+func (s store) Seed(key string, seedFileReader io.Reader) error {
 	r := csv.NewReader(seedFileReader)
 	r.Comma = ';'
 
-	knownDevices, err := r.ReadAll()
+	data, err := r.ReadAll()
 	if err != nil {
 		return fmt.Errorf("failed to read csv data from file: %s", err.Error())
 	}
 
-	devices := []Device{}
+	key = strings.ToLower(key)
 
-	for idx, d := range knownDevices {
+	if strings.Contains(key, "devices") {
+		return seedDevices(s, data)
+	}
+
+	if strings.Contains(key, "sensortype") {
+		return seedSensorTypes(s, data)
+	}
+
+	if strings.Contains(key, "environment") {
+		return seedEnvironment(s, data)
+	}
+
+	return nil
+}
+
+func seedEnvironment(s store, data [][]string) error {
+	var environments []Environment
+
+	for idx, d := range data {
+		if idx == 0 {
+			// Skip the CSV header
+			continue
+		}
+
+		name := strings.ToLower(d[0])
+		environments = append(environments, Environment{
+			Name: name,
+		})
+	}
+
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		UpdateAll: true,
+	}).Create(environments)
+
+	return result.Error
+}
+
+func seedSensorTypes(s store, data [][]string) error {
+	var err error
+	var sensorTypes []SensorType
+
+	for idx, d := range data {
+		if idx == 0 {
+			// Skip the CSV header
+			continue
+		}
+
+		name := strings.ToLower(d[0])
+		desc := d[1]
+		var interval int = 3600
+		if interval, err = strconv.Atoi(d[2]); err != nil {
+			interval = 3600
+		}
+
+		sensorTypes = append(sensorTypes, SensorType{
+			Name:        name,
+			Description: desc,
+			Interval:    interval,
+		})
+	}
+
+	result := s.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		UpdateAll: true,
+	}).Create(sensorTypes)
+
+	return result.Error
+}
+
+func seedDevices(s store, data [][]string) error {
+	var devices []Device
+
+	for idx, d := range data {
 		if idx == 0 {
 			// Skip the CSV header
 			continue
@@ -153,14 +225,25 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			environment = newEnvironment
 		}
 
-		types := []Lwm2mType{}
+		var types []Lwm2mType
 		ts := strings.Split(d[5], ",")
 
 		for _, t := range ts {
 			types = append(types, Lwm2mType{Type: t})
 		}
 
-		sensorType := d[6]
+		var interval int = 3600
+		if interval, err = strconv.Atoi(d[11]); err != nil {
+			interval = 3600
+		}
+
+		var sensorType SensorType
+		result = s.db.First(&sensorType, "name=?", strings.ToLower(d[6]))
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: interval}
+			s.db.Create(&newSensorType)
+			sensorType = newSensorType
+		}
 
 		name := d[7]
 
@@ -191,6 +274,7 @@ func (s store) Seed(seedFileReader io.Reader) error {
 			SensorType:  sensorType,
 			Active:      active,
 			Tenant:      tenant,
+			Interval:    interval,
 		}
 
 		devices = append(devices, d)
@@ -205,28 +289,28 @@ func (s store) Seed(seedFileReader io.Reader) error {
 }
 
 func (s store) GetDeviceFromDevEUI(eui string) (Device, error) {
-	var d Device
-	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "dev_eui=?", eui)
-
-	return d, result.Error
+	return getDevice(s, eui, "dev_eui")
 }
 
 func (s store) GetDeviceFromID(deviceID string) (Device, error) {
-	var d Device
-	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").First(&d, "device_id=?", deviceID)
+	return getDevice(s, deviceID, "device_id")
+}
 
+func getDevice(s store, id, column string) (Device, error) {
+	var d Device
+	result := s.db.Preload("Types").Preload("Environment").Preload("Tenant").Preload("SensorType").First(&d, column+"=?", id)
 	return d, result.Error
 }
 
 func (s store) UpdateLastObservedOnDevice(deviceID string, timestamp time.Time) error {
-	result := s.db.Model(&Device{}).Where("device_id = ?", deviceID).Update("last_observed", timestamp)
+	result := s.db.Model(&Device{}).Where("device_id=?", deviceID).Update("last_observed", timestamp)
 	return result.Error
 }
 
-func (s store) getTenantByName(tenantName string) (*Tenant, error) {
+func getTenantByName(s store, tenantName string) (*Tenant, error) {
 	var tenant Tenant
 
-	err := s.db.First(&tenant, "name = ?", tenantName).Error
+	err := s.db.First(&tenant, "name=?", tenantName).Error
 	if err != nil {
 		return nil, err
 	}
@@ -234,18 +318,30 @@ func (s store) getTenantByName(tenantName string) (*Tenant, error) {
 	return &tenant, nil
 }
 
-func (s store) GetAll(tenantNames []string) ([]Device, error) {
+func (s store) GetAllTenants() []string {
+	var tenants []Tenant
+	if err := s.db.Find(&tenants); err != nil {
+		var tenantNames []string
+		for _, t := range tenants {
+			tenantNames = append(tenantNames, t.Name)
+		}
+		return tenantNames
+	}
+	return []string{}
+}
+
+func (s store) GetAll(tenantNames ...string) ([]Device, error) {
 	var deviceList []Device
 
 	for _, name := range tenantNames {
-		tenant, err := s.getTenantByName(name)
+		tenant, err := getTenantByName(s, name)
 		if err != nil {
 			return nil, err
 		}
 
 		var devices []Device
 
-		err = s.db.Preload("Types").Preload("Environment").Preload("Tenant").Find(&devices, "tenant_id = ?", tenant.ID).Error
+		err = s.db.Preload("Types").Preload("Environment").Preload("Tenant").Preload("SensorType").Find(&devices, "tenant_id=?", tenant.ID).Error
 		if err != nil {
 			return nil, err
 		}
@@ -277,7 +373,10 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 	var t Tenant
 	s.db.First(&tenant, "name=?", tenant)
 
-	lwm2mTypes := []Lwm2mType{}
+	var st SensorType
+	s.db.First(&st, "name=?", sensorType)
+
+	var lwm2mTypes []Lwm2mType
 	for _, t := range types {
 		lwm2mTypes = append(lwm2mTypes, Lwm2mType{Type: t})
 	}
@@ -287,7 +386,7 @@ func (s store) CreateDevice(devEUI, deviceId, name, description, environment, se
 		DeviceId:    deviceId,
 		Name:        name,
 		Description: description,
-		SensorType:  sensorType,
+		SensorType:  st,
 		Latitude:    latitude,
 		Longitude:   longitude,
 		Active:      active,
@@ -311,7 +410,6 @@ func (s store) ListEnvironments() ([]Environment, error) {
 func (s store) SetStatusIfChanged(sm Status) error {
 	latest, err := s.GetLatestStatus(sm.DeviceID)
 	if err != nil {
-		s.logger.Err(err).Msg("could not find status message")
 		return fmt.Errorf("could not find status message, %w", err)
 	}
 
@@ -322,14 +420,19 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			return fmt.Errorf("could not create new status message, %w", result.Error)
 		}
 
-		s.logger.Info().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+		s.logger.Debug().Msgf("status created for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 
 		return nil
 	}
 
 	if sm.BatteryLevel != latest.BatteryLevel || sm.Messages != latest.Messages || sm.Status != latest.Status {
-		latest.BatteryLevel = sm.BatteryLevel
-		latest.Messages = sm.Messages
+		if sm.BatteryLevel > 0 && sm.BatteryLevel != latest.BatteryLevel {
+			latest.BatteryLevel = sm.BatteryLevel
+		}
+		if sm.Messages != "" && sm.Messages != latest.Messages {
+			latest.Messages = sm.Messages
+		}
+
 		latest.Status = sm.Status
 		latest.Timestamp = sm.Timestamp
 
@@ -339,9 +442,9 @@ func (s store) SetStatusIfChanged(sm Status) error {
 			return fmt.Errorf("could not save status message, %w", result.Error)
 		}
 
-		s.logger.Info().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
+		s.logger.Debug().Msgf("status updated for %s, status: %d, battery: %d, timestamp: %s", sm.DeviceID, sm.Status, sm.BatteryLevel, sm.Timestamp)
 	} else {
-		s.logger.Info().Msgf("status not changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
+		s.logger.Debug().Msgf("status NOT changed for %s, status: %d, battery: %d", sm.DeviceID, sm.Status, sm.BatteryLevel)
 	}
 
 	return nil
@@ -354,7 +457,6 @@ func (s store) GetLatestStatus(deviceID string) (Status, error) {
 
 	result := s.db.Order("timestamp desc").Limit(1).Find(&latest, &Status{DeviceID: deviceID})
 	if result.Error != nil {
-		s.logger.Err(result.Error).Msg("could not fetch latest status message")
 		return latest, fmt.Errorf("could not fetch status message, %w", result.Error)
 	}
 

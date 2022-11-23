@@ -9,10 +9,15 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"time"
+	"path"
+	"path/filepath"
+	"sort"
 
 	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/webevents"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -28,7 +33,7 @@ import (
 
 const serviceName string = "iot-device-mgmt"
 
-var devicesFilePath string
+var dataDir string
 var opaFilePath string
 var notificationConfigPath string
 
@@ -37,56 +42,37 @@ func main() {
 	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&devicesFilePath, "devices", "/opt/diwise/config/devices.csv", "A file of known devices")
+	flag.StringVar(&dataDir, "devices", "/opt/diwise/config/data", "A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.StringVar(&notificationConfigPath, "notifications", "/opt/diwise/config/notifications.yaml", "Configuration file for notifications")
 	flag.Parse()
 
-	db := connectToDatabaseOrDie(logger)
-
-	devicesFile, err := os.Open(devicesFilePath)
-	if err == nil {
-		defer devicesFile.Close()
-
-		logger.Info().Msgf("seeding database from %s", devicesFilePath)
-		err = db.Seed(devicesFile)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to seed database")
-		}
-	}
-
-	config := messaging.LoadConfiguration(serviceName, logger)
-	messenger, err := messaging.Initialize(config)
-	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to init messenger")
-	}
-
-	nCfg := &application.Config{}
-	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
-		defer nCfgFile.Close()
-
-		nCfg, err = application.LoadConfiguration(nCfgFile)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to load configuration")
-		}
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		logger.Fatal().Err(err).Msg("failed to open file")
-	}
-
-	s := sse.NewServer(nil)
-	defer s.Shutdown()
-
-	r := createAppAndSetupRouter(logger, serviceName, db, messenger, nCfg, s)
-
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
-	err = http.ListenAndServe(apiPort, r)
+	db := setupDatabaseOrDie(logger)
+	messenger := setupMessaging(serviceName, logger)
+	eventSender := events.New(loadEventSenderConfig(logger))
+	webEvents := webevents.New()
+
+	app := application.New(db, eventSender, webEvents)
+	defer app.Stop()
+
+	routingKey := "device-status"
+	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
+
+	watchdog := watchdog.New(app, logger)
+	watchdog.Start()
+	defer watchdog.Stop()
+
+	r := setupRouter(logger, serviceName, app, webEvents.Server())
+
+	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to start router")
 	}
 }
 
-func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
+func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	var db database.Datastore
 	var err error
 
@@ -101,15 +87,61 @@ func connectToDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		logger.Fatal().Err(err).Msgf("directory %s does not exists! Unable to load data", dataDir)
+	}
+
+	files, err := filepath.Glob(dataDir + "/*.csv")
+	if err != nil {
+		logger.Fatal().Err(err).Msg("no data files found!")
+	}
+
+	logger.Debug().Msgf("found %d files in %s", len(files), dataDir)
+
+	sort.Strings(files)
+
+	for _, f := range files {
+		dataFile, err := os.Open(f)
+		if err == nil {
+			defer dataFile.Close()
+			logger.Debug().Msgf("Seeding %s", path.Base(dataFile.Name()))
+			err = db.Seed(path.Base(dataFile.Name()), dataFile)
+			if err != nil {
+				logger.Fatal().Err(err).Msg("failed to seed database")
+			}
+		}
+	}
+
 	return db
 }
 
-func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db database.Datastore, messenger messaging.MsgContext, cfg *application.Config, sseServer *sse.Server) *chi.Mux {
-	app := application.New(db, cfg, sseServer)
+func setupMessaging(serviceName string, logger zerolog.Logger) messaging.MsgContext {
+	config := messaging.LoadConfiguration(serviceName, logger)
+	messenger, err := messaging.Initialize(config)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to init messenger")
+	}
 
-	routingKey := "device-status"
-	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
+	return messenger
+}
 
+func loadEventSenderConfig(logger zerolog.Logger) *events.Config {
+	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
+		defer nCfgFile.Close()
+
+		nCfg, err := events.LoadConfiguration(nCfgFile)
+		if err != nil {
+			logger.Fatal().Err(err).Msg("failed to load configuration")
+		}
+
+		return nCfg
+	} else if !errors.Is(err, fs.ErrNotExist) {
+		logger.Fatal().Err(err).Msgf("failed to open configuration file %s", notificationConfigPath)
+	}
+	return nil
+}
+
+func setupRouter(logger zerolog.Logger, serviceName string, app application.App, sseServer *sse.Server) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
@@ -121,52 +153,21 @@ func createAppAndSetupRouter(logger zerolog.Logger, serviceName string, db datab
 	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }
 
-func newTopicMessageHandler(messenger messaging.MsgContext, app application.DeviceManagement) messaging.TopicMessageHandler {
+func newTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger.Info().Str("body", string(msg.Body)).Msg("received message")
 
-		s := struct {
-			DeviceID     string   `json:"deviceID"`
-			BatteryLevel int      `json:"batteryLevel"`
-			Code         int      `json:"statusCode"`
-			Messages     []string `json:"statusMessages,omitempty"`
-			Timestamp    string   `json:"timestamp"`
-		}{}
+		ds := types.DeviceStatus{}
 
-		err := json.Unmarshal(msg.Body, &s)
+		err := json.Unmarshal(msg.Body, &ds)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
 			return
 		}
 
-		timestamp, err := time.Parse(time.RFC3339, s.Timestamp)
+		err = app.Handle(ctx, ds)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to parse time from status message")
-			return
-		}
-
-		err = app.UpdateLastObservedOnDevice(ctx, s.DeviceID, timestamp)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle accepted message")
-			return
-		}
-
-		a := types.DeviceStatus{
-			BatteryLevel: s.BatteryLevel,
-			Code:         s.Code,
-			Messages:     s.Messages,
-			Timestamp:    s.Timestamp,
-		}
-
-		err = app.SetStatusIfChanged(ctx, s.DeviceID, a)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to store status")
-			return
-		}
-
-		err = app.NotifyStatus(ctx, s.DeviceID, a)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to send notification")
+			logger.Error().Err(err).Msg("failed to handle device status message")
 			return
 		}
 	}
