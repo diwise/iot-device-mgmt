@@ -15,52 +15,58 @@ var _ Datastore = &DatastoreMock{}
 
 // DatastoreMock is a mock implementation of Datastore.
 //
-// 	func TestSomethingThatUsesDatastore(t *testing.T) {
+//	func TestSomethingThatUsesDatastore(t *testing.T) {
 //
-// 		// make and configure a mocked Datastore
-// 		mockedDatastore := &DatastoreMock{
-// 			CreateDeviceFunc: func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
-// 				panic("mock out the CreateDevice method")
-// 			},
-// 			GetAllFunc: func(tenants []string) ([]Device, error) {
-// 				panic("mock out the GetAll method")
-// 			},
-// 			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
-// 				panic("mock out the GetDeviceFromDevEUI method")
-// 			},
-// 			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
-// 				panic("mock out the GetDeviceFromID method")
-// 			},
-// 			GetLatestStatusFunc: func(deviceID string) (Status, error) {
-// 				panic("mock out the GetLatestStatus method")
-// 			},
-// 			ListEnvironmentsFunc: func() ([]Environment, error) {
-// 				panic("mock out the ListEnvironments method")
-// 			},
-// 			SeedFunc: func(r io.Reader) error {
-// 				panic("mock out the Seed method")
-// 			},
-// 			SetStatusIfChangedFunc: func(status Status) error {
-// 				panic("mock out the SetStatusIfChanged method")
-// 			},
-// 			UpdateDeviceFunc: func(deviceID string, fields map[string]interface{}) (Device, error) {
-// 				panic("mock out the UpdateDevice method")
-// 			},
-// 			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
-// 				panic("mock out the UpdateLastObservedOnDevice method")
-// 			},
-// 		}
+//		// make and configure a mocked Datastore
+//		mockedDatastore := &DatastoreMock{
+//			CreateDeviceFunc: func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error) {
+//				panic("mock out the CreateDevice method")
+//			},
+//			GetAllFunc: func(tenants ...string) ([]Device, error) {
+//				panic("mock out the GetAll method")
+//			},
+//			GetAllTenantsFunc: func() []string {
+//				panic("mock out the GetAllTenants method")
+//			},
+//			GetDeviceFromDevEUIFunc: func(eui string) (Device, error) {
+//				panic("mock out the GetDeviceFromDevEUI method")
+//			},
+//			GetDeviceFromIDFunc: func(deviceID string) (Device, error) {
+//				panic("mock out the GetDeviceFromID method")
+//			},
+//			GetLatestStatusFunc: func(deviceID string) (Status, error) {
+//				panic("mock out the GetLatestStatus method")
+//			},
+//			ListEnvironmentsFunc: func() ([]Environment, error) {
+//				panic("mock out the ListEnvironments method")
+//			},
+//			SeedFunc: func(key string, r io.Reader) error {
+//				panic("mock out the Seed method")
+//			},
+//			SetStatusIfChangedFunc: func(status Status) error {
+//				panic("mock out the SetStatusIfChanged method")
+//			},
+//			UpdateDeviceFunc: func(deviceID string, fields map[string]interface{}) (Device, error) {
+//				panic("mock out the UpdateDevice method")
+//			},
+//			UpdateLastObservedOnDeviceFunc: func(deviceID string, timestamp time.Time) error {
+//				panic("mock out the UpdateLastObservedOnDevice method")
+//			},
+//		}
 //
-// 		// use mockedDatastore in code that requires Datastore
-// 		// and then make assertions.
+//		// use mockedDatastore in code that requires Datastore
+//		// and then make assertions.
 //
-// 	}
+//	}
 type DatastoreMock struct {
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(devEUI string, deviceId string, name string, description string, environment string, sensorType string, tenant string, latitude float64, longitude float64, types []string, active bool) (Device, error)
 
 	// GetAllFunc mocks the GetAll method.
-	GetAllFunc func(tenants []string) ([]Device, error)
+	GetAllFunc func(tenants ...string) ([]Device, error)
+
+	// GetAllTenantsFunc mocks the GetAllTenants method.
+	GetAllTenantsFunc func() []string
 
 	// GetDeviceFromDevEUIFunc mocks the GetDeviceFromDevEUI method.
 	GetDeviceFromDevEUIFunc func(eui string) (Device, error)
@@ -75,7 +81,7 @@ type DatastoreMock struct {
 	ListEnvironmentsFunc func() ([]Environment, error)
 
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(r io.Reader) error
+	SeedFunc func(key string, r io.Reader) error
 
 	// SetStatusIfChangedFunc mocks the SetStatusIfChanged method.
 	SetStatusIfChangedFunc func(status Status) error
@@ -118,6 +124,9 @@ type DatastoreMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// GetAllTenants holds details about calls to the GetAllTenants method.
+		GetAllTenants []struct {
+		}
 		// GetDeviceFromDevEUI holds details about calls to the GetDeviceFromDevEUI method.
 		GetDeviceFromDevEUI []struct {
 			// Eui is the eui argument value.
@@ -138,6 +147,8 @@ type DatastoreMock struct {
 		}
 		// Seed holds details about calls to the Seed method.
 		Seed []struct {
+			// Key is the key argument value.
+			Key string
 			// R is the r argument value.
 			R io.Reader
 		}
@@ -163,6 +174,7 @@ type DatastoreMock struct {
 	}
 	lockCreateDevice               sync.RWMutex
 	lockGetAll                     sync.RWMutex
+	lockGetAllTenants              sync.RWMutex
 	lockGetDeviceFromDevEUI        sync.RWMutex
 	lockGetDeviceFromID            sync.RWMutex
 	lockGetLatestStatus            sync.RWMutex
@@ -211,7 +223,8 @@ func (mock *DatastoreMock) CreateDevice(devEUI string, deviceId string, name str
 
 // CreateDeviceCalls gets all the calls that were made to CreateDevice.
 // Check the length with:
-//     len(mockedDatastore.CreateDeviceCalls())
+//
+//	len(mockedDatastore.CreateDeviceCalls())
 func (mock *DatastoreMock) CreateDeviceCalls() []struct {
 	DevEUI      string
 	DeviceId    string
@@ -245,7 +258,7 @@ func (mock *DatastoreMock) CreateDeviceCalls() []struct {
 }
 
 // GetAll calls GetAllFunc.
-func (mock *DatastoreMock) GetAll(tenants []string) ([]Device, error) {
+func (mock *DatastoreMock) GetAll(tenants ...string) ([]Device, error) {
 	if mock.GetAllFunc == nil {
 		panic("DatastoreMock.GetAllFunc: method is nil but Datastore.GetAll was just called")
 	}
@@ -257,12 +270,13 @@ func (mock *DatastoreMock) GetAll(tenants []string) ([]Device, error) {
 	mock.lockGetAll.Lock()
 	mock.calls.GetAll = append(mock.calls.GetAll, callInfo)
 	mock.lockGetAll.Unlock()
-	return mock.GetAllFunc(tenants)
+	return mock.GetAllFunc(tenants...)
 }
 
 // GetAllCalls gets all the calls that were made to GetAll.
 // Check the length with:
-//     len(mockedDatastore.GetAllCalls())
+//
+//	len(mockedDatastore.GetAllCalls())
 func (mock *DatastoreMock) GetAllCalls() []struct {
 	Tenants []string
 } {
@@ -272,6 +286,33 @@ func (mock *DatastoreMock) GetAllCalls() []struct {
 	mock.lockGetAll.RLock()
 	calls = mock.calls.GetAll
 	mock.lockGetAll.RUnlock()
+	return calls
+}
+
+// GetAllTenants calls GetAllTenantsFunc.
+func (mock *DatastoreMock) GetAllTenants() []string {
+	if mock.GetAllTenantsFunc == nil {
+		panic("DatastoreMock.GetAllTenantsFunc: method is nil but Datastore.GetAllTenants was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockGetAllTenants.Lock()
+	mock.calls.GetAllTenants = append(mock.calls.GetAllTenants, callInfo)
+	mock.lockGetAllTenants.Unlock()
+	return mock.GetAllTenantsFunc()
+}
+
+// GetAllTenantsCalls gets all the calls that were made to GetAllTenants.
+// Check the length with:
+//
+//	len(mockedDatastore.GetAllTenantsCalls())
+func (mock *DatastoreMock) GetAllTenantsCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockGetAllTenants.RLock()
+	calls = mock.calls.GetAllTenants
+	mock.lockGetAllTenants.RUnlock()
 	return calls
 }
 
@@ -293,7 +334,8 @@ func (mock *DatastoreMock) GetDeviceFromDevEUI(eui string) (Device, error) {
 
 // GetDeviceFromDevEUICalls gets all the calls that were made to GetDeviceFromDevEUI.
 // Check the length with:
-//     len(mockedDatastore.GetDeviceFromDevEUICalls())
+//
+//	len(mockedDatastore.GetDeviceFromDevEUICalls())
 func (mock *DatastoreMock) GetDeviceFromDevEUICalls() []struct {
 	Eui string
 } {
@@ -324,7 +366,8 @@ func (mock *DatastoreMock) GetDeviceFromID(deviceID string) (Device, error) {
 
 // GetDeviceFromIDCalls gets all the calls that were made to GetDeviceFromID.
 // Check the length with:
-//     len(mockedDatastore.GetDeviceFromIDCalls())
+//
+//	len(mockedDatastore.GetDeviceFromIDCalls())
 func (mock *DatastoreMock) GetDeviceFromIDCalls() []struct {
 	DeviceID string
 } {
@@ -355,7 +398,8 @@ func (mock *DatastoreMock) GetLatestStatus(deviceID string) (Status, error) {
 
 // GetLatestStatusCalls gets all the calls that were made to GetLatestStatus.
 // Check the length with:
-//     len(mockedDatastore.GetLatestStatusCalls())
+//
+//	len(mockedDatastore.GetLatestStatusCalls())
 func (mock *DatastoreMock) GetLatestStatusCalls() []struct {
 	DeviceID string
 } {
@@ -383,7 +427,8 @@ func (mock *DatastoreMock) ListEnvironments() ([]Environment, error) {
 
 // ListEnvironmentsCalls gets all the calls that were made to ListEnvironments.
 // Check the length with:
-//     len(mockedDatastore.ListEnvironmentsCalls())
+//
+//	len(mockedDatastore.ListEnvironmentsCalls())
 func (mock *DatastoreMock) ListEnvironmentsCalls() []struct {
 } {
 	var calls []struct {
@@ -395,29 +440,34 @@ func (mock *DatastoreMock) ListEnvironmentsCalls() []struct {
 }
 
 // Seed calls SeedFunc.
-func (mock *DatastoreMock) Seed(r io.Reader) error {
+func (mock *DatastoreMock) Seed(key string, r io.Reader) error {
 	if mock.SeedFunc == nil {
 		panic("DatastoreMock.SeedFunc: method is nil but Datastore.Seed was just called")
 	}
 	callInfo := struct {
-		R io.Reader
+		Key string
+		R   io.Reader
 	}{
-		R: r,
+		Key: key,
+		R:   r,
 	}
 	mock.lockSeed.Lock()
 	mock.calls.Seed = append(mock.calls.Seed, callInfo)
 	mock.lockSeed.Unlock()
-	return mock.SeedFunc(r)
+	return mock.SeedFunc(key, r)
 }
 
 // SeedCalls gets all the calls that were made to Seed.
 // Check the length with:
-//     len(mockedDatastore.SeedCalls())
+//
+//	len(mockedDatastore.SeedCalls())
 func (mock *DatastoreMock) SeedCalls() []struct {
-	R io.Reader
+	Key string
+	R   io.Reader
 } {
 	var calls []struct {
-		R io.Reader
+		Key string
+		R   io.Reader
 	}
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed
@@ -443,7 +493,8 @@ func (mock *DatastoreMock) SetStatusIfChanged(status Status) error {
 
 // SetStatusIfChangedCalls gets all the calls that were made to SetStatusIfChanged.
 // Check the length with:
-//     len(mockedDatastore.SetStatusIfChangedCalls())
+//
+//	len(mockedDatastore.SetStatusIfChangedCalls())
 func (mock *DatastoreMock) SetStatusIfChangedCalls() []struct {
 	Status Status
 } {
@@ -476,7 +527,8 @@ func (mock *DatastoreMock) UpdateDevice(deviceID string, fields map[string]inter
 
 // UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
 // Check the length with:
-//     len(mockedDatastore.UpdateDeviceCalls())
+//
+//	len(mockedDatastore.UpdateDeviceCalls())
 func (mock *DatastoreMock) UpdateDeviceCalls() []struct {
 	DeviceID string
 	Fields   map[string]interface{}
@@ -511,7 +563,8 @@ func (mock *DatastoreMock) UpdateLastObservedOnDevice(deviceID string, timestamp
 
 // UpdateLastObservedOnDeviceCalls gets all the calls that were made to UpdateLastObservedOnDevice.
 // Check the length with:
-//     len(mockedDatastore.UpdateLastObservedOnDeviceCalls())
+//
+//	len(mockedDatastore.UpdateLastObservedOnDeviceCalls())
 func (mock *DatastoreMock) UpdateLastObservedOnDeviceCalls() []struct {
 	DeviceID  string
 	Timestamp time.Time

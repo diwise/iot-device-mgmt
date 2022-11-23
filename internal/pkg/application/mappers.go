@@ -7,43 +7,39 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
-type Environment struct {
-	ID   uint   `json:"id"`
-	Name string `json:"name"`
-}
-
-func MapToEnvModels(environments []database.Environment) []Environment {
-	env := make([]Environment, 0)
-	for _, e := range environments {
-		env = append(env, Environment{ID: e.ID, Name: e.Name})
+func MapStatus(status types.DeviceStatus) database.Status {
+	return database.Status{
+		DeviceID:     status.DeviceID,
+		BatteryLevel: status.BatteryLevel,
+		Status:       status.Code,
+		Messages:     strings.Join(status.Messages, ","),
+		Timestamp:    status.Timestamp,
 	}
-	return env
 }
 
 func MapToModel(d database.Device, s database.Status) types.Device {
 	env := d.Environment.Name
 	t := d.Tenant.Name
 
-	lwm2mTypes := func(x []database.Lwm2mType) []string {
-		t := make([]string, 0)
-		for _, l := range x {
-			t = append(t, l.Type)
-		}
-		return t
-	}
-
 	dev := types.Device{
 		DevEUI:      d.DevEUI,
-		DeviceId:    d.DeviceId,
+		DeviceID:    d.DeviceId,
 		Name:        d.Name,
 		Description: d.Description,
 		Location: types.Location{
 			Latitude:  d.Latitude,
 			Longitude: d.Longitude,
 		},
-		Environment:  env,
-		Types:        lwm2mTypes(d.Types),
-		SensorType:   d.SensorType,
+		Environment: env,
+		Types: MapTo(d.Types, func(e database.Lwm2mType) string {
+			return e.Type
+		}),
+		SensorType: types.SensorType{
+			ID:          d.SensorType.ID,
+			Name:        d.SensorType.Name,
+			Description: d.SensorType.Description,
+			Interval:    d.SensorType.Interval,
+		},
 		LastObserved: d.LastObserved,
 		Active:       d.Active,
 		Tenant:       t,
@@ -52,6 +48,7 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 			Code:         s.Status,
 			Timestamp:    s.Timestamp,
 		},
+		Interval: d.Interval,
 	}
 
 	if len(s.Messages) > 0 {
@@ -59,4 +56,12 @@ func MapToModel(d database.Device, s database.Status) types.Device {
 	}
 
 	return dev
+}
+
+func MapTo[TFrom any, TTo any](data []TFrom, f func(TFrom) TTo) []TTo {
+	result := make([]TTo, 0)
+	for _, v := range data {
+		result = append(result, f(v))
+	}
+	return result
 }

@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -48,8 +50,14 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
+	d := []struct {
+		DevEui string `json:"devEUI"`
+	}{}
+	json.Unmarshal([]byte(body), &d)
+
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""}}]`)
+	is.Equal("a81758fffe06bfa3", d[0].DevEui)
+	is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys_codec","description":"","interval":60},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}]`)
 }
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
@@ -60,8 +68,14 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
+	d := struct {
+		DevEui string `json:"devEUI"`
+	}{}
+	json.Unmarshal([]byte(body), &d)
+
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensor_type":"Elsys_Codec","last_observed":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""}}`)
+	is.Equal("a81758fffe06bfa3", d.DevEui)
+	is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys_codec","description":"","interval":60},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}`)
 }
 
 func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {
@@ -94,7 +108,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	db, err := database.NewDatabaseConnection(database.NewSQLiteConnector(log))
 	is.NoErr(err)
 
-	err = db.Seed(bytes.NewBuffer([]byte(csvMock)))
+	err = db.Seed("devices.csv", bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
 
 	app := application.New(db, nil, nil)
@@ -126,10 +140,10 @@ func createJWTWithTenants(tenants []string) string {
 	return tokenString
 }
 
-const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;default
-a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe04d83f;desc-a81758fffe04d83f;true;default`
+const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60
+a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;default;60
+a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;ground;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe04d83f;desc-a81758fffe04d83f;true;default;60`
 
 const opaModule string = `
 #

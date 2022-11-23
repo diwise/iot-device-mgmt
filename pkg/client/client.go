@@ -171,7 +171,7 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		err = fmt.Errorf("failed to read response body: %w", err)
 		return nil, err
 	}
-
+		
 	impl := &types.Device{}
 
 	err = json.Unmarshal(respBody, impl)
@@ -204,7 +204,7 @@ type deviceWrapper struct {
 }
 
 func (d *deviceWrapper) ID() string {
-	return d.impl.DeviceId
+	return d.impl.DeviceID
 }
 
 func (d *deviceWrapper) Latitude() float64 {
@@ -220,7 +220,7 @@ func (d *deviceWrapper) Environment() string {
 }
 
 func (d *deviceWrapper) SensorType() string {
-	return d.impl.SensorType
+	return d.impl.SensorType.Name
 }
 
 func (d *deviceWrapper) Types() []string {
