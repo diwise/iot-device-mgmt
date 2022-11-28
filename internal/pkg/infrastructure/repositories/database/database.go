@@ -263,7 +263,7 @@ func seedDevices(s store, data [][]string) error {
 		}
 
 		d := Device{
-			DevEUI:      devEUI,
+			DevEUI:      strings.ToLower(devEUI),
 			DeviceId:    deviceID,
 			Name:        name,
 			Description: description,
@@ -289,7 +289,7 @@ func seedDevices(s store, data [][]string) error {
 }
 
 func (s store) GetDeviceFromDevEUI(eui string) (Device, error) {
-	return getDevice(s, eui, "dev_eui")
+	return getDevice(s, strings.ToLower(eui), "dev_eui")
 }
 
 func (s store) GetDeviceFromID(deviceID string) (Device, error) {
