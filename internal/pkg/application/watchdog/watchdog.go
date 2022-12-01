@@ -58,7 +58,7 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 				w.done <- true
 				return
 			}
-			
+
 			devices, err := w.app.GetDevices(ctx, tenants)
 			if err != nil {
 				w.log.Error().Err(err).Msg("could not fetch devices!")
@@ -92,8 +92,10 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 				}
 			}
 
-			w.log.Debug().Msgf("will sleep for %d seconds", sleepForSeconds)
-			time.Sleep(time.Duration(sleepForSeconds) * time.Second)
+			if sleepForSeconds > 0 {
+				w.log.Debug().Msgf("will sleep for %d seconds", sleepForSeconds)
+				time.Sleep(time.Duration(sleepForSeconds) * time.Second)
+			}
 		}
 	}
 }
