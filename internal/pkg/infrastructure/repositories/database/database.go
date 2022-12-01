@@ -312,7 +312,7 @@ func getTenantByName(s store, tenantName string) (*Tenant, error) {
 
 	err := s.db.First(&tenant, "name=?", tenantName).Error
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve tenant %s: (%w)", tenantName, err)
 	}
 
 	return &tenant, nil
@@ -418,7 +418,7 @@ func (s store) SetStatusIfChanged(sm Status) error {
 		if result.Error != nil {
 			s.logger.Err(result.Error).Msg("could not create new status message")
 			return fmt.Errorf("could not create new status message, %w", result.Error)
-		}		
+		}
 
 		return nil
 	}
@@ -438,8 +438,8 @@ func (s store) SetStatusIfChanged(sm Status) error {
 		if result.Error != nil {
 			s.logger.Err(result.Error).Msg("could not save status message")
 			return fmt.Errorf("could not save status message, %w", result.Error)
-		}	
-	} 
+		}
+	}
 
 	return nil
 }

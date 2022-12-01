@@ -18,7 +18,7 @@ type webEvents struct {
 
 func New() WebEvents {
 	return &webEvents{
-		s: gosse.NewServer(nil),
+		s: gosse.NewServer(&gosse.Options{}),
 	}
 }
 
