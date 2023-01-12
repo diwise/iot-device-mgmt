@@ -170,5 +170,7 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.App)
 			logger.Error().Err(err).Msg("failed to handle device status message")
 			return
 		}
+
+		logger.Info().Msg("message handled")
 	}
 }
