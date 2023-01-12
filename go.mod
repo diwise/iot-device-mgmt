@@ -1,6 +1,6 @@
 module github.com/diwise/iot-device-mgmt
 
-go 1.18
+go 1.19
 
 require (
 	github.com/diwise/messaging-golang v0.0.0-20230112181152-6d313f5f9451
@@ -92,3 +92,5 @@ require (
 	gorm.io/driver/postgres v1.3.8
 	gorm.io/gorm v1.23.8
 )
+
+replace github.com/alexandrevicenzi/go-sse v1.6.0 => github.com/istyf/go-sse v0.0.0-20230112205726-a1a5746d45bc
