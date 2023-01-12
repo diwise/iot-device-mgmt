@@ -3,7 +3,7 @@ module github.com/diwise/iot-device-mgmt
 go 1.18
 
 require (
-	github.com/diwise/messaging-golang v0.0.0-20220923095330-874218800e05
+	github.com/diwise/messaging-golang v0.0.0-20230112181152-6d313f5f9451
 	github.com/go-chi/chi/v5 v5.0.7
 	github.com/matryer/is v1.4.0
 	github.com/riandyrn/otelchi v0.4.0
