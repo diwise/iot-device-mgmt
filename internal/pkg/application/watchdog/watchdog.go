@@ -42,7 +42,7 @@ func (w *watchdogImpl) Stop() {
 
 func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 	time.Sleep(60 * time.Second)
-	w.log.Debug().Msg("Watchdog started")
+	w.log.Debug().Msg("watchdog started")
 
 	for {
 		select {
