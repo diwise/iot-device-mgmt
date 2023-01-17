@@ -195,5 +195,13 @@ func (a *app) SetStatus(ctx context.Context, deviceID string, message types.Devi
 		Timestamp:    message.Timestamp,
 	}
 
-	return a.store.SetStatusIfChanged(s)
+	if err := a.store.SetStatusIfChanged(s); err == nil {
+		if d, err := a.GetDevice(ctx, deviceID); err == nil {
+			a.webEvents.Publish("deviceUpdated", d)
+		}
+	} else {
+		return err
+	}
+
+	return nil
 }
