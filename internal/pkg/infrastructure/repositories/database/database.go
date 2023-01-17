@@ -232,15 +232,10 @@ func seedDevices(s store, data [][]string) error {
 			types = append(types, Lwm2mType{Type: t})
 		}
 
-		var interval int = 3600
-		if interval, err = strconv.Atoi(d[11]); err != nil {
-			interval = 3600
-		}
-
 		var sensorType SensorType
 		result = s.db.First(&sensorType, "name=?", strings.ToLower(d[6]))
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: interval}
+			newSensorType := SensorType{Name: strings.ToLower(d[6]), Interval: 3600}
 			s.db.Create(&newSensorType)
 			sensorType = newSensorType
 		}
@@ -260,6 +255,11 @@ func seedDevices(s store, data [][]string) error {
 			newTenant := Tenant{Name: d[10]}
 			s.db.Create(&newTenant)
 			tenant = newTenant
+		}
+
+		var interval int = 0
+		if interval, err = strconv.Atoi(d[11]); err != nil {
+			interval = 0
 		}
 
 		d := Device{
