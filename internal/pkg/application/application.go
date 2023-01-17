@@ -63,6 +63,7 @@ func (a *app) Handle(ctx context.Context, ds types.DeviceStatus) error {
 	if err != nil {
 		return fmt.Errorf("could not update last observed on device %s, %w", deviceID, err)
 	}
+
 	err = a.store.SetStatusIfChanged(MapStatus(ds))
 	if err != nil {
 		return fmt.Errorf("could not update status for device %s %w", deviceID, err)
@@ -72,14 +73,20 @@ func (a *app) Handle(ctx context.Context, ds types.DeviceStatus) error {
 	if err != nil {
 		return fmt.Errorf("could not fetch device %s from datastore, %w", deviceID, err)
 	}
-	err = a.webEvents.Publish("lastObservedUpdated", d)
-	if err != nil {
-		log.Error().Err(err).Msgf("could not publish web event for device %s", deviceID)
-	}
-	err = a.eventSender.Send(ctx, deviceID, ds)
-	if err != nil {
-		return fmt.Errorf("could not send status event for device %s, %w", deviceID, err)
-	}
+
+	go func() {
+		err := a.webEvents.Publish("lastObservedUpdated", d)
+		if err != nil {
+			log.Error().Err(err).Msgf("could not publish web event for device %s", deviceID)
+		}
+	}()
+
+	go func() {
+		err := a.eventSender.Send(ctx, deviceID, ds)
+		if err != nil {
+			log.Error().Err(err).Msgf("could not send status event for device %s", deviceID)
+		}
+	}()
 
 	return nil
 }
