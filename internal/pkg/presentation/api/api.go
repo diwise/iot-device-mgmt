@@ -43,8 +43,10 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 			})
 
 			r.Get("/environments", getEnvironments(log, app))
+
+			r.Mount("/events", sseServer)
 		})
-		r.Mount("/events", sseServer)
+
 	})
 
 	return router
