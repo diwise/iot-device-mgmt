@@ -12,7 +12,7 @@ flowchart LR
     core --http--> iot-device-mgmt-web
     subgraph iot-device-mgmt
         api
-        handler
+        handlerhttps://cloudevents.io/
         core
         watchdog-->watchdog
     end 
