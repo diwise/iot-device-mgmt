@@ -14,7 +14,7 @@ WORKDIR /app/cmd/iot-device-mgmt
 
 ARG TARGETARCH
 ARG TARGETOS
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build
+RUN GOOS=$TARGETOS GOARCH=$TARGETARCH go build
 
 
 FROM registry.access.redhat.com/ubi8/ubi-minimal
