@@ -41,3 +41,8 @@ func (we *webEvents) Publish(event string, data any) error {
 
 	return nil
 }
+
+func (we *webEvents) PublishFeature(event string, data []byte) {
+	message := gosse.NewMessage("", string(data), event)
+	we.s.SendMessage("", message)
+}

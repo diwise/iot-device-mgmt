@@ -15,49 +15,52 @@ var _ App = &AppMock{}
 
 // AppMock is a mock implementation of App.
 //
-//	func TestSomethingThatUsesApp(t *testing.T) {
+// 	func TestSomethingThatUsesApp(t *testing.T) {
 //
-//		// make and configure a mocked App
-//		mockedApp := &AppMock{
-//			CreateDeviceFunc: func(ctx context.Context, device types.Device) error {
-//				panic("mock out the CreateDevice method")
-//			},
-//			GetDeviceFunc: func(ctx context.Context, deviceID string) (types.Device, error) {
-//				panic("mock out the GetDevice method")
-//			},
-//			GetDeviceByEUIFunc: func(ctx context.Context, eui string) (types.Device, error) {
-//				panic("mock out the GetDeviceByEUI method")
-//			},
-//			GetDevicesFunc: func(ctx context.Context, tenants []string) ([]types.Device, error) {
-//				panic("mock out the GetDevices method")
-//			},
-//			GetEnvironmentsFunc: func(ctx context.Context) ([]types.Environment, error) {
-//				panic("mock out the GetEnvironments method")
-//			},
-//			GetTenantsFunc: func(ctx context.Context) ([]string, error) {
-//				panic("mock out the GetTenants method")
-//			},
-//			HandleFunc: func(ctx context.Context, ds types.DeviceStatus) error {
-//				panic("mock out the Handle method")
-//			},
-//			SetStatusFunc: func(ctx context.Context, deviceID string, message types.DeviceStatus) error {
-//				panic("mock out the SetStatus method")
-//			},
-//			StartFunc: func()  {
-//				panic("mock out the Start method")
-//			},
-//			StopFunc: func()  {
-//				panic("mock out the Stop method")
-//			},
-//			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
-//				panic("mock out the UpdateDevice method")
-//			},
-//		}
+// 		// make and configure a mocked App
+// 		mockedApp := &AppMock{
+// 			CreateDeviceFunc: func(ctx context.Context, device types.Device) error {
+// 				panic("mock out the CreateDevice method")
+// 			},
+// 			GetDeviceFunc: func(ctx context.Context, deviceID string) (types.Device, error) {
+// 				panic("mock out the GetDevice method")
+// 			},
+// 			GetDeviceByEUIFunc: func(ctx context.Context, eui string) (types.Device, error) {
+// 				panic("mock out the GetDeviceByEUI method")
+// 			},
+// 			GetDevicesFunc: func(ctx context.Context, tenants []string) ([]types.Device, error) {
+// 				panic("mock out the GetDevices method")
+// 			},
+// 			GetEnvironmentsFunc: func(ctx context.Context) ([]types.Environment, error) {
+// 				panic("mock out the GetEnvironments method")
+// 			},
+// 			GetTenantsFunc: func(ctx context.Context) ([]string, error) {
+// 				panic("mock out the GetTenants method")
+// 			},
+// 			HandleFunc: func(ctx context.Context, ds types.DeviceStatus) error {
+// 				panic("mock out the Handle method")
+// 			},
+// 			HandleFeatureFunc: func(ctx context.Context, feat []byte) error {
+// 				panic("mock out the HandleFeature method")
+// 			},
+// 			SetStatusFunc: func(ctx context.Context, deviceID string, message types.DeviceStatus) error {
+// 				panic("mock out the SetStatus method")
+// 			},
+// 			StartFunc: func()  {
+// 				panic("mock out the Start method")
+// 			},
+// 			StopFunc: func()  {
+// 				panic("mock out the Stop method")
+// 			},
+// 			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
+// 				panic("mock out the UpdateDevice method")
+// 			},
+// 		}
 //
-//		// use mockedApp in code that requires App
-//		// and then make assertions.
+// 		// use mockedApp in code that requires App
+// 		// and then make assertions.
 //
-//	}
+// 	}
 type AppMock struct {
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(ctx context.Context, device types.Device) error
@@ -79,6 +82,9 @@ type AppMock struct {
 
 	// HandleFunc mocks the Handle method.
 	HandleFunc func(ctx context.Context, ds types.DeviceStatus) error
+
+	// HandleFeatureFunc mocks the HandleFeature method.
+	HandleFeatureFunc func(ctx context.Context, feat []byte) error
 
 	// SetStatusFunc mocks the SetStatus method.
 	SetStatusFunc func(ctx context.Context, deviceID string, message types.DeviceStatus) error
@@ -139,6 +145,13 @@ type AppMock struct {
 			// Ds is the ds argument value.
 			Ds types.DeviceStatus
 		}
+		// HandleFeature holds details about calls to the HandleFeature method.
+		HandleFeature []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Feat is the feat argument value.
+			Feat []byte
+		}
 		// SetStatus holds details about calls to the SetStatus method.
 		SetStatus []struct {
 			// Ctx is the ctx argument value.
@@ -171,6 +184,7 @@ type AppMock struct {
 	lockGetEnvironments sync.RWMutex
 	lockGetTenants      sync.RWMutex
 	lockHandle          sync.RWMutex
+	lockHandleFeature   sync.RWMutex
 	lockSetStatus       sync.RWMutex
 	lockStart           sync.RWMutex
 	lockStop            sync.RWMutex
@@ -197,8 +211,7 @@ func (mock *AppMock) CreateDevice(ctx context.Context, device types.Device) erro
 
 // CreateDeviceCalls gets all the calls that were made to CreateDevice.
 // Check the length with:
-//
-//	len(mockedApp.CreateDeviceCalls())
+//     len(mockedApp.CreateDeviceCalls())
 func (mock *AppMock) CreateDeviceCalls() []struct {
 	Ctx    context.Context
 	Device types.Device
@@ -233,8 +246,7 @@ func (mock *AppMock) GetDevice(ctx context.Context, deviceID string) (types.Devi
 
 // GetDeviceCalls gets all the calls that were made to GetDevice.
 // Check the length with:
-//
-//	len(mockedApp.GetDeviceCalls())
+//     len(mockedApp.GetDeviceCalls())
 func (mock *AppMock) GetDeviceCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -269,8 +281,7 @@ func (mock *AppMock) GetDeviceByEUI(ctx context.Context, eui string) (types.Devi
 
 // GetDeviceByEUICalls gets all the calls that were made to GetDeviceByEUI.
 // Check the length with:
-//
-//	len(mockedApp.GetDeviceByEUICalls())
+//     len(mockedApp.GetDeviceByEUICalls())
 func (mock *AppMock) GetDeviceByEUICalls() []struct {
 	Ctx context.Context
 	Eui string
@@ -305,8 +316,7 @@ func (mock *AppMock) GetDevices(ctx context.Context, tenants []string) ([]types.
 
 // GetDevicesCalls gets all the calls that were made to GetDevices.
 // Check the length with:
-//
-//	len(mockedApp.GetDevicesCalls())
+//     len(mockedApp.GetDevicesCalls())
 func (mock *AppMock) GetDevicesCalls() []struct {
 	Ctx     context.Context
 	Tenants []string
@@ -339,8 +349,7 @@ func (mock *AppMock) GetEnvironments(ctx context.Context) ([]types.Environment, 
 
 // GetEnvironmentsCalls gets all the calls that were made to GetEnvironments.
 // Check the length with:
-//
-//	len(mockedApp.GetEnvironmentsCalls())
+//     len(mockedApp.GetEnvironmentsCalls())
 func (mock *AppMock) GetEnvironmentsCalls() []struct {
 	Ctx context.Context
 } {
@@ -371,8 +380,7 @@ func (mock *AppMock) GetTenants(ctx context.Context) ([]string, error) {
 
 // GetTenantsCalls gets all the calls that were made to GetTenants.
 // Check the length with:
-//
-//	len(mockedApp.GetTenantsCalls())
+//     len(mockedApp.GetTenantsCalls())
 func (mock *AppMock) GetTenantsCalls() []struct {
 	Ctx context.Context
 } {
@@ -405,8 +413,7 @@ func (mock *AppMock) Handle(ctx context.Context, ds types.DeviceStatus) error {
 
 // HandleCalls gets all the calls that were made to Handle.
 // Check the length with:
-//
-//	len(mockedApp.HandleCalls())
+//     len(mockedApp.HandleCalls())
 func (mock *AppMock) HandleCalls() []struct {
 	Ctx context.Context
 	Ds  types.DeviceStatus
@@ -418,6 +425,41 @@ func (mock *AppMock) HandleCalls() []struct {
 	mock.lockHandle.RLock()
 	calls = mock.calls.Handle
 	mock.lockHandle.RUnlock()
+	return calls
+}
+
+// HandleFeature calls HandleFeatureFunc.
+func (mock *AppMock) HandleFeature(ctx context.Context, feat []byte) error {
+	if mock.HandleFeatureFunc == nil {
+		panic("AppMock.HandleFeatureFunc: method is nil but App.HandleFeature was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Feat []byte
+	}{
+		Ctx:  ctx,
+		Feat: feat,
+	}
+	mock.lockHandleFeature.Lock()
+	mock.calls.HandleFeature = append(mock.calls.HandleFeature, callInfo)
+	mock.lockHandleFeature.Unlock()
+	return mock.HandleFeatureFunc(ctx, feat)
+}
+
+// HandleFeatureCalls gets all the calls that were made to HandleFeature.
+// Check the length with:
+//     len(mockedApp.HandleFeatureCalls())
+func (mock *AppMock) HandleFeatureCalls() []struct {
+	Ctx  context.Context
+	Feat []byte
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Feat []byte
+	}
+	mock.lockHandleFeature.RLock()
+	calls = mock.calls.HandleFeature
+	mock.lockHandleFeature.RUnlock()
 	return calls
 }
 
@@ -443,8 +485,7 @@ func (mock *AppMock) SetStatus(ctx context.Context, deviceID string, message typ
 
 // SetStatusCalls gets all the calls that were made to SetStatus.
 // Check the length with:
-//
-//	len(mockedApp.SetStatusCalls())
+//     len(mockedApp.SetStatusCalls())
 func (mock *AppMock) SetStatusCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -476,8 +517,7 @@ func (mock *AppMock) Start() {
 
 // StartCalls gets all the calls that were made to Start.
 // Check the length with:
-//
-//	len(mockedApp.StartCalls())
+//     len(mockedApp.StartCalls())
 func (mock *AppMock) StartCalls() []struct {
 } {
 	var calls []struct {
@@ -503,8 +543,7 @@ func (mock *AppMock) Stop() {
 
 // StopCalls gets all the calls that were made to Stop.
 // Check the length with:
-//
-//	len(mockedApp.StopCalls())
+//     len(mockedApp.StopCalls())
 func (mock *AppMock) StopCalls() []struct {
 } {
 	var calls []struct {
@@ -537,8 +576,7 @@ func (mock *AppMock) UpdateDevice(ctx context.Context, deviceID string, fields m
 
 // UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
 // Check the length with:
-//
-//	len(mockedApp.UpdateDeviceCalls())
+//     len(mockedApp.UpdateDeviceCalls())
 func (mock *AppMock) UpdateDeviceCalls() []struct {
 	Ctx      context.Context
 	DeviceID string

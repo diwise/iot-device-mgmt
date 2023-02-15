@@ -57,8 +57,11 @@ func main() {
 	app := application.New(db, eventSender, webEvents)
 	defer app.Stop()
 
-	routingKey := "device-status"
-	messenger.RegisterTopicMessageHandler(routingKey, newTopicMessageHandler(messenger, app))
+	devRoutingKey := "device-status"
+	messenger.RegisterTopicMessageHandler(devRoutingKey, newTopicMessageHandler(messenger, app))
+
+	featRoutingKey := "feature.updated"
+	messenger.RegisterTopicMessageHandler(featRoutingKey, newFeatureTopicMessageHandler(messenger, app))
 
 	watchdog := watchdog.New(app, logger)
 	watchdog.Start()
@@ -166,6 +169,20 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.App)
 		}
 
 		err = app.Handle(ctx, ds)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to handle device status message")
+			return
+		}
+
+		logger.Info().Msg("message handled")
+	}
+}
+
+func newFeatureTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
+		logger.Info().Str("body", string(msg.Body)).Msg("received message")
+
+		err := app.HandleFeature(ctx, msg.Body)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle device status message")
 			return
