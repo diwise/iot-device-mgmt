@@ -37,11 +37,11 @@ var _ App = &AppMock{}
 // 			GetTenantsFunc: func(ctx context.Context) ([]string, error) {
 // 				panic("mock out the GetTenants method")
 // 			},
-// 			HandleFunc: func(ctx context.Context, ds types.DeviceStatus) error {
-// 				panic("mock out the Handle method")
+// 			HandleDeviceStatusFunc: func(ctx context.Context, ds types.DeviceStatus) error {
+// 				panic("mock out the HandleDeviceStatus method")
 // 			},
-// 			HandleFeatureFunc: func(ctx context.Context, feat []byte) error {
-// 				panic("mock out the HandleFeature method")
+// 			HandleFeatureUpdatedFunc: func(ctx context.Context, feat []byte) error {
+// 				panic("mock out the HandleFeatureUpdated method")
 // 			},
 // 			SetStatusFunc: func(ctx context.Context, deviceID string, message types.DeviceStatus) error {
 // 				panic("mock out the SetStatus method")
@@ -80,11 +80,11 @@ type AppMock struct {
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) ([]string, error)
 
-	// HandleFunc mocks the Handle method.
-	HandleFunc func(ctx context.Context, ds types.DeviceStatus) error
+	// HandleDeviceStatusFunc mocks the HandleDeviceStatus method.
+	HandleDeviceStatusFunc func(ctx context.Context, ds types.DeviceStatus) error
 
-	// HandleFeatureFunc mocks the HandleFeature method.
-	HandleFeatureFunc func(ctx context.Context, feat []byte) error
+	// HandleFeatureUpdatedFunc mocks the HandleFeatureUpdated method.
+	HandleFeatureUpdatedFunc func(ctx context.Context, feat []byte) error
 
 	// SetStatusFunc mocks the SetStatus method.
 	SetStatusFunc func(ctx context.Context, deviceID string, message types.DeviceStatus) error
@@ -138,15 +138,15 @@ type AppMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
-		// Handle holds details about calls to the Handle method.
-		Handle []struct {
+		// HandleDeviceStatus holds details about calls to the HandleDeviceStatus method.
+		HandleDeviceStatus []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Ds is the ds argument value.
 			Ds types.DeviceStatus
 		}
-		// HandleFeature holds details about calls to the HandleFeature method.
-		HandleFeature []struct {
+		// HandleFeatureUpdated holds details about calls to the HandleFeatureUpdated method.
+		HandleFeatureUpdated []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Feat is the feat argument value.
@@ -177,18 +177,18 @@ type AppMock struct {
 			Fields map[string]interface{}
 		}
 	}
-	lockCreateDevice    sync.RWMutex
-	lockGetDevice       sync.RWMutex
-	lockGetDeviceByEUI  sync.RWMutex
-	lockGetDevices      sync.RWMutex
-	lockGetEnvironments sync.RWMutex
-	lockGetTenants      sync.RWMutex
-	lockHandle          sync.RWMutex
-	lockHandleFeature   sync.RWMutex
-	lockSetStatus       sync.RWMutex
-	lockStart           sync.RWMutex
-	lockStop            sync.RWMutex
-	lockUpdateDevice    sync.RWMutex
+	lockCreateDevice         sync.RWMutex
+	lockGetDevice            sync.RWMutex
+	lockGetDeviceByEUI       sync.RWMutex
+	lockGetDevices           sync.RWMutex
+	lockGetEnvironments      sync.RWMutex
+	lockGetTenants           sync.RWMutex
+	lockHandleDeviceStatus   sync.RWMutex
+	lockHandleFeatureUpdated sync.RWMutex
+	lockSetStatus            sync.RWMutex
+	lockStart                sync.RWMutex
+	lockStop                 sync.RWMutex
+	lockUpdateDevice         sync.RWMutex
 }
 
 // CreateDevice calls CreateDeviceFunc.
@@ -393,10 +393,10 @@ func (mock *AppMock) GetTenantsCalls() []struct {
 	return calls
 }
 
-// Handle calls HandleFunc.
-func (mock *AppMock) Handle(ctx context.Context, ds types.DeviceStatus) error {
-	if mock.HandleFunc == nil {
-		panic("AppMock.HandleFunc: method is nil but App.Handle was just called")
+// HandleDeviceStatus calls HandleDeviceStatusFunc.
+func (mock *AppMock) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error {
+	if mock.HandleDeviceStatusFunc == nil {
+		panic("AppMock.HandleDeviceStatusFunc: method is nil but App.HandleDeviceStatus was just called")
 	}
 	callInfo := struct {
 		Ctx context.Context
@@ -405,16 +405,16 @@ func (mock *AppMock) Handle(ctx context.Context, ds types.DeviceStatus) error {
 		Ctx: ctx,
 		Ds:  ds,
 	}
-	mock.lockHandle.Lock()
-	mock.calls.Handle = append(mock.calls.Handle, callInfo)
-	mock.lockHandle.Unlock()
-	return mock.HandleFunc(ctx, ds)
+	mock.lockHandleDeviceStatus.Lock()
+	mock.calls.HandleDeviceStatus = append(mock.calls.HandleDeviceStatus, callInfo)
+	mock.lockHandleDeviceStatus.Unlock()
+	return mock.HandleDeviceStatusFunc(ctx, ds)
 }
 
-// HandleCalls gets all the calls that were made to Handle.
+// HandleDeviceStatusCalls gets all the calls that were made to HandleDeviceStatus.
 // Check the length with:
-//     len(mockedApp.HandleCalls())
-func (mock *AppMock) HandleCalls() []struct {
+//     len(mockedApp.HandleDeviceStatusCalls())
+func (mock *AppMock) HandleDeviceStatusCalls() []struct {
 	Ctx context.Context
 	Ds  types.DeviceStatus
 } {
@@ -422,16 +422,16 @@ func (mock *AppMock) HandleCalls() []struct {
 		Ctx context.Context
 		Ds  types.DeviceStatus
 	}
-	mock.lockHandle.RLock()
-	calls = mock.calls.Handle
-	mock.lockHandle.RUnlock()
+	mock.lockHandleDeviceStatus.RLock()
+	calls = mock.calls.HandleDeviceStatus
+	mock.lockHandleDeviceStatus.RUnlock()
 	return calls
 }
 
-// HandleFeature calls HandleFeatureFunc.
-func (mock *AppMock) HandleFeature(ctx context.Context, feat []byte) error {
-	if mock.HandleFeatureFunc == nil {
-		panic("AppMock.HandleFeatureFunc: method is nil but App.HandleFeature was just called")
+// HandleFeatureUpdated calls HandleFeatureUpdatedFunc.
+func (mock *AppMock) HandleFeatureUpdated(ctx context.Context, feat []byte) error {
+	if mock.HandleFeatureUpdatedFunc == nil {
+		panic("AppMock.HandleFeatureUpdatedFunc: method is nil but App.HandleFeatureUpdated was just called")
 	}
 	callInfo := struct {
 		Ctx  context.Context
@@ -440,16 +440,16 @@ func (mock *AppMock) HandleFeature(ctx context.Context, feat []byte) error {
 		Ctx:  ctx,
 		Feat: feat,
 	}
-	mock.lockHandleFeature.Lock()
-	mock.calls.HandleFeature = append(mock.calls.HandleFeature, callInfo)
-	mock.lockHandleFeature.Unlock()
-	return mock.HandleFeatureFunc(ctx, feat)
+	mock.lockHandleFeatureUpdated.Lock()
+	mock.calls.HandleFeatureUpdated = append(mock.calls.HandleFeatureUpdated, callInfo)
+	mock.lockHandleFeatureUpdated.Unlock()
+	return mock.HandleFeatureUpdatedFunc(ctx, feat)
 }
 
-// HandleFeatureCalls gets all the calls that were made to HandleFeature.
+// HandleFeatureUpdatedCalls gets all the calls that were made to HandleFeatureUpdated.
 // Check the length with:
-//     len(mockedApp.HandleFeatureCalls())
-func (mock *AppMock) HandleFeatureCalls() []struct {
+//     len(mockedApp.HandleFeatureUpdatedCalls())
+func (mock *AppMock) HandleFeatureUpdatedCalls() []struct {
 	Ctx  context.Context
 	Feat []byte
 } {
@@ -457,9 +457,9 @@ func (mock *AppMock) HandleFeatureCalls() []struct {
 		Ctx  context.Context
 		Feat []byte
 	}
-	mock.lockHandleFeature.RLock()
-	calls = mock.calls.HandleFeature
-	mock.lockHandleFeature.RUnlock()
+	mock.lockHandleFeatureUpdated.RLock()
+	calls = mock.calls.HandleFeatureUpdated
+	mock.lockHandleFeatureUpdated.RUnlock()
 	return calls
 }
 

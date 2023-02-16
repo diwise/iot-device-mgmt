@@ -10,6 +10,7 @@ type WebEvents interface {
 	Server() *gosse.Server
 	Shutdown()
 	Publish(event string, data any) error
+	PublishFeature(event string, data []byte) error
 }
 
 type webEvents struct {
@@ -42,7 +43,9 @@ func (we *webEvents) Publish(event string, data any) error {
 	return nil
 }
 
-func (we *webEvents) PublishFeature(event string, data []byte) {
+func (we *webEvents) PublishFeature(event string, data []byte) error {
 	message := gosse.NewMessage("", string(data), event)
 	we.s.SendMessage("", message)
+
+	return nil
 }

@@ -11,7 +11,6 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/rs/zerolog/log"
 )
 
 //go:generate moq -rm -out application_mock.go . App
@@ -19,8 +18,8 @@ import (
 type App interface {
 	Start()
 	Stop()
-	Handle(ctx context.Context, ds types.DeviceStatus) error
-	HandleFeature(ctx context.Context, feat []byte) error
+	HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error
+	HandleFeatureUpdated(ctx context.Context, feat []byte) error
 
 	GetDevice(ctx context.Context, deviceID string) (types.Device, error)
 	GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error)
@@ -53,16 +52,16 @@ func (a *app) Stop() {
 	a.webEvents.Shutdown()
 }
 
-func (a *app) HandleFeature(ctx context.Context, feat []byte) error {
-	err := a.webEvents.Publish("feature.updated", feat)
+func (a *app) HandleFeatureUpdated(ctx context.Context, feat []byte) error {
+	err := a.webEvents.PublishFeature("feature.updated", feat)
 	if err != nil {
-		log.Error().Err(err).Msgf("could not publish web event for feature")
+		return fmt.Errorf("could not publish web event for feature")
 	}
 
 	return nil
 }
 
-func (a *app) Handle(ctx context.Context, ds types.DeviceStatus) error {
+func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error {
 	log := logging.GetFromContext(ctx)
 	deviceID := ds.DeviceID
 	timestamp, err := time.Parse(time.RFC3339Nano, ds.Timestamp)

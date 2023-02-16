@@ -57,11 +57,11 @@ func main() {
 	app := application.New(db, eventSender, webEvents)
 	defer app.Stop()
 
-	devRoutingKey := "device-status"
-	messenger.RegisterTopicMessageHandler(devRoutingKey, newTopicMessageHandler(messenger, app))
+	routingKey := "device-status"
+	messenger.RegisterTopicMessageHandler(routingKey, newDeviceTopicMessageHandler(messenger, app))
 
-	featRoutingKey := "feature.updated"
-	messenger.RegisterTopicMessageHandler(featRoutingKey, newFeatureTopicMessageHandler(messenger, app))
+	routingKey = "feature.updated"
+	messenger.RegisterTopicMessageHandler(routingKey, newFeatureTopicMessageHandler(messenger, app))
 
 	watchdog := watchdog.New(app, logger)
 	watchdog.Start()
@@ -156,9 +156,9 @@ func setupRouter(logger zerolog.Logger, serviceName string, app application.App,
 	return api.RegisterHandlers(logger, r, policies, app, sseServer)
 }
 
-func newTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
+func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Info().Str("body", string(msg.Body)).Msg("received message")
+		logger.Debug().Str("body", string(msg.Body)).Msg("received message")
 
 		ds := types.DeviceStatus{}
 
@@ -168,7 +168,7 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.App)
 			return
 		}
 
-		err = app.Handle(ctx, ds)
+		err = app.HandleDeviceStatus(ctx, ds)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle device status message")
 			return
@@ -180,11 +180,11 @@ func newTopicMessageHandler(messenger messaging.MsgContext, app application.App)
 
 func newFeatureTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Info().Str("body", string(msg.Body)).Msg("received message")
+		logger.Debug().Str("body", string(msg.Body)).Msg("received message")
 
-		err := app.HandleFeature(ctx, msg.Body)
+		err := app.HandleFeatureUpdated(ctx, msg.Body)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle device status message")
+			logger.Error().Err(err).Msg("failed to handle feature.updated message")
 			return
 		}
 
