@@ -18,7 +18,8 @@ import (
 type App interface {
 	Start()
 	Stop()
-	Handle(ctx context.Context, ds types.DeviceStatus) error
+	HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error
+	HandleFeatureUpdated(ctx context.Context, feat []byte) error
 
 	GetDevice(ctx context.Context, deviceID string) (types.Device, error)
 	GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error)
@@ -51,7 +52,16 @@ func (a *app) Stop() {
 	a.webEvents.Shutdown()
 }
 
-func (a *app) Handle(ctx context.Context, ds types.DeviceStatus) error {
+func (a *app) HandleFeatureUpdated(ctx context.Context, feat []byte) error {
+	err := a.webEvents.PublishFeature("feature.updated", feat)
+	if err != nil {
+		return fmt.Errorf("could not publish web event for feature")
+	}
+
+	return nil
+}
+
+func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error {
 	log := logging.GetFromContext(ctx)
 	deviceID := ds.DeviceID
 	timestamp, err := time.Parse(time.RFC3339Nano, ds.Timestamp)
