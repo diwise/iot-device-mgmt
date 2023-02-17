@@ -29,6 +29,15 @@ func TestThatGetAllRetrievesByTenantNames(t *testing.T) {
 	is.Equal(len(devs), 2)
 }
 
+func TestThatGetAllIgnoresInvalidTenantNames(t *testing.T) {
+	testData := bytes.NewBuffer([]byte(devices))
+	is, db := testSetup(t, testData)
+
+	devs, err := db.GetAll("default", "nosuchtenant")
+	is.NoErr(err)
+	is.Equal(len(devs), 1)
+}
+
 func TestConcurrentAccess(t *testing.T) {
 	testData := bytes.NewBuffer([]byte(devices))
 	is, db := testSetup(t, testData)

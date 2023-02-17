@@ -336,6 +336,11 @@ func (s store) GetAll(tenantNames ...string) ([]Device, error) {
 	for _, name := range tenantNames {
 		tenant, err := getTenantByName(s, name)
 		if err != nil {
+			// not finding a tenant is not an error that we should abort on
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				continue
+			}
+
 			return nil, err
 		}
 
