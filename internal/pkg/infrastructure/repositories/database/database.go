@@ -85,7 +85,8 @@ func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
 func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 	return func() (*gorm.DB, zerolog.Logger, error) {
 		db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
-			Logger: logger.Default.LogMode(logger.Silent),
+			Logger:          logger.Default.LogMode(logger.Silent),
+			CreateBatchSize: 1000,
 		})
 
 		if err == nil {
