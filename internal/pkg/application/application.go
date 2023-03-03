@@ -7,25 +7,21 @@ import (
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/webevents"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/diwise/messaging-golang/pkg/messaging"
 )
 
 //go:generate moq -rm -out application_mock.go . App
 
 type App interface {
-	Start()
-	Stop()
 	HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error
-	HandleFeatureUpdated(ctx context.Context, feat []byte) error
 
 	GetDevice(ctx context.Context, deviceID string) (types.Device, error)
 	GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error)
 	GetDevices(ctx context.Context, tenants []string) ([]types.Device, error)
 	CreateDevice(ctx context.Context, device types.Device) error
-	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error)
+	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) error
 
 	SetStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error
 
@@ -36,33 +32,18 @@ type App interface {
 type app struct {
 	store       database.Datastore
 	eventSender events.EventSender
-	webEvents   webevents.WebEvents
+	messenger   messaging.MsgContext
 }
 
-func New(s database.Datastore, e events.EventSender, we webevents.WebEvents) App {
+func New(s database.Datastore, e events.EventSender, m messaging.MsgContext) App {
 	return &app{
 		store:       s,
 		eventSender: e,
-		webEvents:   we,
+		messenger:   m,
 	}
-}
-
-func (a *app) Start() {}
-func (a *app) Stop() {
-	a.webEvents.Shutdown()
-}
-
-func (a *app) HandleFeatureUpdated(ctx context.Context, feat []byte) error {
-	err := a.webEvents.PublishFeature("feature.updated", feat)
-	if err != nil {
-		return fmt.Errorf("could not publish web event for feature")
-	}
-
-	return nil
 }
 
 func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error {
-	log := logging.GetFromContext(ctx)
 	deviceID := ds.DeviceID
 	timestamp, err := time.Parse(time.RFC3339Nano, ds.Timestamp)
 	if err != nil {
@@ -79,26 +60,25 @@ func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) err
 		return fmt.Errorf("could not update status for device %s %w", deviceID, err)
 	}
 
-	d, err := a.GetDevice(ctx, deviceID)
-	if err != nil {
-		return fmt.Errorf("could not fetch device %s from datastore, %w", deviceID, err)
-	}
-
-	go func() {
-		err := a.webEvents.Publish("lastObservedUpdated", d)
+	return a.messenger.PublishOnTopic(ctx, &types.DeviceStatusUpdated{
+		DeviceID:     deviceID,
+		DeviceStatus: ds,
+		Timestamp:    timestamp,
+	})
+	/*
 		if err != nil {
-			log.Error().Err(err).Msgf("could not publish web event for device %s", deviceID)
-		}
-	}()
 
-	go func() {
-		err := a.eventSender.Send(ctx, deviceID, ds)
-		if err != nil {
-			log.Error().Err(err).Msgf("could not send status event for device %s", deviceID)
 		}
-	}()
 
-	return nil
+		go func() {
+			err := a.eventSender.Send(ctx, deviceID, ds)
+			if err != nil {
+				log.Error().Err(err).Msgf("could not send status event for device %s", deviceID)
+			}
+		}()
+
+		return nil
+	*/
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (types.Device, error) {
@@ -149,35 +129,27 @@ func (a *app) GetDevices(ctx context.Context, tenants []string) ([]types.Device,
 }
 
 func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
-	device, err := a.store.CreateDevice(d.DevEUI, d.DeviceID, d.Name, d.Description, d.Environment, d.SensorType.Name, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
+	_, err := a.store.CreateDevice(d.DevEUI, d.DeviceID, d.Name, d.Description, d.Environment, d.SensorType.Name, d.Tenant, d.Location.Latitude, d.Location.Longitude, d.Types, d.Active)
 	if err != nil {
 		return err
 	}
 
-	err = a.webEvents.Publish("deviceCreated", MapToModel(device, database.Status{}))
-	if err != nil {
-		log := logging.GetFromContext(ctx)
-		log.Error().Err(err).Msg("could not publish web event")
-	}
-
-	return nil
+	return a.messenger.PublishOnTopic(ctx, &types.DeviceCreated{
+		DeviceID:  d.DeviceID,
+		Timestamp: time.Now().UTC(),
+	})
 }
 
-func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) (types.Device, error) {
-	device, err := a.store.UpdateDevice(deviceID, fields)
+func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) error {
+	_, err := a.store.UpdateDevice(deviceID, fields)
 	if err != nil {
-		return types.Device{}, err
+		return  err
 	}
 
-	m := MapToModel(device, database.Status{})
-
-	err = a.webEvents.Publish("deviceUpdated", MapToModel(device, database.Status{}))
-	if err != nil {
-		log := logging.GetFromContext(ctx)
-		log.Error().Err(err).Msg("could not publish web event")
-	}
-
-	return m, nil
+	return a.messenger.PublishOnTopic(ctx, &types.DeviceUpdated{
+		DeviceID:  deviceID,
+		Timestamp: time.Now().UTC(),
+	})
 }
 
 func (a *app) GetTenants(ctx context.Context) ([]string, error) {
@@ -205,13 +177,14 @@ func (a *app) SetStatus(ctx context.Context, deviceID string, message types.Devi
 		Timestamp:    message.Timestamp,
 	}
 
-	if err := a.store.SetStatusIfChanged(s); err == nil {
-		if d, err := a.GetDevice(ctx, deviceID); err == nil {
-			a.webEvents.Publish("deviceUpdated", d)
-		}
-	} else {
+	err := a.store.SetStatusIfChanged(s)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return a.messenger.PublishOnTopic(ctx, &types.DeviceStatusUpdated{
+		DeviceID:     deviceID,
+		DeviceStatus: message,
+		Timestamp:    time.Now().UTC(),
+	})
 }

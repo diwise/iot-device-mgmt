@@ -13,11 +13,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/webevents"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -50,24 +48,19 @@ func main() {
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
 	db := setupDatabaseOrDie(logger)
-	messenger := setupMessaging(serviceName, logger)
+	messenger := setupMessagingOrDie(serviceName, logger)
 	eventSender := events.New(loadEventSenderConfig(logger))
-	webEvents := webevents.New()
 
-	app := application.New(db, eventSender, webEvents)
-	defer app.Stop()
+	app := application.New(db, eventSender, messenger)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newDeviceTopicMessageHandler(messenger, app))
-
-	routingKey = "feature.updated"
-	messenger.RegisterTopicMessageHandler(routingKey, newFeatureTopicMessageHandler(messenger, app))
 
 	watchdog := watchdog.New(app, logger)
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, app, webEvents.Server())
+	r := setupRouter(logger, serviceName, app)
 
 	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
@@ -118,7 +111,7 @@ func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	return db
 }
 
-func setupMessaging(serviceName string, logger zerolog.Logger) messaging.MsgContext {
+func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.MsgContext {
 	config := messaging.LoadConfiguration(serviceName, logger)
 	messenger, err := messaging.Initialize(config)
 	if err != nil {
@@ -144,7 +137,7 @@ func loadEventSenderConfig(logger zerolog.Logger) *events.Config {
 	return nil
 }
 
-func setupRouter(logger zerolog.Logger, serviceName string, app application.App, sseServer *sse.Server) *chi.Mux {
+func setupRouter(logger zerolog.Logger, serviceName string, app application.App) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
@@ -153,7 +146,7 @@ func setupRouter(logger zerolog.Logger, serviceName string, app application.App,
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, app, sseServer)
+	return api.RegisterHandlers(logger, r, policies, app)
 }
 
 func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
@@ -171,20 +164,6 @@ func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app applicatio
 		err = app.HandleDeviceStatus(ctx, ds)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle device status message")
-			return
-		}
-
-		logger.Info().Msg("message handled")
-	}
-}
-
-func newFeatureTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Debug().Str("body", string(msg.Body)).Msg("received message")
-
-		err := app.HandleFeatureUpdated(ctx, msg.Body)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle feature.updated message")
 			return
 		}
 
