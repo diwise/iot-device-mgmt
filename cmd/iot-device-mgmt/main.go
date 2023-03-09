@@ -3,10 +3,8 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"path"
@@ -14,7 +12,6 @@ import (
 	"sort"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
@@ -33,7 +30,6 @@ const serviceName string = "iot-device-mgmt"
 
 var dataDir string
 var opaFilePath string
-var notificationConfigPath string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -42,16 +38,14 @@ func main() {
 
 	flag.StringVar(&dataDir, "devices", "/opt/diwise/config/data", "A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
-	flag.StringVar(&notificationConfigPath, "notifications", "/opt/diwise/config/notifications.yaml", "Configuration file for notifications")
 	flag.Parse()
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
 	db := setupDatabaseOrDie(logger)
 	messenger := setupMessagingOrDie(serviceName, logger)
-	eventSender := events.New(loadEventSenderConfig(logger))
 
-	app := application.New(db, eventSender, messenger)
+	app := application.New(db, messenger)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newDeviceTopicMessageHandler(messenger, app))
@@ -119,22 +113,6 @@ func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.Ms
 	}
 
 	return messenger
-}
-
-func loadEventSenderConfig(logger zerolog.Logger) *events.Config {
-	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
-		defer nCfgFile.Close()
-
-		nCfg, err := events.LoadConfiguration(nCfgFile)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to load configuration")
-		}
-
-		return nCfg
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		logger.Fatal().Err(err).Msgf("failed to open configuration file %s", notificationConfigPath)
-	}
-	return nil
 }
 
 func setupRouter(logger zerolog.Logger, serviceName string, app application.App) *chi.Mux {

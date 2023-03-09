@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
+	
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -15,14 +15,13 @@ import (
 //go:generate moq -rm -out application_mock.go . App
 
 type App interface {
-	HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error
-
 	GetDevice(ctx context.Context, deviceID string) (types.Device, error)
 	GetDeviceByEUI(ctx context.Context, eui string) (types.Device, error)
 	GetDevices(ctx context.Context, tenants []string) ([]types.Device, error)
 	CreateDevice(ctx context.Context, device types.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) error
 
+	HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) error
 	SetStatus(ctx context.Context, deviceID string, message types.DeviceStatus) error
 
 	GetTenants(ctx context.Context) ([]string, error)
@@ -30,15 +29,13 @@ type App interface {
 }
 
 type app struct {
-	store       database.Datastore
-	eventSender events.EventSender
+	store       database.Datastore	
 	messenger   messaging.MsgContext
 }
 
-func New(s database.Datastore, e events.EventSender, m messaging.MsgContext) App {
+func New(s database.Datastore,  m messaging.MsgContext) App {
 	return &app{
-		store:       s,
-		eventSender: e,
+		store:       s,		
 		messenger:   m,
 	}
 }
@@ -65,20 +62,7 @@ func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) err
 		DeviceStatus: ds,
 		Timestamp:    timestamp,
 	})
-	/*
-		if err != nil {
 
-		}
-
-		go func() {
-			err := a.eventSender.Send(ctx, deviceID, ds)
-			if err != nil {
-				log.Error().Err(err).Msgf("could not send status event for device %s", deviceID)
-			}
-		}()
-
-		return nil
-	*/
 }
 
 func (a *app) GetDevice(ctx context.Context, deviceID string) (types.Device, error) {
