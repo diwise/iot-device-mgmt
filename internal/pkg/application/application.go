@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -29,14 +28,14 @@ type App interface {
 }
 
 type app struct {
-	store       database.Datastore	
-	messenger   messaging.MsgContext
+	store     database.Datastore
+	messenger messaging.MsgContext
 }
 
-func New(s database.Datastore,  m messaging.MsgContext) App {
+func New(s database.Datastore, m messaging.MsgContext) App {
 	return &app{
-		store:       s,		
-		messenger:   m,
+		store:     s,
+		messenger: m,
 	}
 }
 
@@ -57,9 +56,15 @@ func (a *app) HandleDeviceStatus(ctx context.Context, ds types.DeviceStatus) err
 		return fmt.Errorf("could not update status for device %s %w", deviceID, err)
 	}
 
+	d, err := a.store.GetDeviceFromID(deviceID)
+	if err != nil {
+		return err
+	}
+
 	return a.messenger.PublishOnTopic(ctx, &types.DeviceStatusUpdated{
 		DeviceID:     deviceID,
 		DeviceStatus: ds,
+		Tenant:       d.Tenant.Name,
 		Timestamp:    timestamp,
 	})
 
@@ -120,18 +125,20 @@ func (a *app) CreateDevice(ctx context.Context, d types.Device) error {
 
 	return a.messenger.PublishOnTopic(ctx, &types.DeviceCreated{
 		DeviceID:  d.DeviceID,
+		Tenant:    d.Tenant,
 		Timestamp: time.Now().UTC(),
 	})
 }
 
 func (a *app) UpdateDevice(ctx context.Context, deviceID string, fields map[string]interface{}) error {
-	_, err := a.store.UpdateDevice(deviceID, fields)
+	d, err := a.store.UpdateDevice(deviceID, fields)
 	if err != nil {
-		return  err
+		return err
 	}
 
 	return a.messenger.PublishOnTopic(ctx, &types.DeviceUpdated{
 		DeviceID:  deviceID,
+		Tenant:    d.Tenant.Name,
 		Timestamp: time.Now().UTC(),
 	})
 }
@@ -166,9 +173,15 @@ func (a *app) SetStatus(ctx context.Context, deviceID string, message types.Devi
 		return err
 	}
 
+	d, err := a.store.GetDeviceFromID(deviceID)
+	if err != nil {
+		return err
+	}
+
 	return a.messenger.PublishOnTopic(ctx, &types.DeviceStatusUpdated{
 		DeviceID:     deviceID,
 		DeviceStatus: message,
+		Tenant:       d.Tenant.Name,
 		Timestamp:    time.Now().UTC(),
 	})
 }
