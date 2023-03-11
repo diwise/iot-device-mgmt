@@ -4,6 +4,7 @@ import "time"
 
 type DeviceCreated struct {
 	DeviceID  string    `json:"deviceID"`
+	Tenant    string    `json:"tenant,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -16,6 +17,7 @@ func (d *DeviceCreated) TopicName() string {
 
 type DeviceUpdated struct {
 	DeviceID  string    `json:"deviceID"`
+	Tenant    string    `json:"tenant,omitempty"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -29,6 +31,7 @@ func (d *DeviceUpdated) TopicName() string {
 type DeviceStatusUpdated struct {
 	DeviceID     string       `json:"deviceID"`
 	DeviceStatus DeviceStatus `json:"status"`
+	Tenant       string       `json:"tenant,omitempty"`
 	Timestamp    time.Time    `json:"timestamp"`
 }
 
