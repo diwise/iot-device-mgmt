@@ -3,21 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"flag"
 	"fmt"
-	"io/fs"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"sort"
 
-	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/events"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/webevents"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -35,7 +30,6 @@ const serviceName string = "iot-device-mgmt"
 
 var dataDir string
 var opaFilePath string
-var notificationConfigPath string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -44,30 +38,23 @@ func main() {
 
 	flag.StringVar(&dataDir, "devices", "/opt/diwise/config/data", "A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
-	flag.StringVar(&notificationConfigPath, "notifications", "/opt/diwise/config/notifications.yaml", "Configuration file for notifications")
 	flag.Parse()
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
 	db := setupDatabaseOrDie(logger)
-	messenger := setupMessaging(serviceName, logger)
-	eventSender := events.New(loadEventSenderConfig(logger))
-	webEvents := webevents.New()
+	messenger := setupMessagingOrDie(serviceName, logger)
 
-	app := application.New(db, eventSender, webEvents)
-	defer app.Stop()
+	app := application.New(db, messenger)
 
 	routingKey := "device-status"
 	messenger.RegisterTopicMessageHandler(routingKey, newDeviceTopicMessageHandler(messenger, app))
-
-	routingKey = "feature.updated"
-	messenger.RegisterTopicMessageHandler(routingKey, newFeatureTopicMessageHandler(messenger, app))
 
 	watchdog := watchdog.New(app, logger)
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, app, webEvents.Server())
+	r := setupRouter(logger, serviceName, app)
 
 	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
@@ -118,7 +105,7 @@ func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
 	return db
 }
 
-func setupMessaging(serviceName string, logger zerolog.Logger) messaging.MsgContext {
+func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.MsgContext {
 	config := messaging.LoadConfiguration(serviceName, logger)
 	messenger, err := messaging.Initialize(config)
 	if err != nil {
@@ -128,23 +115,7 @@ func setupMessaging(serviceName string, logger zerolog.Logger) messaging.MsgCont
 	return messenger
 }
 
-func loadEventSenderConfig(logger zerolog.Logger) *events.Config {
-	if nCfgFile, err := os.Open(notificationConfigPath); err == nil {
-		defer nCfgFile.Close()
-
-		nCfg, err := events.LoadConfiguration(nCfgFile)
-		if err != nil {
-			logger.Fatal().Err(err).Msg("failed to load configuration")
-		}
-
-		return nCfg
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		logger.Fatal().Err(err).Msgf("failed to open configuration file %s", notificationConfigPath)
-	}
-	return nil
-}
-
-func setupRouter(logger zerolog.Logger, serviceName string, app application.App, sseServer *sse.Server) *chi.Mux {
+func setupRouter(logger zerolog.Logger, serviceName string, app application.App) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
@@ -153,7 +124,7 @@ func setupRouter(logger zerolog.Logger, serviceName string, app application.App,
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, app, sseServer)
+	return api.RegisterHandlers(logger, r, policies, app)
 }
 
 func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
@@ -171,20 +142,6 @@ func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app applicatio
 		err = app.HandleDeviceStatus(ctx, ds)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to handle device status message")
-			return
-		}
-
-		logger.Info().Msg("message handled")
-	}
-}
-
-func newFeatureTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Debug().Str("body", string(msg.Body)).Msg("received message")
-
-		err := app.HandleFeatureUpdated(ctx, msg.Body)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle feature.updated message")
 			return
 		}
 

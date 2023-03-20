@@ -171,7 +171,7 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		err = fmt.Errorf("failed to read response body: %w", err)
 		return nil, err
 	}
-		
+
 	impl := &types.Device{}
 
 	err = json.Unmarshal(respBody, impl)

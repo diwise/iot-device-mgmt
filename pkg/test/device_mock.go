@@ -5,7 +5,7 @@ package test
 
 import (
 	"sync"
-	
+
 	"github.com/diwise/iot-device-mgmt/pkg/client"
 )
 
