@@ -76,7 +76,7 @@ func backgroundWorker(w *watchdogImpl, done <-chan bool) {
 				if d.Interval > 0 {
 					interval = d.Interval
 				}
-				
+
 				if d.LastObserved.Before(time.Now().UTC().Add(-time.Duration(interval) * time.Second)) {
 					err = w.app.SetStatus(ctx, d.DeviceID, types.DeviceStatus{
 						BatteryLevel: -1,

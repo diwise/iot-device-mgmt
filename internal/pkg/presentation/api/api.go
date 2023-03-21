@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/alexandrevicenzi/go-sse"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -20,7 +19,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.App, sseServer *sse.Server) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, app application.App) *chi.Mux {
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -43,8 +42,6 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, a
 			})
 
 			r.Get("/environments", getEnvironments(log, app))
-
-			r.Mount("/events", sseServer)
 		})
 
 	})
@@ -140,7 +137,7 @@ func patchDeviceHandler(log zerolog.Logger, app application.App) http.HandlerFun
 			return
 		}
 
-		_, err = app.UpdateDevice(ctx, deviceID, fields)
+		err = app.UpdateDevice(ctx, deviceID, fields)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to update device")
 			w.WriteHeader(http.StatusBadRequest)
