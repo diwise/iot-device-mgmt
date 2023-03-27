@@ -144,4 +144,3 @@ func (w *watchdogImpl) HandleLastObservedMessage(ctx context.Context, deviceID s
 		return
 	}
 }
-

@@ -69,7 +69,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 	return router
 }
 
-func createDeviceHandler(log zerolog.Logger, service service.DeviceManagement) http.HandlerFunc {
+func createDeviceHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -92,7 +92,7 @@ func createDeviceHandler(log zerolog.Logger, service service.DeviceManagement) h
 			return
 		}
 
-		err = service.CreateDevice(ctx, d)
+		err = svc.CreateDevice(ctx, d)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to create device")
 			w.WriteHeader(http.StatusBadRequest)
@@ -104,44 +104,7 @@ func createDeviceHandler(log zerolog.Logger, service service.DeviceManagement) h
 	}
 }
 
-func patchDeviceHandler(log zerolog.Logger, service service.DeviceManagement) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-
-		ctx, span := tracer.Start(r.Context(), "patch-device")
-		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-		deviceID := chi.URLParam(r, "id")
-
-		b, err := io.ReadAll(r.Body)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to read body")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		var fields map[string]interface{}
-		err = json.Unmarshal(b, &fields)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to unmarshal body into map")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		err = service.UpdateDevice(ctx, deviceID, fields)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to update device")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) http.HandlerFunc {
+func queryDevicesHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -153,11 +116,11 @@ func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) h
 
 		var devices []models.Device
 
-		sensorID := r.URL.Query().Get("devEUI")
+		sensorID := r.URL.Query().Get("devEUI") // TODO: change to sensorID?
 		if sensorID != "" {
-			device, err := service.GetDeviceBySensorID(ctx, sensorID, allowedTenants...)
+			device, err := svc.GetDeviceBySensorID(ctx, sensorID, allowedTenants...)
 			if errors.Is(err, db.ErrDeviceNotFound) {
-				requestLogger.Error().Err(err).Msgf("%s not found", sensorID)
+				requestLogger.Debug().Msgf("%s not found", sensorID)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -169,15 +132,13 @@ func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) h
 
 			devices = append(devices, device)
 		} else {
-			devices, err = service.GetDevices(ctx, allowedTenants...)
+			devices, err = svc.GetDevices(ctx, allowedTenants...)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("unable to fetch all devices")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
-
-		// TODO: map to types.Devices?
 
 		b, err := json.Marshal(devices)
 		if err != nil {
@@ -192,7 +153,48 @@ func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) h
 	}
 }
 
-func getAlarmsHandler(log zerolog.Logger, service service.DeviceManagement) http.HandlerFunc {
+func getDeviceDetails(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		deviceID := chi.URLParam(r, "deviceID")
+
+		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
+		if errors.Is(err, db.ErrDeviceNotFound) {
+			requestLogger.Debug().Msgf("%s not found", deviceID)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("could not fetch data")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		//TODO: map to types.Device?
+
+		bytes, err := json.Marshal(device)
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("unable to marshal device to json")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		requestLogger.Info().Msgf("returning information about device %s (%s)", device.DeviceID, deviceID)
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(bytes)
+	}
+}
+
+func getAlarmsHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -206,7 +208,7 @@ func getAlarmsHandler(log zerolog.Logger, service service.DeviceManagement) http
 
 		if deviceID == "" {
 			onlyActive := r.URL.Query().Get("active") == "true"
-			alarms, err := service.GetAlarms(ctx, onlyActive)
+			alarms, err := svc.GetAlarms(ctx, onlyActive)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("unable to fetch alarms")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -225,7 +227,7 @@ func getAlarmsHandler(log zerolog.Logger, service service.DeviceManagement) http
 			return
 		}
 
-		device, err := service.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
+		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
 		if errors.Is(err, db.ErrDeviceNotFound) {
 			requestLogger.Debug().Msgf("%s not found", deviceID)
 			w.WriteHeader(http.StatusNotFound)
@@ -250,43 +252,39 @@ func getAlarmsHandler(log zerolog.Logger, service service.DeviceManagement) http
 	}
 }
 
-func getDeviceDetails(log zerolog.Logger, service service.DeviceManagement) http.HandlerFunc {
+func patchDeviceHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
-		ctx, span := tracer.Start(r.Context(), "get-device")
+		ctx, span := tracer.Start(r.Context(), "patch-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		deviceID := chi.URLParam(r, "deviceID")
 
-		device, err := service.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
-		if errors.Is(err, db.ErrDeviceNotFound) {
-			requestLogger.Debug().Msgf("%s not found", deviceID)
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			requestLogger.Error().Err(err).Msg("could not fetch data")
-			w.WriteHeader(http.StatusInternalServerError)
+			requestLogger.Error().Err(err).Msg("unable to read body")
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		//TODO: map to type.Device?
-
-		bytes, err := json.Marshal(device)
+		var fields map[string]any
+		err = json.Unmarshal(b, &fields)
 		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to marshal device to json")
-			w.WriteHeader(http.StatusInternalServerError)
+			requestLogger.Error().Err(err).Msg("unable to unmarshal body into map")
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		requestLogger.Info().Msgf("returning information about device %s (%s)", device.DeviceID, deviceID)
+		err = svc.UpdateDevice(ctx, deviceID, fields)
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("unable to update device")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(bytes)
 	}
 }

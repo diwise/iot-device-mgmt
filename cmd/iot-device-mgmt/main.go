@@ -107,4 +107,3 @@ func setupRouter(logger zerolog.Logger, serviceName string, service service.Devi
 
 	return api.RegisterHandlers(logger, r, policies, service)
 }
-
