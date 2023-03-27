@@ -74,7 +74,15 @@ func (d *deviceManagement) UpdateDevice(ctx context.Context, deviceID string, fi
 }
 
 func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm m.Alarm) error {
-	return d.deviceRepository.AddAlarm(ctx, deviceID, alarm)
+	err := d.deviceRepository.AddAlarm(ctx, deviceID, alarm)
+	if err != nil {
+		return err
+	}
+
+	return d.UpdateDeviceState(ctx, deviceID, m.DeviceState{
+		State:      m.DeviceStateOK,
+		ObservedAt: time.Now().UTC(),
+	})
 }
 
 func (d *deviceManagement) GetAlarms(ctx context.Context, onlyActive bool) ([]m.Alarm, error) {
@@ -117,8 +125,8 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 		return err
 	}
 
-	if hasAlarm, severityLevel, _ := device.HasActiveAlarms(); hasAlarm {
-		switch severityLevel {
+	if hasAlarm, highestSeverityLevel, _ := device.HasActiveAlarms(); hasAlarm {
+		switch highestSeverityLevel {
 		case m.AlarmSeverityLow:
 			break
 		case m.AlarmSeverityMedium:

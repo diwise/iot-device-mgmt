@@ -22,7 +22,7 @@ WORKDIR /opt/diwise
 
 COPY --from=builder --chown=1001 /app/cmd/iot-device-mgmt/iot-device-mgmt /opt/diwise
 COPY --chown=1001 assets/config/authz.rego /opt/diwise/config/authz.rego
-COPY --chown=1001 assets/config/data /opt/diwise/config/data
+COPY --chown=1001 assets/config/data/30.devices.csv /opt/diwise/config/data/devices.csv
 
 RUN chown 1001 /opt/diwise
 

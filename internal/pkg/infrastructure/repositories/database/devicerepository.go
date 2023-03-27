@@ -468,7 +468,7 @@ func validateDeviceRecord(r deviceRecord) error {
 		return fmt.Errorf("row with %s contains invalid where parameter %s", r.devEUI, r.where)
 	}
 
-	if !contains(r.sensorType, []string{"qalcosonic", "presence", "elsys_codec", "enviot", "tem_lab_14ns", "strips_lora_ms_h", "cube02", "milesight_am100", "niab-fls"}) {
+	if !contains(r.sensorType, []string{"qalcosonic", "presence", "elsys_codec", "enviot", "tem_lab_14ns", "strips_lora_ms_h", "cube02", "milesight_am100", "niab-fls", "virtual"}) {
 		return fmt.Errorf("row with %s contains invalid sensorType parameter %s", r.devEUI, r.sensorType)
 	}
 

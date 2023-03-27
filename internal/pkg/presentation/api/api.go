@@ -157,7 +157,7 @@ func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) h
 		if sensorID != "" {
 			device, err := service.GetDeviceBySensorID(ctx, sensorID, allowedTenants...)
 			if errors.Is(err, db.ErrDeviceNotFound) {
-				requestLogger.Error().Err(err).Msg("device not found")
+				requestLogger.Error().Err(err).Msgf("%s not found", sensorID)
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -167,7 +167,7 @@ func queryDevicesHandler(log zerolog.Logger, service service.DeviceManagement) h
 				return
 			}
 
-			devices = append(devices, device)			
+			devices = append(devices, device)
 		} else {
 			devices, err = service.GetDevices(ctx, allowedTenants...)
 			if err != nil {
@@ -227,7 +227,7 @@ func getAlarmsHandler(log zerolog.Logger, service service.DeviceManagement) http
 
 		device, err := service.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
 		if errors.Is(err, db.ErrDeviceNotFound) {
-			requestLogger.Error().Err(err).Msg("device not found")
+			requestLogger.Debug().Msgf("%s not found", deviceID)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
@@ -264,7 +264,7 @@ func getDeviceDetails(log zerolog.Logger, service service.DeviceManagement) http
 
 		device, err := service.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
 		if errors.Is(err, db.ErrDeviceNotFound) {
-			requestLogger.Error().Err(err).Msg("device not found")
+			requestLogger.Debug().Msgf("%s not found", deviceID)
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
