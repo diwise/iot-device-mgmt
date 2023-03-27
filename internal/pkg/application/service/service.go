@@ -176,7 +176,10 @@ func DeviceStatusTopicHandler(messenger messaging.MsgContext, dm DeviceManagemen
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update state on device")
+			return
 		}
+
+		logger.Debug().Msgf("%s handled", msg.RoutingKey)
 	}
 }
 
@@ -193,13 +196,21 @@ func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, dm Devic
 			return
 		}
 
-		dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
+		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
+
+		err = dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
 			Type:        msg.RoutingKey,
 			Severity:    m.AlarmSeverityLow,
 			Active:      true,
 			Description: "",
 			ObservedAt:  message.ObservedAt,
 		})
+		if err != nil {
+			logger.Error().Err(err).Msg("could not add alarm")
+			return
+		}
+
+		logger.Debug().Msgf("%s handled", msg.RoutingKey)
 	}
 }
 
@@ -216,12 +227,20 @@ func WatchdogLastObservedWarningHandler(messenger messaging.MsgContext, dm Devic
 			return
 		}
 
-		dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
+		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
+
+		err = dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
 			Type:        msg.RoutingKey,
 			Severity:    m.AlarmSeverityMedium,
 			Active:      true,
 			Description: "",
 			ObservedAt:  message.ObservedAt,
 		})
+		if err != nil {
+			logger.Error().Err(err).Msg("could not add alarm")
+			return
+		}
+
+		logger.Debug().Msgf("%s handled", msg.RoutingKey)
 	}
 }
