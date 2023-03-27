@@ -2,33 +2,27 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"net/http"
 	"os"
-	"path"
-	"path/filepath"
-	"sort"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/go-chi/chi/v5"
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 )
 
 const serviceName string = "iot-device-mgmt"
 
-var dataDir string
+var knownDevicesFile string
 var opaFilePath string
 
 func main() {
@@ -36,7 +30,7 @@ func main() {
 	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&dataDir, "devices", "/opt/diwise/config/data", "A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)")
+	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
@@ -45,16 +39,13 @@ func main() {
 	db := setupDatabaseOrDie(logger)
 	messenger := setupMessagingOrDie(serviceName, logger)
 
-	app := application.New(db, messenger)
+	service := service.New(db, messenger)
 
-	routingKey := "device-status"
-	messenger.RegisterTopicMessageHandler(routingKey, newDeviceTopicMessageHandler(messenger, app))
-
-	watchdog := watchdog.New(app, logger)
+	watchdog := watchdog.New(db, messenger, logger)
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, app)
+	r := setupRouter(logger, serviceName, service)
 
 	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
@@ -62,44 +53,34 @@ func main() {
 	}
 }
 
-func setupDatabaseOrDie(logger zerolog.Logger) database.Datastore {
-	var db database.Datastore
+func setupDatabaseOrDie(logger zerolog.Logger) database.DeviceRepository {
+	var db database.DeviceRepository
 	var err error
 
 	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
-		db, err = database.NewDatabaseConnection(database.NewPostgreSQLConnector(logger))
+		db, err = database.New(database.NewPostgreSQLConnector(logger))
 	} else {
 		logger.Info().Msg("no sql database configured, using builtin sqlite instead")
-		db, err = database.NewDatabaseConnection(database.NewSQLiteConnector(logger))
+		db, err = database.New(database.NewSQLiteConnector(logger))
 	}
 
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
 
-	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
-		logger.Fatal().Err(err).Msgf("directory %s does not exists! Unable to load data", dataDir)
+	if _, err := os.Stat(knownDevicesFile); os.IsNotExist(err) {
+		logger.Fatal().Err(err).Msgf("file with known devices (%s) could not be found", knownDevicesFile)
 	}
 
-	files, err := filepath.Glob(dataDir + "/*.csv")
+	f, err := os.Open(knownDevicesFile)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("no data files found!")
+		logger.Fatal().Err(err).Msgf("file with known devices (%s) could not be opened", knownDevicesFile)
 	}
+	defer f.Close()
 
-	logger.Debug().Msgf("found %d files in %s", len(files), dataDir)
-
-	sort.Strings(files)
-
-	for _, f := range files {
-		dataFile, err := os.Open(f)
-		if err == nil {
-			defer dataFile.Close()
-			logger.Debug().Msgf("Seeding %s", path.Base(dataFile.Name()))
-			err = db.Seed(path.Base(dataFile.Name()), dataFile)
-			if err != nil {
-				logger.Fatal().Err(err).Msg("failed to seed database")
-			}
-		}
+	err = db.Seed(context.Background(), knownDevicesFile, f)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("could not seed database with devices")
 	}
 
 	return db
@@ -115,7 +96,7 @@ func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.Ms
 	return messenger
 }
 
-func setupRouter(logger zerolog.Logger, serviceName string, app application.App) *chi.Mux {
+func setupRouter(logger zerolog.Logger, serviceName string, service service.DeviceManagement) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
@@ -124,27 +105,6 @@ func setupRouter(logger zerolog.Logger, serviceName string, app application.App)
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, app)
+	return api.RegisterHandlers(logger, r, policies, service)
 }
 
-func newDeviceTopicMessageHandler(messenger messaging.MsgContext, app application.App) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger.Debug().Str("body", string(msg.Body)).Msg("received message")
-
-		ds := types.DeviceStatus{}
-
-		err := json.Unmarshal(msg.Body, &ds)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal body of accepted message")
-			return
-		}
-
-		err = app.HandleDeviceStatus(ctx, ds)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to handle device status message")
-			return
-		}
-
-		logger.Info().Msg("message handled")
-	}
-}

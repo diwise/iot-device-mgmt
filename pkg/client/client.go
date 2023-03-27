@@ -220,11 +220,11 @@ func (d *deviceWrapper) Environment() string {
 }
 
 func (d *deviceWrapper) SensorType() string {
-	return d.impl.SensorType.Name
+	return d.impl.DeviceProfile.Decoder
 }
 
 func (d *deviceWrapper) Types() []string {
-	return d.impl.Types
+	return []string{}
 }
 
 func (d *deviceWrapper) IsActive() bool {
@@ -232,5 +232,5 @@ func (d *deviceWrapper) IsActive() bool {
 }
 
 func (d *deviceWrapper) Tenant() string {
-	return d.impl.Tenant
+	return d.impl.Tenant.Name
 }
