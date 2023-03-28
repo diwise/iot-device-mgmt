@@ -125,6 +125,7 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 	result := d.db.WithContext(ctx).
 		Preload("Tenant").
 		Preload("Location").
+		Preload("Lwm2mTypes").
 		Preload("DeviceProfile").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
@@ -373,7 +374,7 @@ func (dr deviceRecord) Device() Device {
 	}
 
 	return Device{
-		Active:   true,
+		Active:   dr.active,
 		SensorID: dr.devEUI,
 		DeviceID: dr.internalID,
 		Tenant: Tenant{
@@ -386,20 +387,19 @@ func (dr deviceRecord) Device() Device {
 			Longitude: dr.lon,
 			Altitude:  0.0,
 		},
-		Environment: dr.where,
-		Tags:        []Tag{},
+		Environment: dr.where,		
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: DeviceProfile{
 			Name:    dr.sensorType,
 			Decoder: dr.sensorType,
 		},
 		DeviceStatus: DeviceStatus{
-			BatteryLevel: 100,
-			LastObserved: time.Unix(0, 0),
+			BatteryLevel: -1,			
 		},
 		DeviceState: DeviceState{
+			Online: false,
 			State: DeviceStateUnknown,
-		},
+		},		
 	}
 }
 

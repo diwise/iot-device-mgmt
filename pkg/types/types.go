@@ -55,13 +55,13 @@ type DeviceStatus struct {
 
 const (
 	DeviceStateUnknown = -1
-	DeviceStateOffline = 0
 	DeviceStateOK      = 1
 	DeviceStateWarning = 2
 	DeviceStateError   = 3
 )
 
 type DeviceState struct {
+	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
 }

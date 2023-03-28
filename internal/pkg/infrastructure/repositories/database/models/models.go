@@ -140,8 +140,7 @@ type DeviceStatus struct {
 }
 
 const (
-	DeviceStateUnknown = -1
-	DeviceStateOffline = 0
+	DeviceStateUnknown = -1	
 	DeviceStateOK      = 1
 	DeviceStateWarning = 2
 	DeviceStateError   = 3
@@ -151,6 +150,7 @@ type DeviceState struct {
 	gorm.Model `json:"-"`
 	DeviceID   uint `json:"-"`
 
+	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
 }

@@ -80,6 +80,7 @@ func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm 
 	}
 
 	return d.UpdateDeviceState(ctx, deviceID, m.DeviceState{
+		Online:     true,
 		State:      m.DeviceStateOK,
 		ObservedAt: time.Now().UTC(),
 	})
@@ -133,8 +134,8 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 			deviceState.State = m.DeviceStateWarning
 		case m.AlarmSeverityHigh:
 			deviceState.State = m.DeviceStateError
-		}
-	}
+		}		
+	}	
 
 	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
 	if err != nil {
@@ -171,6 +172,7 @@ func DeviceStatusTopicHandler(messenger messaging.MsgContext, dm DeviceManagemen
 		}
 
 		err = dm.UpdateDeviceState(ctx, status.DeviceID, m.DeviceState{
+			Online:     true,
 			State:      m.DeviceStateOK,
 			ObservedAt: status.LastObserved,
 		})
