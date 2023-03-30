@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
@@ -105,7 +106,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
 
-	db, err := database.New(database.NewSQLiteConnector(log))
+	db, err := database.NewDeviceRepository(database.NewSQLiteConnector(log))
 	is.NoErr(err)
 
 	err = db.Seed(context.Background(), "devices.csv", bytes.NewBuffer([]byte(csvMock)))
@@ -115,7 +116,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)
-	api.RegisterHandlers(log, router, policies, app)
+	api.RegisterHandlers(log, router, policies, app, &alarms.AlarmServiceMock{})
 
 	return router, is
 }

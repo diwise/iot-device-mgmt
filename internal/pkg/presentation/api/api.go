@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
@@ -21,7 +22,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, service service.DeviceManagement) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, svc service.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -53,15 +54,14 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			*/
 
 			r.Route("/devices", func(r chi.Router) {
-				r.Get("/", queryDevicesHandler(log, service))
-				r.Get("/{deviceID}", getDeviceDetails(log, service))
-				r.Get("/{deviceID}/alarms", getAlarmsHandler(log, service))
+				r.Get("/", queryDevicesHandler(log, svc))
+				r.Get("/{deviceID}", getDeviceDetails(log, svc))
 
-				r.Get("/alarms", getAlarmsHandler(log, service))
-
-				r.Post("/", createDeviceHandler(log, service))
-				r.Patch("/{deviceID}", patchDeviceHandler(log, service))
+				r.Post("/", createDeviceHandler(log, svc))
+				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
 			})
+
+			r.Get("/alarms", getAlarmsHandler(log, alarmSvc))
 		})
 
 	})
@@ -192,54 +192,29 @@ func getDeviceDetails(log zerolog.Logger, svc service.DeviceManagement) http.Han
 	}
 }
 
-func getAlarmsHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		deviceID := chi.URLParam(r, "deviceID")
+		//deviceID := chi.URLParam(r, "deviceID")
 
-		if deviceID == "" {
-			onlyActive := r.URL.Query().Get("active") == "true"
-			alarms, err := svc.GetAlarms(ctx, onlyActive)
-			if err != nil {
-				requestLogger.Error().Err(err).Msg("unable to fetch alarms")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			b, err := json.Marshal(alarms)
-			if err != nil {
-				requestLogger.Error().Err(err).Msg("unable to marshal alarms")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write(b)
-			return
-		}
-
-		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
-		if errors.Is(err, db.ErrDeviceNotFound) {
-			requestLogger.Debug().Msgf("%s not found", deviceID)
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
+		//if deviceID == "" {
+		onlyActive := r.URL.Query().Get("active") == "true"
+		alarms, err := svc.GetAlarms(ctx, onlyActive)
 		if err != nil {
-			requestLogger.Error().Err(err).Msg("could not fetch data")
+			requestLogger.Error().Err(err).Msg("unable to fetch alarms")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-
-		b, err := json.Marshal(device.Alarms)
+		b, err := json.Marshal(alarms)
 		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to fetch alarms")
+			requestLogger.Error().Err(err).Msg("unable to marshal alarms")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -247,6 +222,33 @@ func getAlarmsHandler(log zerolog.Logger, svc service.DeviceManagement) http.Han
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(b)
+		return
+		//}
+
+		/*
+			device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
+			if errors.Is(err, db.ErrDeviceNotFound) {
+				requestLogger.Debug().Msgf("%s not found", deviceID)
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("could not fetch data")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			b, err := json.Marshal(device.Alarms)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to fetch alarms")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
+		*/
 	}
 }
 

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
@@ -36,16 +37,20 @@ func main() {
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
-	db := setupDatabaseOrDie(logger)
+	conn := setupDatabaseConnection(logger)
+
+	deviceDB := setupDeviceDatabaseOrDie(logger, conn)
+	alarmDB := setupAlarmDatabaseOrDie(logger, conn)
 	messenger := setupMessagingOrDie(serviceName, logger)
 
-	service := service.New(db, messenger)
+	service := service.New(deviceDB, messenger)
+	alarmService := alarms.New(alarmDB, messenger)
 
-	watchdog := watchdog.New(db, messenger, logger)
+	watchdog := watchdog.New(deviceDB, messenger, logger)
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, service)
+	r := setupRouter(logger, serviceName, service, alarmService)
 
 	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
@@ -53,17 +58,32 @@ func main() {
 	}
 }
 
-func setupDatabaseOrDie(logger zerolog.Logger) database.DeviceRepository {
+func setupDatabaseConnection(logger zerolog.Logger) database.ConnectorFunc {
+	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
+		return database.NewPostgreSQLConnector(logger)
+	}
+
+	logger.Info().Msg("no sql database configured, using builtin sqlite instead")
+	return database.NewSQLiteConnector(logger)
+}
+
+func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc) database.AlarmRepository {
+	var db database.AlarmRepository
+	var err error
+
+	db, err = database.NewAlarmRepository(conn)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to connect to database")
+	}
+
+	return db
+}
+
+func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc) database.DeviceRepository {
 	var db database.DeviceRepository
 	var err error
 
-	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
-		db, err = database.New(database.NewPostgreSQLConnector(logger))
-	} else {
-		logger.Info().Msg("no sql database configured, using builtin sqlite instead")
-		db, err = database.New(database.NewSQLiteConnector(logger))
-	}
-
+	db, err = database.NewDeviceRepository(conn)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
@@ -96,7 +116,7 @@ func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.Ms
 	return messenger
 }
 
-func setupRouter(logger zerolog.Logger, serviceName string, service service.DeviceManagement) *chi.Mux {
+func setupRouter(logger zerolog.Logger, serviceName string, svc service.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
@@ -105,5 +125,5 @@ func setupRouter(logger zerolog.Logger, serviceName string, service service.Devi
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, service)
+	return api.RegisterHandlers(logger, r, policies, svc, alarmSvc)
 }

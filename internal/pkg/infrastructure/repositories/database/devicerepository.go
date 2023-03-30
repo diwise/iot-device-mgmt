@@ -6,83 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
-	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/rs/zerolog"
-	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
-	"gorm.io/gorm/logger"
 )
 
-type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
-
-func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
-	return func() (*gorm.DB, zerolog.Logger, error) {
-		db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
-			Logger:          logger.Default.LogMode(logger.Silent),
-			CreateBatchSize: 1000,
-		})
-
-		if err == nil {
-			db.Exec("PRAGMA foreign_keys = ON")
-			sqldb, _ := db.DB()
-			sqldb.SetMaxOpenConns(1)
-		}
-
-		return db, log, err
-	}
-}
-
-func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
-	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
-	username := os.Getenv("DIWISE_SQLDB_USER")
-	dbName := os.Getenv("DIWISE_SQLDB_NAME")
-	password := os.Getenv("DIWISE_SQLDB_PASSWORD")
-	sslMode := env.GetVariableOrDefault(log, "DIWISE_SQLDB_SSLMODE", "require")
-
-	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=%s password=%s", dbHost, username, dbName, sslMode, password)
-
-	return func() (*gorm.DB, zerolog.Logger, error) {
-		sublogger := log.With().Str("host", dbHost).Str("database", dbName).Logger()
-
-		for {
-			sublogger.Info().Msg("connecting to database host")
-
-			db, err := gorm.Open(postgres.Open(dbURI), &gorm.Config{
-				Logger: logger.New(
-					&sublogger,
-					logger.Config{
-						SlowThreshold:             time.Second,
-						LogLevel:                  logger.Info,
-						IgnoreRecordNotFoundError: false,
-						Colorful:                  false,
-					},
-				),
-			})
-			if err != nil {
-				sublogger.Fatal().Err(err).Msg("failed to connect to database")
-				time.Sleep(3 * time.Second)
-			} else {
-				return db, sublogger, nil
-			}
-		}
-	}
-}
-
-func New(connect ConnectorFunc) (DeviceRepository, error) {
+func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 	impl, _, err := connect()
 	if err != nil {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{}, &Alarm{})
+	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{})
 	if err != nil {
 		return nil, err
 	}
@@ -96,18 +34,15 @@ func New(connect ConnectorFunc) (DeviceRepository, error) {
 
 type DeviceRepository interface {
 	GetDevices(ctx context.Context, tenants ...string) ([]Device, error)
+	GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error)
 	GetDeviceID(ctx context.Context, sensorID string) (string, error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (Device, error)
 	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (Device, error)
-	GetStatistics(ctx context.Context) (DeviceStatistics, error)
 
 	Save(ctx context.Context, device *Device) error
 
 	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error
 	UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error
-
-	GetAlarms(ctx context.Context, onlyActive bool) ([]Alarm, error)
-	AddAlarm(ctx context.Context, deviceID string, alarm Alarm) error
 
 	Seed(context.Context, string, io.Reader) error
 }
@@ -129,8 +64,7 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
-		Preload("Tags").
-		Preload("Alarms")
+		Preload("Tags")
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -139,6 +73,36 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 	result := query.Find(&devices)
 
 	return devices, result.Error
+}
+
+func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {
+	var devices []Device
+
+	query := d.db.
+		Debug().
+		WithContext(ctx).
+		Preload("Location").
+		Preload("Tenant").
+		Preload("DeviceProfile").
+		Preload("Lwm2mTypes").
+		Preload("DeviceStatus").
+		Preload("DeviceState").
+		Preload("Tags")
+
+	if len(tenants) > 0 {
+		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
+	}
+
+	result := query.Find(&devices)
+
+	online := []Device{}
+	for _, device := range devices {
+		if device.DeviceState.Online == true {
+			online = append(online, device)
+		}
+	}
+
+	return online, result.Error
 }
 
 func (d *deviceRepository) GetDeviceID(ctx context.Context, sensorID string) (string, error) {
@@ -192,8 +156,7 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
-		Preload("Tags").
-		Preload("Alarms")
+		Preload("Tags")
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: deviceID})
@@ -280,38 +243,6 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 	}
 
 	return nil
-}
-
-func (d *deviceRepository) GetAlarms(ctx context.Context, onlyActive bool) ([]Alarm, error) {
-	var alarms []Alarm
-
-	query := d.db.WithContext(ctx)
-
-	if onlyActive {
-		query = query.Where(&Alarm{Active: true})
-	}
-
-	err := query.Find(&alarms).Error
-	if err != nil {
-		return []Alarm{}, err
-	}
-
-	return alarms, nil
-}
-
-func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarm Alarm) error {
-	device, err := d.GetDeviceByDeviceID(ctx, deviceID)
-	if err != nil {
-		return err
-	}
-
-	device.Alarms = append(device.Alarms, alarm)
-
-	return d.Save(ctx, &device)
-}
-
-func (d *deviceRepository) GetStatistics(ctx context.Context) (DeviceStatistics, error) {
-	return DeviceStatistics{}, nil
 }
 
 func (d *deviceRepository) Seed(ctx context.Context, key string, reader io.Reader) error {

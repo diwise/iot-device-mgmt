@@ -14,7 +14,7 @@ import (
 )
 
 func TestGetDevices(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	r.Save(ctx, createDevice(1, "default"))
 	r.Save(ctx, createDevice(2, "default"))
@@ -34,10 +34,14 @@ func TestGetDevices(t *testing.T) {
 	allTenantDevices, err := r.GetDevices(ctx, "default", "test", "secret")
 	is.NoErr(err)
 	is.Equal(6, len(allTenantDevices))
+
+	onlineDevices, err := r.GetOnlineDevices(ctx)
+	is.NoErr(err)
+	is.Equal(0, len(onlineDevices))
 }
 
 func TestGetDeviceID(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	err := r.Save(ctx, createDevice(1, "default"))
 	is.NoErr(err)
@@ -48,7 +52,7 @@ func TestGetDeviceID(t *testing.T) {
 }
 
 func TestSaveAndGet(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	err := r.Save(ctx, createDevice(1, "default"))
 	is.NoErr(err)
@@ -70,7 +74,7 @@ func TestSaveAndGet(t *testing.T) {
 }
 
 func TestUpdateDeviceStatus(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	err := r.Save(ctx, createDevice(1, "default"))
 	is.NoErr(err)
@@ -90,7 +94,7 @@ func TestUpdateDeviceStatus(t *testing.T) {
 }
 
 func TestUpdateDeviceState(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	err := r.Save(ctx, createDevice(1, "default"))
 	is.NoErr(err)
@@ -109,43 +113,8 @@ func TestUpdateDeviceState(t *testing.T) {
 	is.Equal(DeviceStateError, fromDb.DeviceState.State)
 }
 
-func TestGetAlarms(t *testing.T) {
-	is, ctx, r := testSetup(t)
-
-	err := r.Save(ctx, createDevice(10, "default"))
-	is.NoErr(err)
-
-	alarms, err := r.GetAlarms(ctx, true)
-	is.NoErr(err)
-	is.True(alarms != nil)
-}
-
-func TestAddAlarms(t *testing.T) {
-	is, ctx, r := testSetup(t)
-
-	err := r.Save(ctx, createDevice(99, "default"))
-	is.NoErr(err)
-
-	alarms, err := r.GetAlarms(ctx, true)
-	is.NoErr(err)
-	l := len(alarms)
-
-	r.AddAlarm(ctx, "device-99", Alarm{
-		Type:        "type",
-		Severity:    AlarmSeverityHigh,
-		Active:      true,
-		Description: "description",
-		ObservedAt:  time.Now(),
-	})
-
-	alarms, err = r.GetAlarms(ctx, true)
-	is.NoErr(err)
-	is.Equal(l+1, len(alarms))
-	is.Equal(AlarmSeverityHigh, alarms[l].Severity)
-}
-
 func TestSeed(t *testing.T) {
-	is, ctx, r := testSetup(t)
+	is, ctx, r := testSetupDeviceRepository(t)
 
 	err := r.Seed(ctx, "devices.csv", bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
@@ -165,12 +134,20 @@ func TestSeed(t *testing.T) {
 	is.Equal("urn:oma:lwm2m:ext:3304", device.Lwm2mTypes[1].Urn)
 }
 
-func testSetup(t *testing.T) (*is.I, context.Context, DeviceRepository) {
+func testSetupDeviceRepository(t *testing.T) (*is.I, context.Context, DeviceRepository) {
+	is, ctx, conn := setup(t)
+
+	r, _ := NewDeviceRepository(conn)
+
+	return is, ctx, r
+}
+
+func setup(t *testing.T) (*is.I, context.Context, ConnectorFunc) {
 	is := is.New(t)
 
-	r, _ := New(NewSQLiteConnector(zerolog.Logger{}))
+	conn := NewSQLiteConnector(zerolog.Logger{})
 
-	return is, context.Background(), r
+	return is, context.Background(), conn
 }
 
 func createDevice(n int, tenant string) *Device {
@@ -201,15 +178,9 @@ func createDevice(n int, tenant string) *Device {
 			LastObserved: time.Now(),
 		},
 		DeviceState: DeviceState{
-			State: DeviceStateOK,
+			Online: false,
+			State:  DeviceStateOK,
 		},
-		Alarms: []Alarm{{
-			Type:        "alarm",
-			Severity:    AlarmSeverityLow,
-			Description: "description",
-			Active:      true,
-			ObservedAt:  time.Now(),
-		}},
 	}
 }
 

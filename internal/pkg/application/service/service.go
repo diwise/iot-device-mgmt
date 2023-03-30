@@ -11,7 +11,6 @@ import (
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
 	m "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -23,37 +22,34 @@ type DeviceManagement interface {
 	GetDevices(ctx context.Context, tenants ...string) ([]m.Device, error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (m.Device, error)
 	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (m.Device, error)
-	// GetStatistics(ctx context.Context) (DeviceStatistics, error)
+
 	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus m.DeviceStatus) error
 	UpdateDeviceState(ctx context.Context, deviceID string, deviceState m.DeviceState) error
 
-	GetAlarms(ctx context.Context, onlyActive bool) ([]m.Alarm, error)
-	AddAlarm(ctx context.Context, deviceID string, alarm m.Alarm) error
-
-	CreateDevice(ctx context.Context, device types.Device) error
+	CreateDevice(ctx context.Context, device t.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error
 }
 
 type deviceManagement struct {
 	deviceRepository db.DeviceRepository
-	messaging        messaging.MsgContext
+	messenger        messaging.MsgContext
 }
 
 func New(d db.DeviceRepository, m messaging.MsgContext) DeviceManagement {
 	dm := &deviceManagement{
 		deviceRepository: d,
-		messaging:        m,
+		messenger:        m,
 	}
 
-	m.RegisterTopicMessageHandler("device-status", DeviceStatusTopicHandler(m, dm))
-	m.RegisterTopicMessageHandler("alarms.batteryLevelWarning", WatchdogBatteryLevelWarningHandler(m, dm))
-	m.RegisterTopicMessageHandler("alarms.lastObservedWarning", WatchdogLastObservedWarningHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusTopicHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("alarms.batteryLevelWarning", WatchdogBatteryLevelWarningHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("alarms.lastObservedWarning", WatchdogLastObservedWarningHandler(m, dm))
 
 	return dm
 }
 
-func (d *deviceManagement) CreateDevice(ctx context.Context, device types.Device) error {
-	dataModel, err := MapTo[models.Device](device)
+func (d *deviceManagement) CreateDevice(ctx context.Context, device t.Device) error {
+	dataModel, err := MapTo[m.Device](device)
 	if err != nil {
 		return err
 	}
@@ -63,7 +59,7 @@ func (d *deviceManagement) CreateDevice(ctx context.Context, device types.Device
 		return err
 	}
 
-	return d.messaging.PublishOnTopic(ctx, &t.DeviceCreated{
+	return d.messenger.PublishOnTopic(ctx, &t.DeviceCreated{
 		DeviceID:  dataModel.DeviceID,
 		Tenant:    dataModel.Tenant.Name,
 		Timestamp: dataModel.CreatedAt,
@@ -72,23 +68,6 @@ func (d *deviceManagement) CreateDevice(ctx context.Context, device types.Device
 
 func (d *deviceManagement) UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error {
 	return nil
-}
-
-func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm m.Alarm) error {
-	err := d.deviceRepository.AddAlarm(ctx, deviceID, alarm)
-	if err != nil {
-		return err
-	}
-
-	return d.UpdateDeviceState(ctx, deviceID, m.DeviceState{
-		Online:     true,
-		State:      m.DeviceStateOK,
-		ObservedAt: time.Now().UTC(),
-	})
-}
-
-func (d *deviceManagement) GetAlarms(ctx context.Context, onlyActive bool) ([]m.Alarm, error) {
-	return d.deviceRepository.GetAlarms(ctx, onlyActive)
 }
 
 func (d *deviceManagement) GetDevices(ctx context.Context, tenants ...string) ([]m.Device, error) {
@@ -121,7 +100,7 @@ func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID stri
 		return err
 	}
 
-	return d.messaging.PublishOnTopic(ctx, &t.DeviceStatusUpdated{
+	return d.messenger.PublishOnTopic(ctx, &t.DeviceStatusUpdated{
 		DeviceID:  device.DeviceID,
 		Tenant:    device.Tenant.Name,
 		Timestamp: deviceStatus.LastObserved,
@@ -129,20 +108,16 @@ func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID stri
 }
 
 func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID string, deviceState m.DeviceState) error {
+	logger := logging.GetFromContext(ctx)
+
 	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
 		return err
 	}
 
-	if hasAlarm, highestSeverityLevel, _ := device.HasActiveAlarms(); hasAlarm {
-		switch highestSeverityLevel {
-		case m.AlarmSeverityLow:
-			break
-		case m.AlarmSeverityMedium:
-			deviceState.State = m.DeviceStateWarning
-		case m.AlarmSeverityHigh:
-			deviceState.State = m.DeviceStateError
-		}
+	if deviceState.ObservedAt.IsZero() {
+		logger.Debug().Msgf("observedAt is zero, set to Now")
+		deviceState.ObservedAt = time.Now().UTC()
 	}
 
 	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
@@ -150,7 +125,7 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 		return err
 	}
 
-	return d.messaging.PublishOnTopic(ctx, &t.DeviceStateUpdated{
+	return d.messenger.PublishOnTopic(ctx, &t.DeviceStateUpdated{
 		DeviceID:  device.DeviceID,
 		Tenant:    device.Tenant.Name,
 		State:     deviceState.State,
@@ -206,19 +181,19 @@ func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, dm Devic
 			return
 		}
 
-		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
-
-		err = dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
-			Type:        msg.RoutingKey,
-			Severity:    m.AlarmSeverityLow,
-			Active:      true,
-			Description: "",
-			ObservedAt:  message.ObservedAt,
-		})
+		d, err := dm.GetDeviceByDeviceID(ctx, message.DeviceID)
 		if err != nil {
-			logger.Error().Err(err).Msg("could not add alarm")
+			logger.Error().Err(err).Msg("failed to retrieve message")
 			return
 		}
+
+		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
+
+		dm.UpdateDeviceState(ctx, message.DeviceID, m.DeviceState{
+			Online:     d.DeviceState.Online,
+			State:      models.DeviceStateWarning,
+			ObservedAt: message.ObservedAt,
+		})
 
 		logger.Debug().Msgf("%s handled", msg.RoutingKey)
 	}
@@ -239,17 +214,17 @@ func WatchdogLastObservedWarningHandler(messenger messaging.MsgContext, dm Devic
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
-		err = dm.AddAlarm(ctx, message.DeviceID, m.Alarm{
-			Type:        msg.RoutingKey,
-			Severity:    m.AlarmSeverityMedium,
-			Active:      true,
-			Description: "",
-			ObservedAt:  message.ObservedAt,
-		})
+		d, err := dm.GetDeviceByDeviceID(ctx, message.DeviceID)
 		if err != nil {
-			logger.Error().Err(err).Msg("could not add alarm")
+			logger.Error().Err(err).Msg("failed to retrieve message")
 			return
 		}
+
+		dm.UpdateDeviceState(ctx, message.DeviceID, m.DeviceState{
+			Online:     d.DeviceState.Online,
+			State:      models.DeviceStateWarning,
+			ObservedAt: message.ObservedAt,
+		})
 
 		logger.Debug().Msgf("%s handled", msg.RoutingKey)
 	}

@@ -27,7 +27,6 @@ type Device struct {
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
-	Alarms       []Alarm      `json:"alarms"`
 }
 
 func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
@@ -73,6 +72,7 @@ func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
 	return nil
 }
 
+/*
 func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
 	alarms := []Alarm{}
 	highestSeverityLevel := 0
@@ -96,6 +96,7 @@ func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
 
 	return true, highestSeverityLevel, alarms
 }
+*/
 
 type Location struct {
 	gorm.Model `json:"-"`
@@ -140,7 +141,7 @@ type DeviceStatus struct {
 }
 
 const (
-	DeviceStateUnknown = -1	
+	DeviceStateUnknown = -1
 	DeviceStateOK      = 1
 	DeviceStateWarning = 2
 	DeviceStateError   = 3
@@ -153,33 +154,4 @@ type DeviceState struct {
 	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
-}
-
-const (
-	AlarmSeverityLow    = 1
-	AlarmSeverityMedium = 2
-	AlarmSeverityHigh   = 3
-)
-
-type Alarm struct {
-	ID        uint           `gorm:"primarykey" json:"id"`
-	CreatedAt time.Time      `json:"-"`
-	UpdatedAt time.Time      `json:"-"`
-	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
-	DeviceID  uint           `json:"-"`
-
-	Type        string    `json:"type"`
-	Severity    int       `json:"severity"`
-	Description string    `json:"description"`
-	Active      bool      `json:"active"`
-	ObservedAt  time.Time `json:"observedAt"`
-}
-
-type DeviceStatistics struct {
-	Total   int
-	Online  int
-	Offline int
-	Warning int
-	Error   int
-	Alarms  int
 }

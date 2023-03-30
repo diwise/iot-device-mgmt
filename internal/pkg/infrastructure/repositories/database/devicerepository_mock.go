@@ -20,12 +20,6 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //		// make and configure a mocked DeviceRepository
 //		mockedDeviceRepository := &DeviceRepositoryMock{
-//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarm models.Alarm) error {
-//				panic("mock out the AddAlarm method")
-//			},
-//			GetAlarmsFunc: func(ctx context.Context, onlyActive bool) ([]models.Alarm, error) {
-//				panic("mock out the GetAlarms method")
-//			},
 //			GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants ...string) (models.Device, error) {
 //				panic("mock out the GetDeviceByDeviceID method")
 //			},
@@ -38,8 +32,8 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			GetDevicesFunc: func(ctx context.Context, tenants ...string) ([]models.Device, error) {
 //				panic("mock out the GetDevices method")
 //			},
-//			GetStatisticsFunc: func(ctx context.Context) (models.DeviceStatistics, error) {
-//				panic("mock out the GetStatistics method")
+//			GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]models.Device, error) {
+//				panic("mock out the GetOnlineDevices method")
 //			},
 //			SaveFunc: func(ctx context.Context, device *models.Device) error {
 //				panic("mock out the Save method")
@@ -60,12 +54,6 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //	}
 type DeviceRepositoryMock struct {
-	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, deviceID string, alarm models.Alarm) error
-
-	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, onlyActive bool) ([]models.Alarm, error)
-
 	// GetDeviceByDeviceIDFunc mocks the GetDeviceByDeviceID method.
 	GetDeviceByDeviceIDFunc func(ctx context.Context, deviceID string, tenants ...string) (models.Device, error)
 
@@ -78,8 +66,8 @@ type DeviceRepositoryMock struct {
 	// GetDevicesFunc mocks the GetDevices method.
 	GetDevicesFunc func(ctx context.Context, tenants ...string) ([]models.Device, error)
 
-	// GetStatisticsFunc mocks the GetStatistics method.
-	GetStatisticsFunc func(ctx context.Context) (models.DeviceStatistics, error)
+	// GetOnlineDevicesFunc mocks the GetOnlineDevices method.
+	GetOnlineDevicesFunc func(ctx context.Context, tenants ...string) ([]models.Device, error)
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, device *models.Device) error
@@ -95,22 +83,6 @@ type DeviceRepositoryMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddAlarm holds details about calls to the AddAlarm method.
-		AddAlarm []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// Alarm is the alarm argument value.
-			Alarm models.Alarm
-		}
-		// GetAlarms holds details about calls to the GetAlarms method.
-		GetAlarms []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// OnlyActive is the onlyActive argument value.
-			OnlyActive bool
-		}
 		// GetDeviceByDeviceID holds details about calls to the GetDeviceByDeviceID method.
 		GetDeviceByDeviceID []struct {
 			// Ctx is the ctx argument value.
@@ -143,10 +115,12 @@ type DeviceRepositoryMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// GetStatistics holds details about calls to the GetStatistics method.
-		GetStatistics []struct {
+		// GetOnlineDevices holds details about calls to the GetOnlineDevices method.
+		GetOnlineDevices []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Tenants is the tenants argument value.
+			Tenants []string
 		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
@@ -183,93 +157,15 @@ type DeviceRepositoryMock struct {
 			DeviceStatus models.DeviceStatus
 		}
 	}
-	lockAddAlarm            sync.RWMutex
-	lockGetAlarms           sync.RWMutex
 	lockGetDeviceByDeviceID sync.RWMutex
 	lockGetDeviceBySensorID sync.RWMutex
 	lockGetDeviceID         sync.RWMutex
 	lockGetDevices          sync.RWMutex
-	lockGetStatistics       sync.RWMutex
+	lockGetOnlineDevices    sync.RWMutex
 	lockSave                sync.RWMutex
 	lockSeed                sync.RWMutex
 	lockUpdateDeviceState   sync.RWMutex
 	lockUpdateDeviceStatus  sync.RWMutex
-}
-
-// AddAlarm calls AddAlarmFunc.
-func (mock *DeviceRepositoryMock) AddAlarm(ctx context.Context, deviceID string, alarm models.Alarm) error {
-	if mock.AddAlarmFunc == nil {
-		panic("DeviceRepositoryMock.AddAlarmFunc: method is nil but DeviceRepository.AddAlarm was just called")
-	}
-	callInfo := struct {
-		Ctx      context.Context
-		DeviceID string
-		Alarm    models.Alarm
-	}{
-		Ctx:      ctx,
-		DeviceID: deviceID,
-		Alarm:    alarm,
-	}
-	mock.lockAddAlarm.Lock()
-	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
-	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, deviceID, alarm)
-}
-
-// AddAlarmCalls gets all the calls that were made to AddAlarm.
-// Check the length with:
-//
-//	len(mockedDeviceRepository.AddAlarmCalls())
-func (mock *DeviceRepositoryMock) AddAlarmCalls() []struct {
-	Ctx      context.Context
-	DeviceID string
-	Alarm    models.Alarm
-} {
-	var calls []struct {
-		Ctx      context.Context
-		DeviceID string
-		Alarm    models.Alarm
-	}
-	mock.lockAddAlarm.RLock()
-	calls = mock.calls.AddAlarm
-	mock.lockAddAlarm.RUnlock()
-	return calls
-}
-
-// GetAlarms calls GetAlarmsFunc.
-func (mock *DeviceRepositoryMock) GetAlarms(ctx context.Context, onlyActive bool) ([]models.Alarm, error) {
-	if mock.GetAlarmsFunc == nil {
-		panic("DeviceRepositoryMock.GetAlarmsFunc: method is nil but DeviceRepository.GetAlarms was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		OnlyActive bool
-	}{
-		Ctx:        ctx,
-		OnlyActive: onlyActive,
-	}
-	mock.lockGetAlarms.Lock()
-	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
-	mock.lockGetAlarms.Unlock()
-	return mock.GetAlarmsFunc(ctx, onlyActive)
-}
-
-// GetAlarmsCalls gets all the calls that were made to GetAlarms.
-// Check the length with:
-//
-//	len(mockedDeviceRepository.GetAlarmsCalls())
-func (mock *DeviceRepositoryMock) GetAlarmsCalls() []struct {
-	Ctx        context.Context
-	OnlyActive bool
-} {
-	var calls []struct {
-		Ctx        context.Context
-		OnlyActive bool
-	}
-	mock.lockGetAlarms.RLock()
-	calls = mock.calls.GetAlarms
-	mock.lockGetAlarms.RUnlock()
-	return calls
 }
 
 // GetDeviceByDeviceID calls GetDeviceByDeviceIDFunc.
@@ -424,35 +320,39 @@ func (mock *DeviceRepositoryMock) GetDevicesCalls() []struct {
 	return calls
 }
 
-// GetStatistics calls GetStatisticsFunc.
-func (mock *DeviceRepositoryMock) GetStatistics(ctx context.Context) (models.DeviceStatistics, error) {
-	if mock.GetStatisticsFunc == nil {
-		panic("DeviceRepositoryMock.GetStatisticsFunc: method is nil but DeviceRepository.GetStatistics was just called")
+// GetOnlineDevices calls GetOnlineDevicesFunc.
+func (mock *DeviceRepositoryMock) GetOnlineDevices(ctx context.Context, tenants ...string) ([]models.Device, error) {
+	if mock.GetOnlineDevicesFunc == nil {
+		panic("DeviceRepositoryMock.GetOnlineDevicesFunc: method is nil but DeviceRepository.GetOnlineDevices was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
+		Ctx     context.Context
+		Tenants []string
 	}{
-		Ctx: ctx,
+		Ctx:     ctx,
+		Tenants: tenants,
 	}
-	mock.lockGetStatistics.Lock()
-	mock.calls.GetStatistics = append(mock.calls.GetStatistics, callInfo)
-	mock.lockGetStatistics.Unlock()
-	return mock.GetStatisticsFunc(ctx)
+	mock.lockGetOnlineDevices.Lock()
+	mock.calls.GetOnlineDevices = append(mock.calls.GetOnlineDevices, callInfo)
+	mock.lockGetOnlineDevices.Unlock()
+	return mock.GetOnlineDevicesFunc(ctx, tenants...)
 }
 
-// GetStatisticsCalls gets all the calls that were made to GetStatistics.
+// GetOnlineDevicesCalls gets all the calls that were made to GetOnlineDevices.
 // Check the length with:
 //
-//	len(mockedDeviceRepository.GetStatisticsCalls())
-func (mock *DeviceRepositoryMock) GetStatisticsCalls() []struct {
-	Ctx context.Context
+//	len(mockedDeviceRepository.GetOnlineDevicesCalls())
+func (mock *DeviceRepositoryMock) GetOnlineDevicesCalls() []struct {
+	Ctx     context.Context
+	Tenants []string
 } {
 	var calls []struct {
-		Ctx context.Context
+		Ctx     context.Context
+		Tenants []string
 	}
-	mock.lockGetStatistics.RLock()
-	calls = mock.calls.GetStatistics
-	mock.lockGetStatistics.RUnlock()
+	mock.lockGetOnlineDevices.RLock()
+	calls = mock.calls.GetOnlineDevices
+	mock.lockGetOnlineDevices.RUnlock()
 	return calls
 }
 
