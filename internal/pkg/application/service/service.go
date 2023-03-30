@@ -14,6 +14,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
@@ -103,6 +104,13 @@ func (d *deviceManagement) GetDeviceByDeviceID(ctx context.Context, deviceID str
 }
 
 func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus m.DeviceStatus) error {
+	logger := logging.GetFromContext(ctx)
+
+	if deviceStatus.LastObserved.IsZero() {
+		logger.Debug().Msgf("lastObserved is zero, set to Now")
+		deviceStatus.LastObserved = time.Now().UTC()
+	}
+
 	err := d.deviceRepository.UpdateDeviceStatus(ctx, deviceID, deviceStatus)
 	if err != nil {
 		return err
@@ -134,8 +142,8 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 			deviceState.State = m.DeviceStateWarning
 		case m.AlarmSeverityHigh:
 			deviceState.State = m.DeviceStateError
-		}		
-	}	
+		}
+	}
 
 	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
 	if err != nil {

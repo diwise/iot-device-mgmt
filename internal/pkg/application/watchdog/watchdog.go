@@ -6,6 +6,7 @@ import (
 
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog/events"
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/rs/zerolog"
@@ -52,7 +53,7 @@ type batteryLevelWatcher struct {
 }
 
 func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(60 * time.Minute)
 
 	for {
 		select {
@@ -60,11 +61,15 @@ func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
 			return
 		case <-ticker.C:
 			// TODO: get from config
-			devices, err := b.r.GetDevices(ctx, "default")
+			devices, err := b.r.GetDevices(ctx)
 			if err != nil {
 				break
 			}
 			for _, d := range devices {
+				if !d.DeviceState.Online || d.DeviceState.State == models.DeviceStateUnknown {
+					break
+				}
+
 				// TODO: get from config min level...
 				if d.DeviceStatus.BatteryLevel < 20 {
 					found <- d.DeviceID
@@ -79,7 +84,7 @@ type lastObservedWatcher struct {
 }
 
 func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
-	ticker := time.NewTicker(10 * time.Minute)
+	ticker := time.NewTicker(5 * time.Minute)
 
 	for {
 		select {
@@ -87,12 +92,16 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 			return
 		case <-ticker.C:
 			// TODO: get from config
-			devices, err := l.r.GetDevices(ctx, "default")
+			devices, err := l.r.GetDevices(ctx)
 			if err != nil {
 				break
 			}
 			for _, d := range devices {
 				// TODO: get from config min level...
+				if !d.DeviceState.Online || d.DeviceState.State == models.DeviceStateUnknown {
+					break
+				}
+
 				if d.DeviceStatus.LastObserved.Before(time.Now().UTC().Add(-time.Duration(10) * time.Minute)) {
 					found <- d.DeviceID
 				}
@@ -128,15 +137,29 @@ func (w *watchdogImpl) run() {
 }
 
 func (w *watchdogImpl) HandleBatteryLevelMessage(ctx context.Context, deviceID string) {
+	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	if err != nil {
+		w.log.Error().Err(err).Msg("could not publish lastObservedWarning")
+		return
+	}
+
 	w.messenger.PublishOnTopic(ctx, &BatteryLevelWarning{
 		DeviceID:   deviceID,
+		Tenant:     d.Tenant.Name,
 		ObservedAt: time.Now().UTC(),
 	})
 }
 
 func (w *watchdogImpl) HandleLastObservedMessage(ctx context.Context, deviceID string) {
-	err := w.messenger.PublishOnTopic(ctx, &LastObservedWarning{
+	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	if err != nil {
+		w.log.Error().Err(err).Msg("could not publish lastObservedWarning")
+		return
+	}
+
+	err = w.messenger.PublishOnTopic(ctx, &LastObservedWarning{
 		DeviceID:   deviceID,
+		Tenant:     d.Tenant.Name,
 		ObservedAt: time.Now().UTC(),
 	})
 	if err != nil {

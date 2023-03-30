@@ -4,6 +4,7 @@ import "time"
 
 type BatteryLevelWarning struct {
 	DeviceID   string    `json:"deviceID"`
+	Tenant     string    `json:"tenant"`
 	ObservedAt time.Time `json:"observedAt"`
 }
 
@@ -16,6 +17,7 @@ func (b *BatteryLevelWarning) TopicName() string {
 
 type LastObservedWarning struct {
 	DeviceID   string    `json:"deviceID"`
+	Tenant     string    `json:"tenant"`
 	ObservedAt time.Time `json:"observedAt"`
 }
 

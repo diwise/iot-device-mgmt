@@ -177,8 +177,6 @@ func getDeviceDetails(log zerolog.Logger, svc service.DeviceManagement) http.Han
 			return
 		}
 
-		//TODO: map to types.Device?
-
 		bytes, err := json.Marshal(device)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to marshal device to json")

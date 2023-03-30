@@ -122,33 +122,23 @@ type deviceRepository struct {
 func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	result := d.db.WithContext(ctx).
-		Preload("Tenant").
+	query := d.db.WithContext(ctx).
 		Preload("Location").
-		Preload("Lwm2mTypes").
+		Preload("Tenant").
 		Preload("DeviceProfile").
+		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
 		Preload("Tags").
-		Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...)).
-		Find(&devices)
+		Preload("Alarms")
 
-	return devices, result.Error
-}
-
-func (d *deviceRepository) getTenantIDs(ctx context.Context, tenants ...string) []int {
-	var ten = []Tenant{}
-	d.db.WithContext(ctx).
-		Select("id").
-		Where("name IN ?", tenants).
-		Find(&ten)
-
-	var i []int
-	for _, t := range ten {
-		i = append(i, int(t.ID))
+	if len(tenants) > 0 {
+		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
 	}
 
-	return i
+	result := query.Find(&devices)
+
+	return devices, result.Error
 }
 
 func (d *deviceRepository) GetDeviceID(ctx context.Context, sensorID string) (string, error) {
@@ -349,6 +339,21 @@ func (d *deviceRepository) Seed(ctx context.Context, key string, reader io.Reade
 	return nil
 }
 
+func (d *deviceRepository) getTenantIDs(ctx context.Context, tenants ...string) []int {
+	var ten = []Tenant{}
+	d.db.WithContext(ctx).
+		Select("id").
+		Where("name IN ?", tenants).
+		Find(&ten)
+
+	var i []int
+	for _, t := range ten {
+		i = append(i, int(t.ID))
+	}
+
+	return i
+}
+
 type deviceRecord struct {
 	devEUI      string
 	internalID  string
@@ -387,19 +392,19 @@ func (dr deviceRecord) Device() Device {
 			Longitude: dr.lon,
 			Altitude:  0.0,
 		},
-		Environment: dr.where,		
+		Environment: dr.where,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: DeviceProfile{
 			Name:    dr.sensorType,
 			Decoder: dr.sensorType,
 		},
 		DeviceStatus: DeviceStatus{
-			BatteryLevel: -1,			
+			BatteryLevel: -1,
 		},
 		DeviceState: DeviceState{
 			Online: false,
-			State: DeviceStateUnknown,
-		},		
+			State:  DeviceStateUnknown,
+		},
 	}
 }
 
