@@ -326,8 +326,8 @@ func (dr deviceRecord) Device() Device {
 		Environment: dr.where,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: DeviceProfile{
-			Name:    dr.sensorType,
-			Decoder: dr.sensorType,
+			Name:     dr.sensorType,
+			Decoder:  dr.sensorType,
 			Interval: dr.interval,
 		},
 		DeviceStatus: DeviceStatus{
@@ -363,6 +363,9 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 
 	strToInt := func(str string, def int) int {
 		if n, err := strconv.Atoi(r[11]); err == nil {
+			if n == 0 {
+				return def
+			}
 			return n
 		}
 		return def

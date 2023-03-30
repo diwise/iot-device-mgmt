@@ -70,11 +70,7 @@ func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
 			logger.Debug().Msgf("checking batteryLevel status on %d devices...", len(devices))
 
 			for _, d := range devices {
-				if !d.DeviceState.Online {
-					break
-				}
-
-				logger.Debug().Msgf("checking batteryLevel status %s", d.DeviceID)
+				logger.Debug().Msgf("checking batteryLevel on %s, battery level: %d", d.DeviceID, d.DeviceStatus.BatteryLevel)
 
 				// TODO: get from config min level...
 				if d.DeviceStatus.BatteryLevel > 0 && d.DeviceStatus.BatteryLevel < 20 {
@@ -102,28 +98,28 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 			// TODO: get from config
 			devices, err := l.r.GetOnlineDevices(ctx)
 			if err != nil {
-				logger.Error().Err(err).Msg("could not check lastObserved")
+				logger.Error().Err(err).Msg("could not check lastObserved, failed to get devices")
 				break
 			}
 
 			logger.Debug().Msgf("checking lastObserved status on %d devices...", len(devices))
-
 			for _, d := range devices {
-				interval := d.DeviceProfile.Interval
-				if interval == 0 {
-					interval = 3600
-				}
-
-				logger.Debug().Msgf("checking lastObserved status on %s with interval %d seconds", d.DeviceID, interval)
+				logger.Debug().Msgf("checking lastObserved status on %s with profile %s and interval %d seconds", d.DeviceID, d.DeviceProfile.Name, d.DeviceProfile.Interval)
 
 				// TODO: get from config min level...
-				if d.DeviceStatus.LastObserved.UTC().Before(time.Now().UTC().Add(-time.Duration(d.DeviceProfile.Interval) * time.Second)) {
-					logger.Debug().Msgf("lastObserved is %s, publish alarm", d.DeviceStatus.LastObserved.Format(time.RFC3339Nano))
+				if !checkLastObservedIsAfter(logger, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
 					found <- d.DeviceID
 				}
 			}
 		}
 	}
+}
+
+func checkLastObservedIsAfter(logger zerolog.Logger, lastObserved time.Time, t time.Time, i int) bool {
+	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
+	after := lastObserved.After(shouldHaveBeenCalledAfter)
+	logger.Debug().Msgf("lastObserved: %s, after:%s, return: %t", lastObserved.Format(time.RFC3339Nano), shouldHaveBeenCalledAfter.Format(time.RFC3339Nano), after)
+	return after
 }
 
 func (w *watchdogImpl) run() {
