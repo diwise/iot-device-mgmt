@@ -91,7 +91,7 @@ type lastObservedWatcher struct {
 }
 
 func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	logger := logging.GetFromContext(ctx)
 
 	for {
@@ -109,14 +109,15 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 			logger.Debug().Msgf("checking lastObserved status on %d devices...", len(devices))
 
 			for _, d := range devices {
-				if !d.DeviceState.Online {
-					break
+				interval := d.DeviceProfile.Interval
+				if interval == 0 {
+					interval = 3600
 				}
 
-				logger.Debug().Msgf("checking lastObserved status %s", d.DeviceID)
+				logger.Debug().Msgf("checking lastObserved status on %s with interval %d seconds", d.DeviceID, interval)
 
 				// TODO: get from config min level...
-				if d.DeviceStatus.LastObserved.Before(time.Now().UTC().Add(-time.Duration(1) * time.Minute)) {
+				if d.DeviceStatus.LastObserved.UTC().Before(time.Now().UTC().Add(-time.Duration(d.DeviceProfile.Interval) * time.Second)) {
 					logger.Debug().Msgf("lastObserved is %s, publish alarm", d.DeviceStatus.LastObserved.Format(time.RFC3339Nano))
 					found <- d.DeviceID
 				}

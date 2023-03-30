@@ -132,6 +132,7 @@ func TestSeed(t *testing.T) {
 	device, err := r.GetDeviceByDeviceID(ctx, "intern-1234")
 	is.NoErr(err)
 	is.Equal("urn:oma:lwm2m:ext:3304", device.Lwm2mTypes[1].Urn)
+	is.Equal(60, device.DeviceProfile.Interval)
 }
 
 func testSetupDeviceRepository(t *testing.T) (*is.I, context.Context, DeviceRepository) {

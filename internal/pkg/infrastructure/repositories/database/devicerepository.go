@@ -328,6 +328,7 @@ func (dr deviceRecord) Device() Device {
 		DeviceProfile: DeviceProfile{
 			Name:    dr.sensorType,
 			Decoder: dr.sensorType,
+			Interval: dr.interval,
 		},
 		DeviceStatus: DeviceStatus{
 			BatteryLevel: -1,

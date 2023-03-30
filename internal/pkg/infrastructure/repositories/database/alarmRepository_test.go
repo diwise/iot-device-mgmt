@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	"github.com/google/uuid"
 	"github.com/matryer/is"
 )
 
@@ -30,8 +31,10 @@ func TestAddTwoAlarms(t *testing.T) {
 	alarms, _ := r.GetAlarms(ctx, false)
 	l := len(alarms)
 
+	deviceID := uuid.New().String()
+
 	err := r.AddAlarm(ctx, models.Alarm{
-		RefID:       models.AlarmIdentifier{DeviceID: "deviceID"},
+		RefID:       models.AlarmIdentifier{DeviceID: deviceID},
 		Type:        "type",
 		Severity:    models.AlarmSeverityHigh,
 		Description: "desc",
@@ -42,7 +45,7 @@ func TestAddTwoAlarms(t *testing.T) {
 	is.NoErr(err)
 
 	err = r.AddAlarm(ctx, models.Alarm{
-		RefID:       models.AlarmIdentifier{DeviceID: "deviceID"},
+		RefID:       models.AlarmIdentifier{DeviceID: deviceID},
 		Type:        "type",
 		Severity:    models.AlarmSeverityHigh,
 		Description: "desc",

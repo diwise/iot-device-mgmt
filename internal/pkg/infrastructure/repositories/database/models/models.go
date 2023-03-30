@@ -122,8 +122,9 @@ type Tag struct {
 type DeviceProfile struct {
 	gorm.Model `json:"-"`
 
-	Name    string `gorm:"uniqueIndex" json:"name"`
-	Decoder string `json:"decoder"`
+	Name     string `gorm:"uniqueIndex" json:"name"`
+	Decoder  string `json:"decoder"`
+	Interval int    `json:"interval"`
 }
 
 type Lwm2mType struct {
