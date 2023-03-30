@@ -24,6 +24,39 @@ func TestAddAlarms(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestAddTwoAlarms(t *testing.T) {
+	is, ctx, r := testSetupAlarmRepository(t)
+
+	alarms, _ := r.GetAlarms(ctx, false)
+	l := len(alarms)
+
+	err := r.AddAlarm(ctx, models.Alarm{
+		RefID:       models.AlarmIdentifier{DeviceID: "deviceID"},
+		Type:        "type",
+		Severity:    models.AlarmSeverityHigh,
+		Description: "desc",
+		Active:      true,
+		ObservedAt:  time.Now(),
+	})
+
+	is.NoErr(err)
+
+	err = r.AddAlarm(ctx, models.Alarm{
+		RefID:       models.AlarmIdentifier{DeviceID: "deviceID"},
+		Type:        "type",
+		Severity:    models.AlarmSeverityHigh,
+		Description: "desc",
+		Active:      true,
+		ObservedAt:  time.Now(),
+	})
+
+	is.NoErr(err)
+
+	alarms, _ = r.GetAlarms(ctx, false)
+
+	is.Equal(l+1, len(alarms))
+}
+
 func TestGetAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
 	err := r.AddAlarm(ctx, models.Alarm{

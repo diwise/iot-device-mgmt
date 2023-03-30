@@ -97,7 +97,7 @@ func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...stri
 
 	online := []Device{}
 	for _, device := range devices {
-		if device.DeviceState.Online == true {
+		if device.DeviceState.Online {
 			online = append(online, device)
 		}
 	}

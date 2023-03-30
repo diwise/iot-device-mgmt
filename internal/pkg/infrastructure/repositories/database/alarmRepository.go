@@ -6,6 +6,7 @@ import (
 	"gorm.io/gorm"
 
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
 //go:generate moq -rm -out alarmrepository_mock.go . AlarmRepository
@@ -36,9 +37,29 @@ func NewAlarmRepository(connect ConnectorFunc) (AlarmRepository, error) {
 }
 
 func (d *alarmRepository) AddAlarm(ctx context.Context, alarm Alarm) error {
+	logger := logging.GetFromContext(ctx)
+
+	a := &Alarm{}
+
+	result := d.db.Debug().WithContext(ctx).
+		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID, Active: true}).
+		First(&a)
+
+	if result.RowsAffected > 0 {
+		logger.Debug().Msgf("found an active alarm to update time on")
+		a.ObservedAt = alarm.ObservedAt
+		err := d.db.Debug().WithContext(ctx).
+			Save(&a).
+			Error
+		return err
+	}
+
+	logger.Debug().Msg("adding new alarm")
+
 	err := d.db.Debug().WithContext(ctx).
 		Save(&alarm).
 		Error
+
 	return err
 }
 
