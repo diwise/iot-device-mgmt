@@ -8,8 +8,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms/events"	
+	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
 
@@ -18,8 +18,9 @@ type AlarmService interface {
 	Start()
 	Stop()
 
-	GetAlarms(ctx context.Context, onlyActive bool) ([]models.Alarm, error)
-	AddAlarm(ctx context.Context, alarm models.Alarm) error
+	GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error)
+	AddAlarm(ctx context.Context, alarm db.Alarm) error
+	CloseAlarm(ctx context.Context, alarmID int) error
 }
 
 type alarmService struct {
@@ -33,8 +34,8 @@ func New(d db.AlarmRepository, m messaging.MsgContext) AlarmService {
 		messenger:       m,
 	}
 
-	as.messenger.RegisterTopicMessageHandler("alarms.batteryLevelWarning", WatchdogBatteryLevelWarningHandler(m, as))
-	as.messenger.RegisterTopicMessageHandler("alarms.lastObservedWarning", WatchdogLastObservedWarningHandler(m, as))
+	as.messenger.RegisterTopicMessageHandler("watchdog.batteryLevelChanged", BatteryLevelChangedHandler(m, as))
+	as.messenger.RegisterTopicMessageHandler("watchdog.deviceNotObserved", DeviceNotObservedHandler(m, as))
 
 	return as
 }
@@ -45,22 +46,30 @@ func (a *alarmService) Start() {
 func (a *alarmService) Stop() {
 }
 
-func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]models.Alarm, error) {
-	alarms, err := a.alarmRepository.GetAlarms(ctx, onlyActive)
+func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
+	alarms, err := a.alarmRepository.GetAll(ctx, onlyActive)
 	if err != nil {
 		return nil, err
 	}
 
 	return alarms, nil
 }
-func (a *alarmService) AddAlarm(ctx context.Context, alarm models.Alarm) error {
-	return a.alarmRepository.AddAlarm(ctx, alarm)
+func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
+	return a.alarmRepository.Add(ctx, alarm)
+}
+func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
+	err := a.alarmRepository.Close(ctx, alarmID)
+	if err != nil {
+		return err
+	}
+	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Timestamp: time.Now().UTC()})
 }
 
-func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
+func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		message := struct {
 			DeviceID   string    `json:"deviceID"`
+			Tenant     string    `json:"tenant"`
 			ObservedAt time.Time `json:"observedAt"`
 		}{}
 
@@ -72,12 +81,12 @@ func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, as Alarm
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
-		err = as.AddAlarm(ctx, models.Alarm{
-			RefID: models.AlarmIdentifier{
+		err = as.AddAlarm(ctx, db.Alarm{
+			RefID: db.AlarmIdentifier{
 				DeviceID: message.DeviceID,
 			},
 			Type:        msg.RoutingKey,
-			Severity:    models.AlarmSeverityLow,
+			Severity:    db.AlarmSeverityLow,
 			Active:      true,
 			Description: "",
 			ObservedAt:  message.ObservedAt,
@@ -91,10 +100,11 @@ func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, as Alarm
 	}
 }
 
-func WatchdogLastObservedWarningHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
+func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		message := struct {
 			DeviceID   string    `json:"deviceID"`
+			Tenant     string    `json:"tenant"`
 			ObservedAt time.Time `json:"observedAt"`
 		}{}
 
@@ -106,12 +116,12 @@ func WatchdogLastObservedWarningHandler(messenger messaging.MsgContext, as Alarm
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
-		err = as.AddAlarm(ctx, models.Alarm{
-			RefID: models.AlarmIdentifier{
+		err = as.AddAlarm(ctx, db.Alarm{
+			RefID: db.AlarmIdentifier{
 				DeviceID: message.DeviceID,
 			},
 			Type:        msg.RoutingKey,
-			Severity:    models.AlarmSeverityMedium,
+			Severity:    db.AlarmSeverityMedium,
 			Active:      true,
 			Description: "",
 			ObservedAt:  message.ObservedAt,

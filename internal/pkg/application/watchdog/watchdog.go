@@ -5,7 +5,7 @@ import (
 	"time"
 
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog/events"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/rs/zerolog"
@@ -48,10 +48,13 @@ func (w *watchdogImpl) Stop() {
 }
 
 type batteryLevelWatcher struct {
-	r db.DeviceRepository
+	r             db.DeviceRepository
+	batteryLevels map[string]int
 }
 
 func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
+	b.batteryLevels = make(map[string]int)
+
 	ticker := time.NewTicker(30 * time.Second)
 	logger := logging.GetFromContext(ctx)
 
@@ -70,12 +73,12 @@ func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
 			logger.Debug().Msgf("checking batteryLevel status on %d devices...", len(devices))
 
 			for _, d := range devices {
-				logger.Debug().Msgf("checking batteryLevel on %s, battery level: %d", d.DeviceID, d.DeviceStatus.BatteryLevel)
-
-				// TODO: get from config min level...
-				if d.DeviceStatus.BatteryLevel > 0 && d.DeviceStatus.BatteryLevel < 20 {
-					logger.Debug().Msgf("batteryLevel is %d, publish alarm", d.DeviceStatus.BatteryLevel)
-					found <- d.DeviceID
+				if level, ok := b.batteryLevels[d.DeviceID]; ok {
+					if d.DeviceStatus.BatteryLevel > 0 && d.DeviceStatus.BatteryLevel != level {
+						found <- d.DeviceID
+					}
+				} else {
+					b.batteryLevels[d.DeviceID] = d.DeviceStatus.BatteryLevel
 				}
 			}
 		}
@@ -94,8 +97,7 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
-			// TODO: get from config
+		case <-ticker.C:			
 			devices, err := l.r.GetOnlineDevices(ctx)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not check lastObserved, failed to get devices")
@@ -103,11 +105,10 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 			}
 
 			logger.Debug().Msgf("checking lastObserved status on %d devices...", len(devices))
-			for _, d := range devices {
-				logger.Debug().Msgf("checking lastObserved status on %s with profile %s and interval %d seconds", d.DeviceID, d.DeviceProfile.Name, d.DeviceProfile.Interval)
 
-				// TODO: get from config min level...
+			for _, d := range devices {				
 				if !checkLastObservedIsAfter(logger, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
+					logger.Debug().Msgf("lastObserved status on %s with profile %s and interval %d seconds", d.DeviceID, d.DeviceProfile.Name, d.DeviceProfile.Interval)
 					found <- d.DeviceID
 				}
 			}
@@ -141,49 +142,49 @@ func (w *watchdogImpl) run() {
 			ctx.Done()
 			return
 		case deviceID := <-w.batteryLevel:
-			w.HandleBatteryLevelMessage(ctx, deviceID)
+			w.BatteryLevelChangedHandler(ctx, deviceID)
 		case deviceID := <-w.lastObserved:
-			w.HandleLastObservedMessage(ctx, deviceID)
+			w.DeviceNotObservedHandler(ctx, deviceID)
 		}
 	}
 }
 
-func (w *watchdogImpl) HandleBatteryLevelMessage(ctx context.Context, deviceID string) {
+func (w *watchdogImpl) BatteryLevelChangedHandler(ctx context.Context, deviceID string) {
 	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
-		w.log.Error().Err(err).Msg("could not publish batteryLevelWarning, device not found")
+		w.log.Error().Err(err).Msg("could not publish BatteryLevelChanged, device not found")
 		return
 	}
 
-	err = w.messenger.PublishOnTopic(ctx, &BatteryLevelWarning{
+	err = w.messenger.PublishOnTopic(ctx, &BatteryLevelChanged{
 		DeviceID:   deviceID,
 		Tenant:     d.Tenant.Name,
 		ObservedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		w.log.Error().Err(err).Msg("could not publish batteryLevelWarning")
+		w.log.Error().Err(err).Msg("could not publish BatteryLevelChanged")
 		return
 	}
 
-	w.log.Debug().Msgf("BatteryLevelWarning published for %s", deviceID)
+	w.log.Debug().Msgf("BatteryLevelChanged published for %s", deviceID)
 }
 
-func (w *watchdogImpl) HandleLastObservedMessage(ctx context.Context, deviceID string) {
+func (w *watchdogImpl) DeviceNotObservedHandler(ctx context.Context, deviceID string) {
 	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
-		w.log.Error().Err(err).Msg("could not publish lastObservedWarning, device not found")
+		w.log.Error().Err(err).Msg("could not publish DeviceNotObserved, device not found")
 		return
 	}
 
-	err = w.messenger.PublishOnTopic(ctx, &LastObservedWarning{
+	err = w.messenger.PublishOnTopic(ctx, &DeviceNotObserved{
 		DeviceID:   deviceID,
 		Tenant:     d.Tenant.Name,
 		ObservedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		w.log.Error().Err(err).Msg("could not publish lastObservedWarning")
+		w.log.Error().Err(err).Msg("could not publish DeviceNotObserved")
 		return
 	}
 
-	w.log.Debug().Msgf("LastObservedWarning published for %s", deviceID)
+	w.log.Debug().Msgf("DeviceNotObserved published for %s", deviceID)
 }

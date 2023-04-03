@@ -1,4 +1,4 @@
-package database
+package devicemanagement
 
 import (
 	"bytes"
@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 
 	"github.com/matryer/is"
 	"github.com/rs/zerolog"
@@ -116,7 +116,7 @@ func TestUpdateDeviceState(t *testing.T) {
 func TestSeed(t *testing.T) {
 	is, ctx, r := testSetupDeviceRepository(t)
 
-	err := r.Seed(ctx, "devices.csv", bytes.NewBuffer([]byte(csvMock)))
+	err := r.Seed(ctx, bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
 
 	devices, err := r.GetDevices(ctx, "_default")

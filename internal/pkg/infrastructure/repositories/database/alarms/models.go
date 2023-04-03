@@ -1,4 +1,4 @@
-package models
+package alarms
 
 import (
 	"time"
@@ -18,7 +18,10 @@ type AlarmIdentifier struct {
 }
 
 type Alarm struct {
-	gorm.Model `json:"-"`
+	ID        uint           `gorm:"primarykey" json:"id"`
+	CreatedAt time.Time      `json:"-"`
+	UpdatedAt time.Time      `json:"-"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
 	RefID AlarmIdentifier `gorm:"embedded;embeddedPrefix:refID_" json:"refID"`
 

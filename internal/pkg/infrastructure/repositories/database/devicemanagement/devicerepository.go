@@ -1,4 +1,4 @@
-package database
+package devicemanagement
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"gorm.io/gorm"
 )
@@ -44,7 +44,7 @@ type DeviceRepository interface {
 	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error
 	UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error
 
-	Seed(context.Context, string, io.Reader) error
+	Seed(context.Context, io.Reader) error
 }
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")
@@ -245,7 +245,7 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 	return nil
 }
 
-func (d *deviceRepository) Seed(ctx context.Context, key string, reader io.Reader) error {
+func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
 	r := csv.NewReader(reader)
 	r.Comma = ';'
 

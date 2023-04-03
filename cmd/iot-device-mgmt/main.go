@@ -8,9 +8,11 @@ import (
 	"os"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	aDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
+	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -25,6 +27,7 @@ const serviceName string = "iot-device-mgmt"
 
 var knownDevicesFile string
 var opaFilePath string
+var alarmConfigFile string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -32,25 +35,29 @@ func main() {
 	defer cleanup()
 
 	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
+	flag.StringVar(&alarmConfigFile, "alarms", "/opt/diwise/config/alarms.csv", "A file containing alarms")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
-
 	conn := setupDatabaseConnection(logger)
-
 	deviceDB := setupDeviceDatabaseOrDie(logger, conn)
 	alarmDB := setupAlarmDatabaseOrDie(logger, conn)
+
 	messenger := setupMessagingOrDie(serviceName, logger)
 
-	service := service.New(deviceDB, messenger)
-	alarmService := alarms.New(alarmDB, messenger)
+	mgmtSvc := devicemanagement.New(deviceDB, messenger)
+
+	alarmSvc := alarms.New(alarmDB, messenger)
+	alarmSvc.Start()
+	defer alarmSvc.Stop()
 
 	watchdog := watchdog.New(deviceDB, messenger, logger)
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, service, alarmService)
+	r := setupRouter(logger, serviceName, mgmtSvc, alarmSvc)
+
+	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
 	err := http.ListenAndServe(apiPort, r)
 	if err != nil {
@@ -58,20 +65,20 @@ func main() {
 	}
 }
 
-func setupDatabaseConnection(logger zerolog.Logger) database.ConnectorFunc {
+func setupDatabaseConnection(logger zerolog.Logger) db.ConnectorFunc {
 	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
-		return database.NewPostgreSQLConnector(logger)
+		return db.NewPostgreSQLConnector(logger)
 	}
 
 	logger.Info().Msg("no sql database configured, using builtin sqlite instead")
-	return database.NewSQLiteConnector(logger)
+	return db.NewSQLiteConnector(logger)
 }
 
-func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc) database.AlarmRepository {
-	var db database.AlarmRepository
+func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) aDb.AlarmRepository {
+	var db aDb.AlarmRepository
 	var err error
 
-	db, err = database.NewAlarmRepository(conn)
+	db, err = aDb.NewAlarmRepository(conn)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
@@ -79,11 +86,11 @@ func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc)
 	return db
 }
 
-func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc) database.DeviceRepository {
-	var db database.DeviceRepository
+func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) dmDb.DeviceRepository {
+	var db dmDb.DeviceRepository
 	var err error
 
-	db, err = database.NewDeviceRepository(conn)
+	db, err = dmDb.NewDeviceRepository(conn)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to connect to database")
 	}
@@ -98,7 +105,7 @@ func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn database.ConnectorFunc
 	}
 	defer f.Close()
 
-	err = db.Seed(context.Background(), knownDevicesFile, f)
+	err = db.Seed(context.Background(), f)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("could not seed database with devices")
 	}
@@ -116,7 +123,7 @@ func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.Ms
 	return messenger
 }
 
-func setupRouter(logger zerolog.Logger, serviceName string, svc service.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
+func setupRouter(logger zerolog.Logger, serviceName string, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)

@@ -10,8 +10,9 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
+	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -106,13 +107,13 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	log := zerolog.Logger{}
 
-	db, err := database.NewDeviceRepository(database.NewSQLiteConnector(log))
+	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(log))
 	is.NoErr(err)
 
-	err = db.Seed(context.Background(), "devices.csv", bytes.NewBuffer([]byte(csvMock)))
+	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
 
-	app := service.New(db, &messaging.MsgContextMock{})
+	app := devicemanagement.New(db, &messaging.MsgContextMock{})
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)

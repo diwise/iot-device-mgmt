@@ -1,12 +1,11 @@
-package service
+package devicemanagement
 
 import (
 	"context"
 	"testing"
 	"time"
-
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	
+	dm "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
@@ -15,11 +14,11 @@ import (
 func TestCreateDevice(t *testing.T) {
 	is := is.New(t)
 
-	var model models.Device
+	var model dm.Device
 
 	m := messaging.MsgContextMock{}
-	r := database.DeviceRepositoryMock{
-		SaveFunc: func(ctx context.Context, device *models.Device) error {
+	r := dm.DeviceRepositoryMock{
+		SaveFunc: func(ctx context.Context, device *dm.Device) error {
 			model = *device
 			return nil
 		},

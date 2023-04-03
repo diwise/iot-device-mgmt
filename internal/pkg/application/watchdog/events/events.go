@@ -2,28 +2,28 @@ package events
 
 import "time"
 
-type BatteryLevelWarning struct {
+type BatteryLevelChanged struct {
 	DeviceID   string    `json:"deviceID"`
 	Tenant     string    `json:"tenant"`
 	ObservedAt time.Time `json:"observedAt"`
 }
 
-func (b *BatteryLevelWarning) ContentType() string {
+func (b *BatteryLevelChanged) ContentType() string {
 	return "application/json"
 }
-func (b *BatteryLevelWarning) TopicName() string {
-	return "alarms.batteryLevelWarning"
+func (b *BatteryLevelChanged) TopicName() string {
+	return "watchdog.batteryLevelChanged"
 }
 
-type LastObservedWarning struct {
+type DeviceNotObserved struct {
 	DeviceID   string    `json:"deviceID"`
 	Tenant     string    `json:"tenant"`
 	ObservedAt time.Time `json:"observedAt"`
 }
 
-func (l *LastObservedWarning) ContentType() string {
+func (l *DeviceNotObserved) ContentType() string {
 	return "application/json"
 }
-func (l *LastObservedWarning) TopicName() string {
-	return "alarms.lastObservedWarning"
+func (l *DeviceNotObserved) TopicName() string {
+	return "watchdog.deviceNotObserved"
 }

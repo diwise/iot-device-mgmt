@@ -1,4 +1,4 @@
-package service
+package devicemanagement
 
 import (
 	"encoding/json"

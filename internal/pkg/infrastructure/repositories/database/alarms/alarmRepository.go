@@ -1,19 +1,24 @@
-package database
+package alarms
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
-	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
 //go:generate moq -rm -out alarmrepository_mock.go . AlarmRepository
 
+var ErrAlarmNotFound = fmt.Errorf("alarm not found")
+
 type AlarmRepository interface {
-	GetAlarms(ctx context.Context, onlyActive bool) ([]Alarm, error)
-	AddAlarm(ctx context.Context, alarm Alarm) error
+	GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error)
+	Add(ctx context.Context, alarm Alarm) error
+	Close(ctx context.Context, alarmID int) error
 }
 
 type alarmRepository struct {
@@ -36,7 +41,29 @@ func NewAlarmRepository(connect ConnectorFunc) (AlarmRepository, error) {
 	}, nil
 }
 
-func (d *alarmRepository) AddAlarm(ctx context.Context, alarm Alarm) error {
+func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
+	a := Alarm{}
+
+	result := d.db.WithContext(ctx).
+		Where(&Alarm{ID: uint(alarmID)}).
+		First(&a)
+
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return ErrAlarmNotFound
+		}
+		return result.Error
+	}
+
+	a.Active = false
+	err := d.db.Debug().WithContext(ctx).
+		Save(&a).
+		Error
+
+	return err
+}
+
+func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) error {
 	logger := logging.GetFromContext(ctx)
 
 	a := &Alarm{}
@@ -63,7 +90,7 @@ func (d *alarmRepository) AddAlarm(ctx context.Context, alarm Alarm) error {
 	return err
 }
 
-func (d *alarmRepository) GetAlarms(ctx context.Context, onlyActive bool) ([]Alarm, error) {
+func (d *alarmRepository) GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error) {
 	var alarms []Alarm
 
 	query := d.db.WithContext(ctx)

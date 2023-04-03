@@ -6,11 +6,11 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"strconv"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/service"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/models"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -22,7 +22,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, svc service.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
+func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
@@ -62,6 +62,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			})
 
 			r.Get("/alarms", getAlarmsHandler(log, alarmSvc))
+			r.Post("/alarms/:alarmID", patchAlarmsHandler(log, alarmSvc))
 		})
 
 	})
@@ -69,7 +70,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 	return router
 }
 
-func createDeviceHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -104,7 +105,7 @@ func createDeviceHandler(log zerolog.Logger, svc service.DeviceManagement) http.
 	}
 }
 
-func queryDevicesHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -114,12 +115,12 @@ func queryDevicesHandler(log zerolog.Logger, svc service.DeviceManagement) http.
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		var devices []models.Device
+		var devices []dmDb.Device
 
 		sensorID := r.URL.Query().Get("devEUI") // TODO: change to sensorID?
 		if sensorID != "" {
 			device, err := svc.GetDeviceBySensorID(ctx, sensorID, allowedTenants...)
-			if errors.Is(err, db.ErrDeviceNotFound) {
+			if errors.Is(err, dmDb.ErrDeviceNotFound) {
 				requestLogger.Debug().Msgf("%s not found", sensorID)
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -153,7 +154,7 @@ func queryDevicesHandler(log zerolog.Logger, svc service.DeviceManagement) http.
 	}
 }
 
-func getDeviceDetails(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+func getDeviceDetails(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -166,7 +167,7 @@ func getDeviceDetails(log zerolog.Logger, svc service.DeviceManagement) http.Han
 		deviceID := chi.URLParam(r, "deviceID")
 
 		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
-		if errors.Is(err, db.ErrDeviceNotFound) {
+		if errors.Is(err, dmDb.ErrDeviceNotFound) {
 			requestLogger.Debug().Msgf("%s not found", deviceID)
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -202,9 +203,6 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		//deviceID := chi.URLParam(r, "deviceID")
-
-		//if deviceID == "" {
 		onlyActive := r.URL.Query().Get("active") == "true"
 		alarms, err := svc.GetAlarms(ctx, onlyActive)
 		if err != nil {
@@ -222,37 +220,40 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		w.Write(b)
-		return
-		//}
-
-		/*
-			device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
-			if errors.Is(err, db.ErrDeviceNotFound) {
-				requestLogger.Debug().Msgf("%s not found", deviceID)
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-			if err != nil {
-				requestLogger.Error().Err(err).Msg("could not fetch data")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			b, err := json.Marshal(device.Alarms)
-			if err != nil {
-				requestLogger.Error().Err(err).Msg("unable to fetch alarms")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write(b)
-		*/
 	}
 }
 
-func patchDeviceHandler(log zerolog.Logger, svc service.DeviceManagement) http.HandlerFunc {
+func patchAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "delete-alarms")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		id := chi.URLParam(r, "alarmID")
+		alarmID, err := strconv.Atoi(id)
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("id is invalid")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err = svc.CloseAlarm(ctx, alarmID)
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("unable to close alarm")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+func patchDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
