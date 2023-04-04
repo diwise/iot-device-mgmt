@@ -362,7 +362,7 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 	}
 
 	strToInt := func(str string, def int) int {
-		if n, err := strconv.Atoi(r[11]); err == nil {
+		if n, err := strconv.Atoi(str); err == nil {
 			if n == 0 {
 				return def
 			}

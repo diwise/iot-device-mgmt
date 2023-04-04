@@ -2,13 +2,18 @@ package alarms
 
 import (
 	"context"
+	"encoding/csv"
 	"encoding/json"
+	"fmt"
+	"io"
+	"os"
+	"strconv"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 
-	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms/events"	
+	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms/events"
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
@@ -26,12 +31,14 @@ type AlarmService interface {
 type alarmService struct {
 	alarmRepository db.AlarmRepository
 	messenger       messaging.MsgContext
+	config          *Config
 }
 
-func New(d db.AlarmRepository, m messaging.MsgContext) AlarmService {
+func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Config) AlarmService {
 	as := &alarmService{
 		alarmRepository: d,
 		messenger:       m,
+		config:          cfg,
 	}
 
 	as.messenger.RegisterTopicMessageHandler("watchdog.batteryLevelChanged", BatteryLevelChangedHandler(m, as))
@@ -40,11 +47,96 @@ func New(d db.AlarmRepository, m messaging.MsgContext) AlarmService {
 	return as
 }
 
-func (a *alarmService) Start() {
+type Config struct {
+	ConfigRows []ConfigRow
+}
+type ConfigRow struct {
+	DeviceID   string
+	FunctionID string
+	Name       string
+	Type       string
+	Min        float64
+	Max        float64
+	Severity   int
 }
 
-func (a *alarmService) Stop() {
+func loadFile(configFile string) (io.ReadCloser, error) {
+	if _, err := os.Stat(configFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("file with known devices (%s) could not be found", configFile)
+	}
+
+	f, err := os.Open(configFile)
+	if err != nil {
+		return nil, fmt.Errorf("file with known devices (%s) could not be opened", configFile)
+	}
+
+	return f, nil
 }
+
+func LoadConfiguration(configFile string) *Config {
+	f, err := loadFile(configFile)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	r := csv.NewReader(f)
+	r.Comma = ';'
+
+	//deviceID;functionID;alarmName;alarmType;min;max;severity
+	//deviceID;;batteryLevelChanged;MIN;20;;1
+	//deviceID;;deviceNotObserved;MAX;3600;;2
+	//;featureID;levelChanged;BETWEEN;20;100;3
+
+	strTof64 := func(s string) float64 {
+		f, err := strconv.ParseFloat(s, 64)
+		if err != nil {
+			return 0.0
+		}
+		return f
+	}
+
+	strToInt := func(str string, def int) int {
+		if n, err := strconv.Atoi(str); err == nil {
+			if n == 0 {
+				return def
+			}
+			return n
+		}
+		return def
+	}
+
+	rows, err := r.ReadAll()
+	if err != nil {
+		return nil
+	}
+
+	config := Config{
+		ConfigRows: make([]ConfigRow, 0),
+	}
+
+	for i, row := range rows {
+		if i == 0 {
+			continue
+		}
+		cfg := ConfigRow{
+			DeviceID:   row[0],
+			FunctionID: row[1],
+			Name:       row[2],
+			Type:       row[3],
+			Min:        strTof64(row[4]),
+			Max:        strTof64(row[5]),
+			Severity:   strToInt(row[6], 0),
+		}
+
+		config.ConfigRows = append(config.ConfigRows, cfg)
+	}
+
+	return &config
+}
+
+func (a *alarmService) Start() {}
+func (a *alarmService) Stop()  {}
 
 func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
 	alarms, err := a.alarmRepository.GetAll(ctx, onlyActive)
@@ -81,6 +173,8 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
+		//TODO: get from config and create alarm if...
+
 		err = as.AddAlarm(ctx, db.Alarm{
 			RefID: db.AlarmIdentifier{
 				DeviceID: message.DeviceID,
@@ -113,6 +207,8 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 			logger.Error().Err(err).Msg("failed to unmarshal message")
 			return
 		}
+
+		//TODO: get from config and create alarm if...
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 

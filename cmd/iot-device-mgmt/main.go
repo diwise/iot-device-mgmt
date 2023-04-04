@@ -47,7 +47,7 @@ func main() {
 
 	mgmtSvc := devicemanagement.New(deviceDB, messenger)
 
-	alarmSvc := alarms.New(alarmDB, messenger)
+	alarmSvc := alarms.New(alarmDB, messenger, alarms.LoadConfiguration(alarmConfigFile))
 	alarmSvc.Start()
 	defer alarmSvc.Stop()
 

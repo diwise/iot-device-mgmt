@@ -97,7 +97,7 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:			
+		case <-ticker.C:
 			devices, err := l.r.GetOnlineDevices(ctx)
 			if err != nil {
 				logger.Error().Err(err).Msg("could not check lastObserved, failed to get devices")
@@ -106,7 +106,7 @@ func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
 
 			logger.Debug().Msgf("checking lastObserved status on %d devices...", len(devices))
 
-			for _, d := range devices {				
+			for _, d := range devices {
 				if !checkLastObservedIsAfter(logger, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
 					logger.Debug().Msgf("lastObserved status on %s with profile %s and interval %d seconds", d.DeviceID, d.DeviceProfile.Name, d.DeviceProfile.Interval)
 					found <- d.DeviceID

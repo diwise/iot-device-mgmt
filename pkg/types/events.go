@@ -55,4 +55,3 @@ func (d *DeviceStateUpdated) ContentType() string {
 func (d *DeviceStateUpdated) TopicName() string {
 	return "device.stateUpdated"
 }
-

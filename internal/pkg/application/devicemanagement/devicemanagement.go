@@ -7,7 +7,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
-	
+
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"

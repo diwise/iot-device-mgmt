@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 	"time"
-	
+
 	dm "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
