@@ -41,3 +41,17 @@ func (d *DeviceStatusUpdated) ContentType() string {
 func (d *DeviceStatusUpdated) TopicName() string {
 	return "device.statusUpdated"
 }
+
+type DeviceStateUpdated struct {
+	DeviceID  string    `json:"deviceID"`
+	State     int       `json:"state"`
+	Tenant    string    `json:"tenant,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+func (d *DeviceStateUpdated) ContentType() string {
+	return "application/json"
+}
+func (d *DeviceStateUpdated) TopicName() string {
+	return "device.stateUpdated"
+}

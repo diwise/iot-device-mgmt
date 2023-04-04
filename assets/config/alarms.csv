@@ -1,0 +1,3 @@
+	deviceID;functionID;alarmName;alarmType;min;max;severity
+	se:servanet:lora:msva:116c52b4274f;;batteryLevel;MIN;20;;1
+	
