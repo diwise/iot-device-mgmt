@@ -39,9 +39,8 @@ func New(d r.DeviceRepository, m messaging.MsgContext) DeviceManagement {
 		messenger:        m,
 	}
 
-	dm.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusTopicHandler(m, dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.batteryLevelWarning", WatchdogBatteryLevelWarningHandler(m, dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.lastObservedWarning", WatchdogLastObservedWarningHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", AlarmsCreatedHandler(m, dm))
 
 	return dm
 }
@@ -131,7 +130,7 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	})
 }
 
-func DeviceStatusTopicHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
+func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		status := t.DeviceStatus{}
 
@@ -166,11 +165,20 @@ func DeviceStatusTopicHandler(messenger messaging.MsgContext, dm DeviceManagemen
 	}
 }
 
-func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
+func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		message := struct {
-			DeviceID   string    `json:"deviceID"`
-			ObservedAt time.Time `json:"observedAt"`
+			Alarm struct {
+				RefID struct {
+					DeviceID string `json:"deviceID,omitempty"`
+				} `json:"refID"`
+				Type        string    `json:"type"`
+				Severity    int       `json:"severity"`
+				Description string    `json:"description"`
+				Active      bool      `json:"active"`
+				ObservedAt  time.Time `json:"observedAt"`
+			} `json:"alarm"`
+			Timestamp time.Time `json:"timestamp"`
 		}{}
 
 		err := json.Unmarshal(msg.Body, &message)
@@ -179,49 +187,36 @@ func WatchdogBatteryLevelWarningHandler(messenger messaging.MsgContext, dm Devic
 			return
 		}
 
-		d, err := dm.GetDeviceByDeviceID(ctx, message.DeviceID)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to retrieve message")
+		if len(message.Alarm.RefID.DeviceID) == 0 {
 			return
 		}
 
-		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
+		deviceID := message.Alarm.RefID.DeviceID
 
-		dm.UpdateDeviceState(ctx, message.DeviceID, r.DeviceState{
+		logger = logger.With().Str("deviceID", deviceID).Logger()
+
+		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to retrieve device")
+			return
+		}
+
+		state := r.DeviceStateUnknown
+		switch message.Alarm.Severity {
+		case 1:
+			state = r.DeviceStateOK
+		case 2:
+			state = r.DeviceStateWarning
+		case 3:
+			state = r.DeviceStateError
+		default:
+			state = r.DeviceStateOK
+		}
+
+		dm.UpdateDeviceState(ctx, deviceID, r.DeviceState{
 			Online:     d.DeviceState.Online,
-			State:      r.DeviceStateWarning,
-			ObservedAt: message.ObservedAt,
-		})
-
-		logger.Debug().Msgf("%s handled", msg.RoutingKey)
-	}
-}
-
-func WatchdogLastObservedWarningHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		message := struct {
-			DeviceID   string    `json:"deviceID"`
-			ObservedAt time.Time `json:"observedAt"`
-		}{}
-
-		err := json.Unmarshal(msg.Body, &message)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
-			return
-		}
-
-		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
-
-		d, err := dm.GetDeviceByDeviceID(ctx, message.DeviceID)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to retrieve message")
-			return
-		}
-
-		dm.UpdateDeviceState(ctx, message.DeviceID, r.DeviceState{
-			Online:     d.DeviceState.Online,
-			State:      r.DeviceStateWarning,
-			ObservedAt: message.ObservedAt,
+			State:      state,
+			ObservedAt: message.Timestamp,
 		})
 
 		logger.Debug().Msgf("%s handled", msg.RoutingKey)

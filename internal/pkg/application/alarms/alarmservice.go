@@ -192,7 +192,11 @@ func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Ala
 }
 
 func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
-	return a.alarmRepository.Add(ctx, alarm)
+	err := a.alarmRepository.Add(ctx, alarm)
+	if err != nil {
+		return err
+	}
+	return a.messenger.PublishOnTopic(ctx, &AlarmCreated{Alarm: alarm, Timestamp: time.Now().UTC()})
 }
 
 func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
