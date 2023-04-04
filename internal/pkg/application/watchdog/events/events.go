@@ -3,9 +3,10 @@ package events
 import "time"
 
 type BatteryLevelChanged struct {
-	DeviceID   string    `json:"deviceID"`
-	Tenant     string    `json:"tenant"`
-	ObservedAt time.Time `json:"observedAt"`
+	DeviceID     string    `json:"deviceID"`
+	BatteryLevel int       `json:"batteryLevel"`
+	Tenant       string    `json:"tenant"`
+	ObservedAt   time.Time `json:"observedAt"`
 }
 
 func (b *BatteryLevelChanged) ContentType() string {

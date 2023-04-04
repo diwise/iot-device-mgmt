@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -26,15 +27,17 @@ type AlarmService interface {
 	GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error)
 	AddAlarm(ctx context.Context, alarm db.Alarm) error
 	CloseAlarm(ctx context.Context, alarmID int) error
+
+	GetConfiguration() Configuration
 }
 
 type alarmService struct {
 	alarmRepository db.AlarmRepository
 	messenger       messaging.MsgContext
-	config          *Config
+	config          *Configuration
 }
 
-func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Config) AlarmService {
+func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Configuration) AlarmService {
 	as := &alarmService{
 		alarmRepository: d,
 		messenger:       m,
@@ -47,17 +50,24 @@ func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Config) AlarmService
 	return as
 }
 
-type Config struct {
-	ConfigRows []ConfigRow
+type Configuration struct {
+	DeviceAlarmConfigurations   []DeviceAlarmConfig
+	FunctionAlarmConfigurations []FunctionAlarmConfig
 }
-type ConfigRow struct {
-	DeviceID   string
+type AlarmConfig struct {
+	Name     string
+	Type     string
+	Min      float64
+	Max      float64
+	Severity int
+}
+type DeviceAlarmConfig struct {
+	DeviceID string
+	AlarmConfig
+}
+type FunctionAlarmConfig struct {
 	FunctionID string
-	Name       string
-	Type       string
-	Min        float64
-	Max        float64
-	Severity   int
+	AlarmConfig
 }
 
 func loadFile(configFile string) (io.ReadCloser, error) {
@@ -73,7 +83,7 @@ func loadFile(configFile string) (io.ReadCloser, error) {
 	return f, nil
 }
 
-func LoadConfiguration(configFile string) *Config {
+func LoadConfiguration(configFile string) *Configuration {
 	f, err := loadFile(configFile)
 	if err != nil {
 		return nil
@@ -111,15 +121,25 @@ func LoadConfiguration(configFile string) *Config {
 		return nil
 	}
 
-	config := Config{
-		ConfigRows: make([]ConfigRow, 0),
+	config := Configuration{
+		DeviceAlarmConfigurations:   make([]DeviceAlarmConfig, 0),
+		FunctionAlarmConfigurations: make([]FunctionAlarmConfig, 0),
 	}
 
 	for i, row := range rows {
 		if i == 0 {
 			continue
 		}
-		cfg := ConfigRow{
+
+		cfg := struct {
+			DeviceID   string
+			FunctionID string
+			Name       string
+			Type       string
+			Min        float64
+			Max        float64
+			Severity   int
+		}{
 			DeviceID:   row[0],
 			FunctionID: row[1],
 			Name:       row[2],
@@ -129,7 +149,31 @@ func LoadConfiguration(configFile string) *Config {
 			Severity:   strToInt(row[6], 0),
 		}
 
-		config.ConfigRows = append(config.ConfigRows, cfg)
+		if len(cfg.DeviceID) > 0 && len(cfg.FunctionID) == 0 {
+			config.DeviceAlarmConfigurations = append(config.DeviceAlarmConfigurations, DeviceAlarmConfig{
+				DeviceID: cfg.DeviceID,
+				AlarmConfig: AlarmConfig{
+					Name:     cfg.Name,
+					Type:     cfg.Type,
+					Min:      cfg.Min,
+					Max:      cfg.Max,
+					Severity: cfg.Severity,
+				},
+			})
+		}
+
+		if len(cfg.FunctionID) > 0 && len(cfg.DeviceID) == 0 {
+			config.FunctionAlarmConfigurations = append(config.FunctionAlarmConfigurations, FunctionAlarmConfig{
+				FunctionID: cfg.FunctionID,
+				AlarmConfig: AlarmConfig{
+					Name:     cfg.Name,
+					Type:     cfg.Type,
+					Min:      cfg.Min,
+					Max:      cfg.Max,
+					Severity: cfg.Severity,
+				},
+			})
+		}
 	}
 
 	return &config
@@ -146,9 +190,11 @@ func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Ala
 
 	return alarms, nil
 }
+
 func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
 	return a.alarmRepository.Add(ctx, alarm)
 }
+
 func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 	err := a.alarmRepository.Close(ctx, alarmID)
 	if err != nil {
@@ -157,12 +203,17 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Timestamp: time.Now().UTC()})
 }
 
+func (a *alarmService) GetConfiguration() Configuration {
+	return *a.config
+}
+
 func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		message := struct {
-			DeviceID   string    `json:"deviceID"`
-			Tenant     string    `json:"tenant"`
-			ObservedAt time.Time `json:"observedAt"`
+			DeviceID     string    `json:"deviceID"`
+			BatteryLevel int       `json:"batteryLevel"`
+			Tenant       string    `json:"tenant"`
+			ObservedAt   time.Time `json:"observedAt"`
 		}{}
 
 		err := json.Unmarshal(msg.Body, &message)
@@ -173,21 +224,26 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
-		//TODO: get from config and create alarm if...
-
-		err = as.AddAlarm(ctx, db.Alarm{
-			RefID: db.AlarmIdentifier{
-				DeviceID: message.DeviceID,
-			},
-			Type:        msg.RoutingKey,
-			Severity:    db.AlarmSeverityLow,
-			Active:      true,
-			Description: "",
-			ObservedAt:  message.ObservedAt,
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("could not add alarm")
-			return
+		for _, cfg := range as.GetConfiguration().DeviceAlarmConfigurations {
+			if strings.EqualFold(cfg.DeviceID, message.DeviceID) {
+				if cfg.Name == "batteryLevel" && message.BatteryLevel < int(cfg.Min) {
+					err := as.AddAlarm(ctx, db.Alarm{
+						RefID: db.AlarmIdentifier{
+							DeviceID: message.DeviceID,
+						},
+						Type:        cfg.Type,
+						Severity:    cfg.Severity,
+						Active:      true,
+						ObservedAt:  time.Now().UTC(),
+						Description: fmt.Sprintf("Batterinivå låg %d (min: %d)", message.BatteryLevel, int(cfg.Min)),
+					})
+					if err != nil {
+						logger.Error().Err(err).Msg("could not add alarm")
+						return
+					}
+					break
+				}
+			}
 		}
 
 		logger.Debug().Msgf("%s handled", msg.RoutingKey)
@@ -208,20 +264,19 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 			return
 		}
 
-		//TODO: get from config and create alarm if...
-
 		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
 
 		err = as.AddAlarm(ctx, db.Alarm{
 			RefID: db.AlarmIdentifier{
 				DeviceID: message.DeviceID,
 			},
-			Type:        msg.RoutingKey,
-			Severity:    db.AlarmSeverityMedium,
+			Type:        "deviceNotObserved",
+			Severity:    1,
 			Active:      true,
-			Description: "",
-			ObservedAt:  message.ObservedAt,
+			ObservedAt:  time.Now().UTC(),
+			Description: fmt.Sprintf("Ingen kommunikation registrerad från %s", message.DeviceID),
 		})
+
 		if err != nil {
 			logger.Error().Err(err).Msg("could not add alarm")
 			return

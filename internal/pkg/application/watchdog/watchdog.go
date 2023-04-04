@@ -157,9 +157,10 @@ func (w *watchdogImpl) BatteryLevelChangedHandler(ctx context.Context, deviceID 
 	}
 
 	err = w.messenger.PublishOnTopic(ctx, &BatteryLevelChanged{
-		DeviceID:   deviceID,
-		Tenant:     d.Tenant.Name,
-		ObservedAt: time.Now().UTC(),
+		DeviceID:     deviceID,
+		BatteryLevel: d.DeviceStatus.BatteryLevel,
+		Tenant:       d.Tenant.Name,
+		ObservedAt:   time.Now().UTC(),
 	})
 	if err != nil {
 		w.log.Error().Err(err).Msg("could not publish BatteryLevelChanged")

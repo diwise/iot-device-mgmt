@@ -28,6 +28,9 @@ var _ AlarmService = &AlarmServiceMock{}
 //			GetAlarmsFunc: func(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
 //				panic("mock out the GetAlarms method")
 //			},
+//			GetConfigurationFunc: func() Configuration {
+//				panic("mock out the GetConfiguration method")
+//			},
 //			StartFunc: func()  {
 //				panic("mock out the Start method")
 //			},
@@ -49,6 +52,9 @@ type AlarmServiceMock struct {
 
 	// GetAlarmsFunc mocks the GetAlarms method.
 	GetAlarmsFunc func(ctx context.Context, onlyActive bool) ([]db.Alarm, error)
+
+	// GetConfigurationFunc mocks the GetConfiguration method.
+	GetConfigurationFunc func() Configuration
 
 	// StartFunc mocks the Start method.
 	StartFunc func()
@@ -79,6 +85,9 @@ type AlarmServiceMock struct {
 			// OnlyActive is the onlyActive argument value.
 			OnlyActive bool
 		}
+		// GetConfiguration holds details about calls to the GetConfiguration method.
+		GetConfiguration []struct {
+		}
 		// Start holds details about calls to the Start method.
 		Start []struct {
 		}
@@ -86,11 +95,12 @@ type AlarmServiceMock struct {
 		Stop []struct {
 		}
 	}
-	lockAddAlarm   sync.RWMutex
-	lockCloseAlarm sync.RWMutex
-	lockGetAlarms  sync.RWMutex
-	lockStart      sync.RWMutex
-	lockStop       sync.RWMutex
+	lockAddAlarm         sync.RWMutex
+	lockCloseAlarm       sync.RWMutex
+	lockGetAlarms        sync.RWMutex
+	lockGetConfiguration sync.RWMutex
+	lockStart            sync.RWMutex
+	lockStop             sync.RWMutex
 }
 
 // AddAlarm calls AddAlarmFunc.
@@ -198,6 +208,33 @@ func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
 	mock.lockGetAlarms.RLock()
 	calls = mock.calls.GetAlarms
 	mock.lockGetAlarms.RUnlock()
+	return calls
+}
+
+// GetConfiguration calls GetConfigurationFunc.
+func (mock *AlarmServiceMock) GetConfiguration() Configuration {
+	if mock.GetConfigurationFunc == nil {
+		panic("AlarmServiceMock.GetConfigurationFunc: method is nil but AlarmService.GetConfiguration was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockGetConfiguration.Lock()
+	mock.calls.GetConfiguration = append(mock.calls.GetConfiguration, callInfo)
+	mock.lockGetConfiguration.Unlock()
+	return mock.GetConfigurationFunc()
+}
+
+// GetConfigurationCalls gets all the calls that were made to GetConfiguration.
+// Check the length with:
+//
+//	len(mockedAlarmService.GetConfigurationCalls())
+func (mock *AlarmServiceMock) GetConfigurationCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockGetConfiguration.RLock()
+	calls = mock.calls.GetConfiguration
+	mock.lockGetConfiguration.RUnlock()
 	return calls
 }
 
