@@ -8,6 +8,7 @@ import (
 
 type AlarmCreated struct {
 	Alarm     db.Alarm  `json:"alarm"`
+	Tenant    string    `json:"tenant"`
 	Timestamp time.Time `json:"timestamp"`
 }
 
@@ -20,6 +21,7 @@ func (l *AlarmCreated) TopicName() string {
 
 type AlarmClosed struct {
 	ID        int       `json:"id"`
+	Tenant    string    `json:"tenant"`
 	Timestamp time.Time `json:"timestamp"`
 }
 

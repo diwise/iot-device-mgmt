@@ -29,5 +29,6 @@ type Alarm struct {
 	Severity    int       `json:"severity"`
 	Description string    `json:"description"`
 	Active      bool      `json:"active"`
+	Tenant      string    `json:"tenant"`
 	ObservedAt  time.Time `json:"observedAt"`
 }

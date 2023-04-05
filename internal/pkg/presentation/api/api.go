@@ -37,22 +37,6 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			}
 			r.Use(authenticator)
 
-			/*
-
-				GET
-				/api/v0/devices - get all
-				/api/v0/devices/stats - total, online, warning ...
-				/api/v0/devices/:deviceID - single
-				/api/v0/devices/:deviceID/alarms - all alarms
-
-				POST
-				/api/v0/devices - create new device
-
-				PATCH
-				/api/v0/devices/:deviceID - update device
-
-			*/
-
 			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", queryDevicesHandler(log, svc))
 				r.Get("/{deviceID}", getDeviceDetails(log, svc))
@@ -62,7 +46,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			})
 
 			r.Get("/alarms", getAlarmsHandler(log, alarmSvc))
-			r.Post("/alarms/:alarmID", patchAlarmsHandler(log, alarmSvc))
+			r.Patch("/alarms/{alarmID}", patchAlarmsHandler(log, alarmSvc))
 		})
 
 	})

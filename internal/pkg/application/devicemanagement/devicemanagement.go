@@ -132,7 +132,14 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 
 func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		status := t.DeviceStatus{}
+		status := struct {
+			DeviceID     string   `json:"deviceID"`
+			BatteryLevel int      `json:"batteryLevel"`
+			Code         int      `json:"statusCode"`
+			Messages     []string `json:"statusMessages,omitempty"`
+			Tenant       string   `json:"tenant,omitempty"`
+			Timestamp    string   `json:"timestamp"`
+		}{}
 
 		err := json.Unmarshal(msg.Body, &status)
 		if err != nil {
@@ -142,9 +149,15 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 
 		logger = logger.With().Str("deviceID", status.DeviceID).Logger()
 
+		lastObserved, err := time.Parse(time.RFC3339Nano, status.Timestamp)
+		if err != nil {
+			logger.Error().Err(err).Msg("device-status contains no valid timestamp")
+			lastObserved = time.Now().UTC()
+		}
+
 		err = dm.UpdateDeviceStatus(ctx, status.DeviceID, r.DeviceStatus{
 			BatteryLevel: status.BatteryLevel,
-			LastObserved: status.LastObserved,
+			LastObserved: lastObserved,
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update status on device")
@@ -154,7 +167,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		err = dm.UpdateDeviceState(ctx, status.DeviceID, r.DeviceState{
 			Online:     true,
 			State:      r.DeviceStateOK,
-			ObservedAt: status.LastObserved,
+			ObservedAt: lastObserved,
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update state on device")

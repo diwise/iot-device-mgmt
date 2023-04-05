@@ -17,6 +17,7 @@ var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 
 type AlarmRepository interface {
 	GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error)
+	GetByID(ctx context.Context, alarmID int) (Alarm, error)
 	Add(ctx context.Context, alarm Alarm) error
 	Close(ctx context.Context, alarmID int) error
 }
@@ -88,6 +89,21 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) error {
 		Error
 
 	return err
+}
+
+func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
+	alarm := &Alarm{}
+
+	err := d.db.WithContext(ctx).
+		Where(&Alarm{ID: uint(alarmID)}).
+		First(&alarm).
+		Error
+
+	if err != nil {
+		return Alarm{}, nil
+	}
+
+	return *alarm, nil
 }
 
 func (d *alarmRepository) GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error) {

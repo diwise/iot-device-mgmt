@@ -27,6 +27,9 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //			GetAllFunc: func(ctx context.Context, onlyActive bool) ([]Alarm, error) {
 //				panic("mock out the GetAll method")
 //			},
+//			GetByIDFunc: func(ctx context.Context, alarmID int) (Alarm, error) {
+//				panic("mock out the GetByID method")
+//			},
 //		}
 //
 //		// use mockedAlarmRepository in code that requires AlarmRepository
@@ -42,6 +45,9 @@ type AlarmRepositoryMock struct {
 
 	// GetAllFunc mocks the GetAll method.
 	GetAllFunc func(ctx context.Context, onlyActive bool) ([]Alarm, error)
+
+	// GetByIDFunc mocks the GetByID method.
+	GetByIDFunc func(ctx context.Context, alarmID int) (Alarm, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -66,10 +72,18 @@ type AlarmRepositoryMock struct {
 			// OnlyActive is the onlyActive argument value.
 			OnlyActive bool
 		}
+		// GetByID holds details about calls to the GetByID method.
+		GetByID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+		}
 	}
-	lockAdd    sync.RWMutex
-	lockClose  sync.RWMutex
-	lockGetAll sync.RWMutex
+	lockAdd     sync.RWMutex
+	lockClose   sync.RWMutex
+	lockGetAll  sync.RWMutex
+	lockGetByID sync.RWMutex
 }
 
 // Add calls AddFunc.
@@ -177,5 +191,41 @@ func (mock *AlarmRepositoryMock) GetAllCalls() []struct {
 	mock.lockGetAll.RLock()
 	calls = mock.calls.GetAll
 	mock.lockGetAll.RUnlock()
+	return calls
+}
+
+// GetByID calls GetByIDFunc.
+func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
+	if mock.GetByIDFunc == nil {
+		panic("AlarmRepositoryMock.GetByIDFunc: method is nil but AlarmRepository.GetByID was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		AlarmID int
+	}{
+		Ctx:     ctx,
+		AlarmID: alarmID,
+	}
+	mock.lockGetByID.Lock()
+	mock.calls.GetByID = append(mock.calls.GetByID, callInfo)
+	mock.lockGetByID.Unlock()
+	return mock.GetByIDFunc(ctx, alarmID)
+}
+
+// GetByIDCalls gets all the calls that were made to GetByID.
+// Check the length with:
+//
+//	len(mockedAlarmRepository.GetByIDCalls())
+func (mock *AlarmRepositoryMock) GetByIDCalls() []struct {
+	Ctx     context.Context
+	AlarmID int
+} {
+	var calls []struct {
+		Ctx     context.Context
+		AlarmID int
+	}
+	mock.lockGetByID.RLock()
+	calls = mock.calls.GetByID
+	mock.lockGetByID.RUnlock()
 	return calls
 }

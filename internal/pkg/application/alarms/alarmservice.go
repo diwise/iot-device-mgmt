@@ -2,12 +2,8 @@ package alarms
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -44,139 +40,11 @@ func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Configuration) Alarm
 		config:          cfg,
 	}
 
+	as.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusHandler(m, as))
 	as.messenger.RegisterTopicMessageHandler("watchdog.batteryLevelChanged", BatteryLevelChangedHandler(m, as))
 	as.messenger.RegisterTopicMessageHandler("watchdog.deviceNotObserved", DeviceNotObservedHandler(m, as))
 
 	return as
-}
-
-type Configuration struct {
-	DeviceAlarmConfigurations   []DeviceAlarmConfig
-	FunctionAlarmConfigurations []FunctionAlarmConfig
-}
-type AlarmConfig struct {
-	Name     string
-	Type     string
-	Min      float64
-	Max      float64
-	Severity int
-}
-type DeviceAlarmConfig struct {
-	DeviceID string
-	AlarmConfig
-}
-type FunctionAlarmConfig struct {
-	FunctionID string
-	AlarmConfig
-}
-
-func loadFile(configFile string) (io.ReadCloser, error) {
-	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf("file with known devices (%s) could not be found", configFile)
-	}
-
-	f, err := os.Open(configFile)
-	if err != nil {
-		return nil, fmt.Errorf("file with known devices (%s) could not be opened", configFile)
-	}
-
-	return f, nil
-}
-
-func LoadConfiguration(configFile string) *Configuration {
-	f, err := loadFile(configFile)
-	if err != nil {
-		return nil
-	}
-	defer f.Close()
-
-	r := csv.NewReader(f)
-	r.Comma = ';'
-
-	//deviceID;functionID;alarmName;alarmType;min;max;severity
-	//deviceID;;batteryLevelChanged;MIN;20;;1
-	//deviceID;;deviceNotObserved;MAX;3600;;2
-	//;featureID;levelChanged;BETWEEN;20;100;3
-
-	strTof64 := func(s string) float64 {
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return 0.0
-		}
-		return f
-	}
-
-	strToInt := func(str string, def int) int {
-		if n, err := strconv.Atoi(str); err == nil {
-			if n == 0 {
-				return def
-			}
-			return n
-		}
-		return def
-	}
-
-	rows, err := r.ReadAll()
-	if err != nil {
-		return nil
-	}
-
-	config := Configuration{
-		DeviceAlarmConfigurations:   make([]DeviceAlarmConfig, 0),
-		FunctionAlarmConfigurations: make([]FunctionAlarmConfig, 0),
-	}
-
-	for i, row := range rows {
-		if i == 0 {
-			continue
-		}
-
-		cfg := struct {
-			DeviceID   string
-			FunctionID string
-			Name       string
-			Type       string
-			Min        float64
-			Max        float64
-			Severity   int
-		}{
-			DeviceID:   row[0],
-			FunctionID: row[1],
-			Name:       row[2],
-			Type:       row[3],
-			Min:        strTof64(row[4]),
-			Max:        strTof64(row[5]),
-			Severity:   strToInt(row[6], 0),
-		}
-
-		if len(cfg.DeviceID) > 0 && len(cfg.FunctionID) == 0 {
-			config.DeviceAlarmConfigurations = append(config.DeviceAlarmConfigurations, DeviceAlarmConfig{
-				DeviceID: cfg.DeviceID,
-				AlarmConfig: AlarmConfig{
-					Name:     cfg.Name,
-					Type:     cfg.Type,
-					Min:      cfg.Min,
-					Max:      cfg.Max,
-					Severity: cfg.Severity,
-				},
-			})
-		}
-
-		if len(cfg.FunctionID) > 0 && len(cfg.DeviceID) == 0 {
-			config.FunctionAlarmConfigurations = append(config.FunctionAlarmConfigurations, FunctionAlarmConfig{
-				FunctionID: cfg.FunctionID,
-				AlarmConfig: AlarmConfig{
-					Name:     cfg.Name,
-					Type:     cfg.Type,
-					Min:      cfg.Min,
-					Max:      cfg.Max,
-					Severity: cfg.Severity,
-				},
-			})
-		}
-	}
-
-	return &config
 }
 
 func (a *alarmService) Start() {}
@@ -196,15 +64,30 @@ func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
 	if err != nil {
 		return err
 	}
-	return a.messenger.PublishOnTopic(ctx, &AlarmCreated{Alarm: alarm, Timestamp: time.Now().UTC()})
+
+	return a.messenger.PublishOnTopic(ctx, &AlarmCreated{
+		Alarm:     alarm,
+		Tenant:    alarm.Tenant,
+		Timestamp: alarm.ObservedAt,
+	})
 }
 
 func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
-	err := a.alarmRepository.Close(ctx, alarmID)
+	alarm, err := a.alarmRepository.GetByID(ctx, alarmID)
 	if err != nil {
 		return err
 	}
-	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Timestamp: time.Now().UTC()})
+
+	if !alarm.Active {
+		return nil
+	}
+
+	err = a.alarmRepository.Close(ctx, alarmID)
+	if err != nil {
+		return err
+	}
+
+	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Tenant: alarm.Tenant, Timestamp: time.Now().UTC()})
 }
 
 func (a *alarmService) GetConfiguration() Configuration {
@@ -238,6 +121,7 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 						Type:        cfg.Type,
 						Severity:    cfg.Severity,
 						Active:      true,
+						Tenant:      message.Tenant,
 						ObservedAt:  time.Now().UTC(),
 						Description: fmt.Sprintf("Batterinivå låg %d (min: %d)", message.BatteryLevel, int(cfg.Min)),
 					})
@@ -275,17 +159,84 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 				DeviceID: message.DeviceID,
 			},
 			Type:        "deviceNotObserved",
-			Severity:    1,
+			Severity:    db.AlarmSeverityMedium,
 			Active:      true,
+			Tenant:      message.Tenant,
 			ObservedAt:  time.Now().UTC(),
 			Description: fmt.Sprintf("Ingen kommunikation registrerad från %s", message.DeviceID),
 		})
-
 		if err != nil {
 			logger.Error().Err(err).Msg("could not add alarm")
 			return
 		}
 
 		logger.Debug().Msgf("%s handled", msg.RoutingKey)
+	}
+}
+
+func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
+		status := struct {
+			DeviceID     string   `json:"deviceID"`
+			BatteryLevel int      `json:"batteryLevel"`
+			Code         int      `json:"statusCode"`
+			Messages     []string `json:"statusMessages,omitempty"`
+			Tenant       string   `json:"tenant,omitempty"`
+			Timestamp    string   `json:"timestamp"`
+		}{}
+
+		err := json.Unmarshal(msg.Body, &status)
+		if err != nil {
+			logger.Error().Err(err).Msgf("failed to unmarshal message from %s", msg.RoutingKey)
+			return
+		}
+
+		if status.Code == 0 {
+			return
+		}
+
+		logger = logger.With().Str("deviceID", status.DeviceID).Logger()
+
+		ts, err := time.Parse(time.RFC3339Nano, status.Timestamp)
+		if err != nil {
+			logger.Error().Err(err).Msg("device-status contains no valid timestamp")
+			ts = time.Now().UTC()
+		}
+
+		if len(status.Messages) > 0 {
+			for _, m := range status.Messages {
+				err = as.AddAlarm(ctx, db.Alarm{
+					RefID: db.AlarmIdentifier{
+						DeviceID: status.DeviceID,
+					},
+					Type:        m,
+					Severity:    db.AlarmSeverityMedium,
+					Active:      true,
+					Tenant:      status.Tenant,
+					ObservedAt:  ts,
+					Description: m,
+				})
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add alarm")
+					return
+				}
+			}
+		} else {
+			err = as.AddAlarm(ctx, db.Alarm{
+				RefID: db.AlarmIdentifier{
+					DeviceID: status.DeviceID,
+				},
+				Type:        fmt.Sprintf("code: %d", status.Code),
+				Severity:    db.AlarmSeverityMedium,
+				Active:      true,
+				Tenant:      status.Tenant,
+				ObservedAt:  ts,
+				Description: fmt.Sprintf("code: %d", status.Code),
+			})
+			if err != nil {
+				logger.Error().Err(err).Msg("could not add alarm")
+				return
+			}
+		}
 	}
 }

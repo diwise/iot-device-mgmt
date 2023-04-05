@@ -53,6 +53,17 @@ type DeviceStatus struct {
 	LastObserved time.Time `json:"lastObservedAt"`
 }
 
+/*
+
+	DeviceID     string   `json:"deviceID"`
+	BatteryLevel int      `json:"batteryLevel"`
+	Code         int      `json:"statusCode"`
+	Messages     []string `json:"statusMessages,omitempty"`
+	Tenant       string   `json:"tenant,omitempty"`
+	Timestamp    string   `json:"timestamp"`
+
+*/
+
 const (
 	DeviceStateUnknown = -1
 	DeviceStateOK      = 1
