@@ -1,21 +1,27 @@
 package types
 
-import "time"
+import (
+	"time"
+)
 
 type Device struct {
-	DevEUI       string       `json:"devEUI"`
-	DeviceID     string       `json:"deviceID"`
-	Name         string       `json:"name"`
-	Description  string       `json:"description"`
-	Location     Location     `json:"location"`
-	Environment  string       `json:"environment"`
-	Types        []string     `json:"types"`
-	SensorType   SensorType   `json:"sensorType"`
-	LastObserved time.Time    `json:"lastObserved"`
-	Active       bool         `json:"active"`
-	Tenant       string       `json:"tenant"`
-	Status       DeviceStatus `json:"status"`
-	Interval     int          `json:"interval"`
+	Active      bool     `json:"active"`
+	SensorID    string   `json:"sensorID"`
+	DeviceID    string   `json:"deviceID"`
+	Tenant      Tenant   `json:"tenant"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Location    Location `json:"location"`
+	Environment string   `json:"environment"`
+
+	Lwm2mTypes []Lwm2mType `json:"types"`
+	Tags       []Tag       `json:"tags"`
+
+	DeviceProfile DeviceProfile `json:"deviceProfile"`
+
+	DeviceStatus DeviceStatus `json:"deviceStatus"`
+	DeviceState  DeviceState  `json:"deviceState"`
+	Alarms       []Alarm      `json:"alarms"`
 }
 
 type Location struct {
@@ -24,27 +30,73 @@ type Location struct {
 	Altitude  float64 `json:"altitude"`
 }
 
-type Environment struct {
-	ID   uint   `json:"id"`
+type Tenant struct {
 	Name string `json:"name"`
 }
 
-type SensorType struct {
-	ID          uint   `json:"id"`
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Interval    int    `json:"interval"`
+type Tag struct {
+	Name string `json:"name"`
+}
+
+type DeviceProfile struct {
+	Name    string `json:"name"`
+	Decoder string `json:"decoder"`
+}
+
+type Lwm2mType struct {
+	Urn string `json:"urn"`
 }
 
 type DeviceStatus struct {
-	DeviceID     string   `json:"deviceID,omitempty"`
+	DeviceID     string    `json:"deviceID,omitempty"`
+	BatteryLevel int       `json:"batteryLevel"`
+	LastObserved time.Time `json:"lastObservedAt"`
+}
+
+/*
+
+	DeviceID     string   `json:"deviceID"`
 	BatteryLevel int      `json:"batteryLevel"`
 	Code         int      `json:"statusCode"`
 	Messages     []string `json:"statusMessages,omitempty"`
+	Tenant       string   `json:"tenant,omitempty"`
 	Timestamp    string   `json:"timestamp"`
+
+*/
+
+const (
+	DeviceStateUnknown = -1
+	DeviceStateOK      = 1
+	DeviceStateWarning = 2
+	DeviceStateError   = 3
+)
+
+type DeviceState struct {
+	Online     bool      `json:"online"`
+	State      int       `json:"state"`
+	ObservedAt time.Time `json:"observedAt"`
 }
 
-const StatusUnknown = -1
-const StatusOK = 0
-const StatusWarning = 1
-const StatusError = 2
+const (
+	AlarmSeverityLow    = 1
+	AlarmSeverityMedium = 2
+	AlarmSeverityHigh   = 3
+)
+
+type Alarm struct {
+	ID          uint      `json:"id"`
+	Type        string    `json:"type"`
+	Severity    int       `json:"severity"`
+	Description string    `json:"description"`
+	Active      bool      `json:"active"`
+	ObservedAt  time.Time `json:"observedAt"`
+}
+
+type DeviceStatistics struct {
+	Total   int
+	Online  int
+	Offline int
+	Warning int
+	Error   int
+	Alarms  int
+}
