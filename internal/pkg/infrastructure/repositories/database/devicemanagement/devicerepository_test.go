@@ -135,6 +135,38 @@ func TestSeed(t *testing.T) {
 	is.Equal(60, device.DeviceProfile.Interval)
 }
 
+func TestAlarms(t *testing.T) {
+	is, ctx, r := testSetupDeviceRepository(t)
+
+	err := r.Save(ctx, createDevice(50, "default"))
+	is.NoErr(err)
+
+	d, err := r.GetDeviceByDeviceID(ctx, "device-50")
+	is.NoErr(err)
+	is.Equal(0, len(d.Alarms))
+
+	d.Alarms = append(d.Alarms, Alarm{
+		AlarmID:    1,
+		Severity:   1,
+		ObservedAt: time.Now(),
+	})
+
+	err = r.Save(ctx, &d)
+	is.NoErr(err)
+
+	d, err = r.GetDeviceByDeviceID(ctx, "device-50")
+	is.NoErr(err)
+	is.Equal(1, len(d.Alarms))
+
+	deviceID, err := r.RemoveAlarmByID(ctx, 1)
+	is.NoErr(err)
+	is.Equal("device-50", deviceID)
+
+	d, err = r.GetDeviceByDeviceID(ctx, "device-50")
+	is.NoErr(err)
+	is.Equal(0, len(d.Alarms))
+}
+
 func testSetupDeviceRepository(t *testing.T) (*is.I, context.Context, DeviceRepository) {
 	is, ctx, conn := setup(t)
 

@@ -20,7 +20,7 @@ func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{})
+	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{}, &Alarm{})
 	if err != nil {
 		return nil, err
 	}
@@ -43,6 +43,8 @@ type DeviceRepository interface {
 
 	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error
 	UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error
+
+	RemoveAlarmByID(ctx context.Context, alarmID int) (string, error)
 
 	Seed(context.Context, io.Reader) error
 }
@@ -156,7 +158,8 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
-		Preload("Tags")
+		Preload("Tags").
+		Preload("Alarms")
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: deviceID})
@@ -243,6 +246,32 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 	}
 
 	return nil
+}
+
+func (d *deviceRepository) RemoveAlarmByID(ctx context.Context, alarmID int) (string, error) {
+	a := Alarm{}
+
+	result := d.db.Statement.WithContext(ctx).
+		Where(&Alarm{AlarmID: alarmID}).
+		First(&a)
+
+	if result.RowsAffected == 0 || errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+
+	device := Device{}
+	err := d.db.WithContext(ctx).
+		First(&device, a.DeviceID).
+		Error
+	if err != nil {
+		return "", err
+	}
+
+	err = d.db.WithContext(ctx).
+		Delete(&a).
+		Error
+
+	return device.DeviceID, err
 }
 
 func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {

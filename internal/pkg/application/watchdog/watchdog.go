@@ -55,7 +55,7 @@ type batteryLevelWatcher struct {
 func (b *batteryLevelWatcher) Start(ctx context.Context, found chan string) {
 	b.batteryLevels = make(map[string]int)
 
-	ticker := time.NewTicker(30 * time.Second)
+	ticker := time.NewTicker(30 * time.Minute)
 	logger := logging.GetFromContext(ctx)
 
 	for {
@@ -90,7 +90,7 @@ type lastObservedWatcher struct {
 }
 
 func (l lastObservedWatcher) Start(ctx context.Context, found chan string) {
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Minute)
 	logger := logging.GetFromContext(ctx)
 
 	for {

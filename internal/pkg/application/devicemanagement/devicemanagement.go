@@ -2,11 +2,7 @@ package devicemanagement
 
 import (
 	"context"
-	"encoding/json"
 	"time"
-
-	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog"
 
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
@@ -26,6 +22,9 @@ type DeviceManagement interface {
 
 	CreateDevice(ctx context.Context, device t.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error
+
+	AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error
+	RemoveAlarm(ctx context.Context, alarmID int) error
 }
 
 type deviceManagement struct {
@@ -41,6 +40,7 @@ func New(d r.DeviceRepository, m messaging.MsgContext) DeviceManagement {
 
 	dm.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusHandler(m, dm))
 	dm.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", AlarmsCreatedHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", AlarmsClosedHandler(m, dm))
 
 	return dm
 }
@@ -105,7 +105,7 @@ func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID stri
 }
 
 func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID string, deviceState r.DeviceState) error {
-	logger := logging.GetFromContext(ctx)
+	logger := logging.GetFromContext(ctx).With().Str("device_id", deviceID).Logger()
 
 	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
@@ -115,6 +115,23 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	if deviceState.ObservedAt.IsZero() {
 		logger.Debug().Msgf("observedAt is zero, set to Now")
 		deviceState.ObservedAt = time.Now().UTC()
+	}
+
+	logger.Debug().Msgf("online: %t, state: %d", deviceState.Online, deviceState.State)
+
+	if has, highestSeverity, _ := device.HasActiveAlarms(); has {
+		switch highestSeverity {
+		case 1:
+			deviceState.State = r.DeviceStateOK
+		case 2:
+			deviceState.State = r.DeviceStateWarning
+		case 3:
+			deviceState.State = r.DeviceStateError
+		default:
+			deviceState.State = r.DeviceStateUnknown
+		}
+
+		logger.Debug().Msgf("has alarms with severity %d, state set to %d", highestSeverity, deviceState.State)
 	}
 
 	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
@@ -130,108 +147,36 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	})
 }
 
-func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		status := struct {
-			DeviceID     string   `json:"deviceID"`
-			BatteryLevel int      `json:"batteryLevel"`
-			Code         int      `json:"statusCode"`
-			Messages     []string `json:"statusMessages,omitempty"`
-			Tenant       string   `json:"tenant,omitempty"`
-			Timestamp    string   `json:"timestamp"`
-		}{}
-
-		err := json.Unmarshal(msg.Body, &status)
-		if err != nil {
-			logger.Error().Err(err).Msgf("failed to unmarshal message from %s", msg.RoutingKey)
-			return
-		}
-
-		logger = logger.With().Str("deviceID", status.DeviceID).Logger()
-
-		lastObserved, err := time.Parse(time.RFC3339Nano, status.Timestamp)
-		if err != nil {
-			logger.Error().Err(err).Msg("device-status contains no valid timestamp")
-			lastObserved = time.Now().UTC()
-		}
-
-		err = dm.UpdateDeviceStatus(ctx, status.DeviceID, r.DeviceStatus{
-			BatteryLevel: status.BatteryLevel,
-			LastObserved: lastObserved,
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("could not update status on device")
-			return
-		}
-
-		err = dm.UpdateDeviceState(ctx, status.DeviceID, r.DeviceState{
-			Online:     true,
-			State:      r.DeviceStateOK,
-			ObservedAt: lastObserved,
-		})
-		if err != nil {
-			logger.Error().Err(err).Msg("could not update state on device")
-			return
-		}
-
-		logger.Debug().Msgf("%s handled", msg.RoutingKey)
+func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error {
+	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	if err != nil {
+		return err
 	}
+
+	for _, a := range device.Alarms {
+		if a.AlarmID == alarm.AlarmID {
+			return nil
+		}
+	}
+
+	device.Alarms = append(device.Alarms, alarm)
+
+	return d.deviceRepository.Save(ctx, &device)
 }
 
-func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		message := struct {
-			Alarm struct {
-				RefID struct {
-					DeviceID string `json:"deviceID,omitempty"`
-				} `json:"refID"`
-				Type        string    `json:"type"`
-				Severity    int       `json:"severity"`
-				Description string    `json:"description"`
-				Active      bool      `json:"active"`
-				ObservedAt  time.Time `json:"observedAt"`
-			} `json:"alarm"`
-			Timestamp time.Time `json:"timestamp"`
-		}{}
-
-		err := json.Unmarshal(msg.Body, &message)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
-			return
-		}
-
-		if len(message.Alarm.RefID.DeviceID) == 0 {
-			return
-		}
-
-		deviceID := message.Alarm.RefID.DeviceID
-
-		logger = logger.With().Str("deviceID", deviceID).Logger()
-
-		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
-		if err != nil {
-			logger.Error().Err(err).Msg("failed to retrieve device")
-			return
-		}
-
-		state := r.DeviceStateUnknown
-		switch message.Alarm.Severity {
-		case 1:
-			state = r.DeviceStateOK
-		case 2:
-			state = r.DeviceStateWarning
-		case 3:
-			state = r.DeviceStateError
-		default:
-			state = r.DeviceStateOK
-		}
-
-		dm.UpdateDeviceState(ctx, deviceID, r.DeviceState{
-			Online:     d.DeviceState.Online,
-			State:      state,
-			ObservedAt: message.Timestamp,
-		})
-
-		logger.Debug().Msgf("%s handled", msg.RoutingKey)
+func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
+	deviceID, err := d.deviceRepository.RemoveAlarmByID(ctx, alarmID)
+	if err != nil {
+		return err
 	}
+
+	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	if err != nil {
+		return err
+	}
+
+	deviceState := device.DeviceState
+	deviceState.State = r.DeviceStateOK
+
+	return d.UpdateDeviceState(ctx, deviceID, deviceState)
 }
