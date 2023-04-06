@@ -36,7 +36,7 @@ func TestCreateDevice(t *testing.T) {
 		Tags:          []types.Tag{{Name: "tag"}},
 		DeviceProfile: types.DeviceProfile{Name: "profile", Decoder: "decoder"},
 		DeviceStatus:  types.DeviceStatus{BatteryLevel: 100, LastObserved: time.Now()},
-		DeviceState:   types.DeviceState{State: 0, ObservedAt: time.Now()},		
+		DeviceState:   types.DeviceState{State: 0, ObservedAt: time.Now()},
 	}
 
 	svc := New(&r, &m)

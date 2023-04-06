@@ -17,7 +17,7 @@ import (
 func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger = logger.With().Str("handler", "BatteryLevelChangedHandler").Logger()
-		
+
 		message := struct {
 			DeviceID     string    `json:"deviceID"`
 			BatteryLevel int       `json:"batteryLevel"`

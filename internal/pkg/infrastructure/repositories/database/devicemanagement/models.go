@@ -142,14 +142,14 @@ type Alarm struct {
 	ObservedAt time.Time `json:"-"`
 }
 
-func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {	
+func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
 	highestSeverityLevel := 0
 
 	if len(d.Alarms) == 0 {
 		return false, 0, nil
 	}
 
-	for _, a := range d.Alarms {	
+	for _, a := range d.Alarms {
 		if highestSeverityLevel < a.Severity {
 			highestSeverityLevel = a.Severity
 		}
@@ -164,6 +164,6 @@ func (d *Device) HasAlarm(id int) bool {
 			return true
 		}
 	}
-	
+
 	return false
 }
