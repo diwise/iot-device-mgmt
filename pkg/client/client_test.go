@@ -28,9 +28,6 @@ func TestMe(t *testing.T) {
 
 	_, err := New(ctx, s.URL(), s.URL()+"/token", "", "")
 	is.NoErr(err)
-
-	//_, err = c.FindDeviceFromDevEUI(ctx, "testeui")
-	//is.NoErr(err)
 }
 
 const TokenResponse string = `{"access_token":"testtoken","expires_in":300,"refresh_expires_in":0,"token_type":"Bearer","not-before-policy":0,"scope":"email profile"}`
