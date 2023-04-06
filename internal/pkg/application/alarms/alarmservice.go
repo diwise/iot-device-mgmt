@@ -13,6 +13,7 @@ import (
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms/events"
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
 //go:generate moq -rm -out alarmservice_mock.go . AlarmService
@@ -73,12 +74,16 @@ func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
 }
 
 func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
+	logger := logging.GetFromContext(ctx)
+
 	alarm, err := a.alarmRepository.GetByID(ctx, alarmID)
 	if err != nil {
+		logger.Debug().Msgf("alarm %d could not be fetched by ID")
 		return err
 	}
 
 	if !alarm.Active {
+		logger.Debug().Msgf("alarm %d is not active")
 		return nil
 	}
 
@@ -176,43 +181,53 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 
 func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		status := struct {
+		logger = logger.With().Str("func", "DeviceStatusHandler").Logger()
+
+		message := struct {
 			DeviceID     string   `json:"deviceID"`
 			BatteryLevel int      `json:"batteryLevel"`
 			Code         int      `json:"statusCode"`
 			Messages     []string `json:"statusMessages,omitempty"`
-			Tenant       string   `json:"tenant,omitempty"`
+			Tenant       string   `json:"tenant"`
 			Timestamp    string   `json:"timestamp"`
 		}{}
 
-		err := json.Unmarshal(msg.Body, &status)
+		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
 			logger.Error().Err(err).Msgf("failed to unmarshal message from %s", msg.RoutingKey)
 			return
 		}
 
-		if status.Code == 0 {
+		if message.Code == 0 {
 			return
 		}
 
-		logger = logger.With().Str("deviceID", status.DeviceID).Logger()
+		if message.DeviceID == "" {
+			logger.Warn().Msg("device-status contains no deviceID")
+		}
 
-		ts, err := time.Parse(time.RFC3339Nano, status.Timestamp)
+		logger = logger.With().Str("deviceID", message.DeviceID).Logger()
+
+		ts, err := time.Parse(time.RFC3339Nano, message.Timestamp)
 		if err != nil {
 			logger.Error().Err(err).Msg("device-status contains no valid timestamp")
 			ts = time.Now().UTC()
 		}
 
-		if len(status.Messages) > 0 {
-			for _, m := range status.Messages {
+		if message.Tenant == "" {
+			logger.Warn().Msg("device-status contains no tenant information")
+		}
+
+		if len(message.Messages) > 0 {
+			for _, m := range message.Messages {
 				err = as.AddAlarm(ctx, db.Alarm{
 					RefID: db.AlarmIdentifier{
-						DeviceID: status.DeviceID,
+						DeviceID: message.DeviceID,
 					},
 					Type:        m,
 					Severity:    db.AlarmSeverityMedium,
 					Active:      true,
-					Tenant:      status.Tenant,
+					Tenant:      message.Tenant,
 					ObservedAt:  ts,
 					Description: m,
 				})
@@ -224,14 +239,14 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 		} else {
 			err = as.AddAlarm(ctx, db.Alarm{
 				RefID: db.AlarmIdentifier{
-					DeviceID: status.DeviceID,
+					DeviceID: message.DeviceID,
 				},
-				Type:        fmt.Sprintf("code: %d", status.Code),
+				Type:        fmt.Sprintf("code: %d", message.Code),
 				Severity:    db.AlarmSeverityMedium,
 				Active:      true,
-				Tenant:      status.Tenant,
+				Tenant:      message.Tenant,
 				ObservedAt:  ts,
-				Description: fmt.Sprintf("code: %d", status.Code),
+				Description: fmt.Sprintf("code: %d", message.Code),
 			})
 			if err != nil {
 				logger.Error().Err(err).Msg("could not add alarm")
