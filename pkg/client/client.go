@@ -224,7 +224,11 @@ func (d *deviceWrapper) SensorType() string {
 }
 
 func (d *deviceWrapper) Types() []string {
-	return []string{}
+	types := []string{}
+	for _, t := range d.impl.Lwm2mTypes {
+		types = append(types, t.Urn)
+	}
+	return types
 }
 
 func (d *deviceWrapper) IsActive() bool {
