@@ -56,17 +56,22 @@ type deviceRepository struct {
 	db *gorm.DB
 }
 
-func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
-	var devices []Device
-
-	query := d.db.WithContext(ctx).
+func (d *deviceRepository) getDeviceQuery(ctx context.Context) (tx *gorm.DB) {
+	return d.db.WithContext(ctx).
 		Preload("Location").
 		Preload("Tenant").
 		Preload("DeviceProfile").
 		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
-		Preload("Tags")
+		Preload("Tags").
+		Preload("Alarms")
+}
+
+func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
+	var devices []Device
+
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -80,16 +85,7 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.db.
-		Debug().
-		WithContext(ctx).
-		Preload("Location").
-		Preload("Tenant").
-		Preload("DeviceProfile").
-		Preload("Lwm2mTypes").
-		Preload("DeviceStatus").
-		Preload("DeviceState").
-		Preload("Tags")
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -122,7 +118,7 @@ func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID str
 
 	var device = Device{}
 
-	query := d.db.WithContext(ctx)
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{SensorID: sensorID})
@@ -150,16 +146,7 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 	logger := logging.GetFromContext(ctx)
 
 	var device = Device{}
-
-	query := d.db.WithContext(ctx).
-		Preload("Location").
-		Preload("Tenant").
-		Preload("DeviceProfile").
-		Preload("Lwm2mTypes").
-		Preload("DeviceStatus").
-		Preload("DeviceState").
-		Preload("Tags").
-		Preload("Alarms")
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: deviceID})
