@@ -15,6 +15,7 @@ import (
 	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
@@ -79,6 +80,22 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	is.Equal(resp.StatusCode, http.StatusOK)
 	is.Equal("a81758fffe06bfa3", d.DevEui)
 	//is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys_codec","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}`)
+}
+
+func TestThatGetKnownDeviceMarshalToType(t *testing.T) {
+	r, is := setupTest(t)
+	server := httptest.NewServer(r)
+	defer server.Close()
+
+	token := createJWTWithTenants([]string{"default"})
+	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
+
+	d := types.Device{}
+	json.Unmarshal([]byte(body), &d)
+
+	is.Equal(resp.StatusCode, http.StatusOK)
+	is.Equal("a81758fffe06bfa3", d.SensorID)
+	is.Equal("default", d.Tenant.Name)
 }
 
 func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {
