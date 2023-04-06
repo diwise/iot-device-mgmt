@@ -149,11 +149,21 @@ func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
 		return false, 0, nil
 	}
 
-	for _, a := range d.Alarms {		
+	for _, a := range d.Alarms {	
 		if highestSeverityLevel < a.Severity {
 			highestSeverityLevel = a.Severity
 		}
 	}
 
 	return true, highestSeverityLevel, d.Alarms
+}
+
+func (d *Device) HasAlarm(id int) bool {
+	for _, a := range d.Alarms {
+		if a.AlarmID == id {
+			return true
+		}
+	}
+	
+	return false
 }
