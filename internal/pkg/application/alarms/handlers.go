@@ -354,21 +354,31 @@ func alarmTypeBetweenHandler(ctx context.Context, f functionUpdated, cfg AlarmCo
 func alarmTypeTrueHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
 	case "counter":
-		return fmt.Errorf("counter not implemented")
+		if f.Counter.State {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.State), f.Tenant, time.Now().UTC(), cfg)
+		}
 	case "presence":
-		return fmt.Errorf("presence not implemented")
+		if f.Presence.State {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Presence.State), f.Tenant, time.Now().UTC(), cfg)
+		}
 	default:
 		return fmt.Errorf("not implemented")
 	}
+	return nil
 }
 
 func alarmTypeFalseHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
 	case "counter":
-		return fmt.Errorf("counter not implemented")
+		if !f.Counter.State {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.State), f.Tenant, time.Now().UTC(), cfg)
+		}
 	case "presence":
-		return fmt.Errorf("presence not implemented")
+		if !f.Presence.State {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Presence.State), f.Tenant, time.Now().UTC(), cfg)
+		}
 	default:
 		return fmt.Errorf("not implemented")
 	}
+	return nil
 }
