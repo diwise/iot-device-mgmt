@@ -82,7 +82,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) error {
 		return err
 	}
 
-	logger.Debug().Msg("adding new alarm")
+	logger.Debug().Msg("add new alarm")
 
 	err := d.db.Debug().WithContext(ctx).
 		Save(&alarm).

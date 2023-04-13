@@ -20,6 +20,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
+//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarm r.Alarm) error {
+//				panic("mock out the AddAlarm method")
+//			},
 //			CreateDeviceFunc: func(ctx context.Context, device t.Device) error {
 //				panic("mock out the CreateDevice method")
 //			},
@@ -31,6 +34,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			},
 //			GetDevicesFunc: func(ctx context.Context, tenants ...string) ([]r.Device, error) {
 //				panic("mock out the GetDevices method")
+//			},
+//			RemoveAlarmFunc: func(ctx context.Context, alarmID int) error {
+//				panic("mock out the RemoveAlarm method")
 //			},
 //			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]any) error {
 //				panic("mock out the UpdateDevice method")
@@ -48,6 +54,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
+	// AddAlarmFunc mocks the AddAlarm method.
+	AddAlarmFunc func(ctx context.Context, deviceID string, alarm r.Alarm) error
+
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(ctx context.Context, device t.Device) error
 
@@ -60,6 +69,9 @@ type DeviceManagementMock struct {
 	// GetDevicesFunc mocks the GetDevices method.
 	GetDevicesFunc func(ctx context.Context, tenants ...string) ([]r.Device, error)
 
+	// RemoveAlarmFunc mocks the RemoveAlarm method.
+	RemoveAlarmFunc func(ctx context.Context, alarmID int) error
+
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]any) error
 
@@ -71,6 +83,15 @@ type DeviceManagementMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// AddAlarm holds details about calls to the AddAlarm method.
+		AddAlarm []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Alarm is the alarm argument value.
+			Alarm r.Alarm
+		}
 		// CreateDevice holds details about calls to the CreateDevice method.
 		CreateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -103,6 +124,13 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// RemoveAlarm holds details about calls to the RemoveAlarm method.
+		RemoveAlarm []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -131,13 +159,55 @@ type DeviceManagementMock struct {
 			DeviceStatus r.DeviceStatus
 		}
 	}
+	lockAddAlarm            sync.RWMutex
 	lockCreateDevice        sync.RWMutex
 	lockGetDeviceByDeviceID sync.RWMutex
 	lockGetDeviceBySensorID sync.RWMutex
 	lockGetDevices          sync.RWMutex
+	lockRemoveAlarm         sync.RWMutex
 	lockUpdateDevice        sync.RWMutex
 	lockUpdateDeviceState   sync.RWMutex
 	lockUpdateDeviceStatus  sync.RWMutex
+}
+
+// AddAlarm calls AddAlarmFunc.
+func (mock *DeviceManagementMock) AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error {
+	if mock.AddAlarmFunc == nil {
+		panic("DeviceManagementMock.AddAlarmFunc: method is nil but DeviceManagement.AddAlarm was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		Alarm    r.Alarm
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		Alarm:    alarm,
+	}
+	mock.lockAddAlarm.Lock()
+	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
+	mock.lockAddAlarm.Unlock()
+	return mock.AddAlarmFunc(ctx, deviceID, alarm)
+}
+
+// AddAlarmCalls gets all the calls that were made to AddAlarm.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.AddAlarmCalls())
+func (mock *DeviceManagementMock) AddAlarmCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	Alarm    r.Alarm
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+		Alarm    r.Alarm
+	}
+	mock.lockAddAlarm.RLock()
+	calls = mock.calls.AddAlarm
+	mock.lockAddAlarm.RUnlock()
+	return calls
 }
 
 // CreateDevice calls CreateDeviceFunc.
@@ -289,6 +359,42 @@ func (mock *DeviceManagementMock) GetDevicesCalls() []struct {
 	mock.lockGetDevices.RLock()
 	calls = mock.calls.GetDevices
 	mock.lockGetDevices.RUnlock()
+	return calls
+}
+
+// RemoveAlarm calls RemoveAlarmFunc.
+func (mock *DeviceManagementMock) RemoveAlarm(ctx context.Context, alarmID int) error {
+	if mock.RemoveAlarmFunc == nil {
+		panic("DeviceManagementMock.RemoveAlarmFunc: method is nil but DeviceManagement.RemoveAlarm was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		AlarmID int
+	}{
+		Ctx:     ctx,
+		AlarmID: alarmID,
+	}
+	mock.lockRemoveAlarm.Lock()
+	mock.calls.RemoveAlarm = append(mock.calls.RemoveAlarm, callInfo)
+	mock.lockRemoveAlarm.Unlock()
+	return mock.RemoveAlarmFunc(ctx, alarmID)
+}
+
+// RemoveAlarmCalls gets all the calls that were made to RemoveAlarm.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.RemoveAlarmCalls())
+func (mock *DeviceManagementMock) RemoveAlarmCalls() []struct {
+	Ctx     context.Context
+	AlarmID int
+} {
+	var calls []struct {
+		Ctx     context.Context
+		AlarmID int
+	}
+	mock.lockRemoveAlarm.RLock()
+	calls = mock.calls.RemoveAlarm
+	mock.lockRemoveAlarm.RUnlock()
 	return calls
 }
 

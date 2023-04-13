@@ -34,6 +34,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]Device, error) {
 //				panic("mock out the GetOnlineDevices method")
 //			},
+//			RemoveAlarmByIDFunc: func(ctx context.Context, alarmID int) (string, error) {
+//				panic("mock out the RemoveAlarmByID method")
+//			},
 //			SaveFunc: func(ctx context.Context, device *Device) error {
 //				panic("mock out the Save method")
 //			},
@@ -67,6 +70,9 @@ type DeviceRepositoryMock struct {
 
 	// GetOnlineDevicesFunc mocks the GetOnlineDevices method.
 	GetOnlineDevicesFunc func(ctx context.Context, tenants ...string) ([]Device, error)
+
+	// RemoveAlarmByIDFunc mocks the RemoveAlarmByID method.
+	RemoveAlarmByIDFunc func(ctx context.Context, alarmID int) (string, error)
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, device *Device) error
@@ -121,6 +127,13 @@ type DeviceRepositoryMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// RemoveAlarmByID holds details about calls to the RemoveAlarmByID method.
+		RemoveAlarmByID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
 			// Ctx is the ctx argument value.
@@ -159,6 +172,7 @@ type DeviceRepositoryMock struct {
 	lockGetDeviceID         sync.RWMutex
 	lockGetDevices          sync.RWMutex
 	lockGetOnlineDevices    sync.RWMutex
+	lockRemoveAlarmByID     sync.RWMutex
 	lockSave                sync.RWMutex
 	lockSeed                sync.RWMutex
 	lockUpdateDeviceState   sync.RWMutex
@@ -350,6 +364,42 @@ func (mock *DeviceRepositoryMock) GetOnlineDevicesCalls() []struct {
 	mock.lockGetOnlineDevices.RLock()
 	calls = mock.calls.GetOnlineDevices
 	mock.lockGetOnlineDevices.RUnlock()
+	return calls
+}
+
+// RemoveAlarmByID calls RemoveAlarmByIDFunc.
+func (mock *DeviceRepositoryMock) RemoveAlarmByID(ctx context.Context, alarmID int) (string, error) {
+	if mock.RemoveAlarmByIDFunc == nil {
+		panic("DeviceRepositoryMock.RemoveAlarmByIDFunc: method is nil but DeviceRepository.RemoveAlarmByID was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		AlarmID int
+	}{
+		Ctx:     ctx,
+		AlarmID: alarmID,
+	}
+	mock.lockRemoveAlarmByID.Lock()
+	mock.calls.RemoveAlarmByID = append(mock.calls.RemoveAlarmByID, callInfo)
+	mock.lockRemoveAlarmByID.Unlock()
+	return mock.RemoveAlarmByIDFunc(ctx, alarmID)
+}
+
+// RemoveAlarmByIDCalls gets all the calls that were made to RemoveAlarmByID.
+// Check the length with:
+//
+//	len(mockedDeviceRepository.RemoveAlarmByIDCalls())
+func (mock *DeviceRepositoryMock) RemoveAlarmByIDCalls() []struct {
+	Ctx     context.Context
+	AlarmID int
+} {
+	var calls []struct {
+		Ctx     context.Context
+		AlarmID int
+	}
+	mock.lockRemoveAlarmByID.RLock()
+	calls = mock.calls.RemoveAlarmByID
+	mock.lockRemoveAlarmByID.RUnlock()
 	return calls
 }
 

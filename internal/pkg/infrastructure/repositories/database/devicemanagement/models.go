@@ -27,6 +27,8 @@ type Device struct {
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
+
+	Alarms []Alarm `json:"-"`
 }
 
 func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
@@ -71,32 +73,6 @@ func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
 
 	return nil
 }
-
-/*
-func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
-	alarms := []Alarm{}
-	highestSeverityLevel := 0
-
-	if len(d.Alarms) == 0 {
-		return false, 0, nil
-	}
-
-	for _, a := range d.Alarms {
-		if a.Active {
-			alarms = append(alarms, a)
-			if highestSeverityLevel < a.Severity {
-				highestSeverityLevel = a.Severity
-			}
-		}
-	}
-
-	if len(alarms) == 0 {
-		return false, 0, nil
-	}
-
-	return true, highestSeverityLevel, alarms
-}
-*/
 
 type Location struct {
 	gorm.Model `json:"-"`
@@ -155,4 +131,39 @@ type DeviceState struct {
 	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
+}
+
+type Alarm struct {
+	gorm.Model `json:"-"`
+	DeviceID   uint `json:"-"`
+
+	AlarmID    int       `json:"-"`
+	Severity   int       `json:"-"`
+	ObservedAt time.Time `json:"-"`
+}
+
+func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
+	highestSeverityLevel := 0
+
+	if len(d.Alarms) == 0 {
+		return false, 0, nil
+	}
+
+	for _, a := range d.Alarms {
+		if highestSeverityLevel < a.Severity {
+			highestSeverityLevel = a.Severity
+		}
+	}
+
+	return true, highestSeverityLevel, d.Alarms
+}
+
+func (d *Device) HasAlarm(id int) bool {
+	for _, a := range d.Alarms {
+		if a.AlarmID == id {
+			return true
+		}
+	}
+
+	return false
 }

@@ -21,7 +21,6 @@ type Device struct {
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
-	Alarms       []Alarm      `json:"alarms"`
 }
 
 type Location struct {
@@ -31,7 +30,7 @@ type Location struct {
 }
 
 type Tenant struct {
-	Name string `json:"name"`
+	Name string ` json:"name"`
 }
 
 type Tag struct {
@@ -39,30 +38,19 @@ type Tag struct {
 }
 
 type DeviceProfile struct {
-	Name    string `json:"name"`
-	Decoder string `json:"decoder"`
+	Name     string `json:"name"`
+	Decoder  string `json:"decoder"`
+	Interval int    `json:"interval"`
 }
 
 type Lwm2mType struct {
-	Urn string `json:"urn"`
+	Urn string ` json:"urn"`
 }
 
 type DeviceStatus struct {
-	DeviceID     string    `json:"deviceID,omitempty"`
 	BatteryLevel int       `json:"batteryLevel"`
 	LastObserved time.Time `json:"lastObservedAt"`
 }
-
-/*
-
-	DeviceID     string   `json:"deviceID"`
-	BatteryLevel int      `json:"batteryLevel"`
-	Code         int      `json:"statusCode"`
-	Messages     []string `json:"statusMessages,omitempty"`
-	Tenant       string   `json:"tenant,omitempty"`
-	Timestamp    string   `json:"timestamp"`
-
-*/
 
 const (
 	DeviceStateUnknown = -1
@@ -75,28 +63,4 @@ type DeviceState struct {
 	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
-}
-
-const (
-	AlarmSeverityLow    = 1
-	AlarmSeverityMedium = 2
-	AlarmSeverityHigh   = 3
-)
-
-type Alarm struct {
-	ID          uint      `json:"id"`
-	Type        string    `json:"type"`
-	Severity    int       `json:"severity"`
-	Description string    `json:"description"`
-	Active      bool      `json:"active"`
-	ObservedAt  time.Time `json:"observedAt"`
-}
-
-type DeviceStatistics struct {
-	Total   int
-	Online  int
-	Offline int
-	Warning int
-	Error   int
-	Alarms  int
 }

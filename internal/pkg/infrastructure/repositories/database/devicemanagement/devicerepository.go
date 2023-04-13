@@ -20,7 +20,7 @@ func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 		return nil, err
 	}
 
-	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{})
+	err = impl.AutoMigrate(&Device{}, &Location{}, &Tenant{}, &DeviceProfile{}, &DeviceStatus{}, &Lwm2mType{}, &DeviceState{}, &Alarm{})
 	if err != nil {
 		return nil, err
 	}
@@ -44,6 +44,8 @@ type DeviceRepository interface {
 	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error
 	UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error
 
+	RemoveAlarmByID(ctx context.Context, alarmID int) (string, error)
+
 	Seed(context.Context, io.Reader) error
 }
 
@@ -54,17 +56,22 @@ type deviceRepository struct {
 	db *gorm.DB
 }
 
-func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
-	var devices []Device
-
-	query := d.db.WithContext(ctx).
+func (d *deviceRepository) getDeviceQuery(ctx context.Context) (tx *gorm.DB) {
+	return d.db.WithContext(ctx).
 		Preload("Location").
 		Preload("Tenant").
 		Preload("DeviceProfile").
 		Preload("Lwm2mTypes").
 		Preload("DeviceStatus").
 		Preload("DeviceState").
-		Preload("Tags")
+		Preload("Tags").
+		Preload("Alarms")
+}
+
+func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
+	var devices []Device
+
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -78,16 +85,7 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.db.
-		Debug().
-		WithContext(ctx).
-		Preload("Location").
-		Preload("Tenant").
-		Preload("DeviceProfile").
-		Preload("Lwm2mTypes").
-		Preload("DeviceStatus").
-		Preload("DeviceState").
-		Preload("Tags")
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -120,7 +118,7 @@ func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID str
 
 	var device = Device{}
 
-	query := d.db.WithContext(ctx)
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{SensorID: sensorID})
@@ -148,15 +146,7 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 	logger := logging.GetFromContext(ctx)
 
 	var device = Device{}
-
-	query := d.db.WithContext(ctx).
-		Preload("Location").
-		Preload("Tenant").
-		Preload("DeviceProfile").
-		Preload("Lwm2mTypes").
-		Preload("DeviceStatus").
-		Preload("DeviceState").
-		Preload("Tags")
+	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: deviceID})
@@ -243,6 +233,32 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 	}
 
 	return nil
+}
+
+func (d *deviceRepository) RemoveAlarmByID(ctx context.Context, alarmID int) (string, error) {
+	a := Alarm{}
+
+	result := d.db.Statement.WithContext(ctx).
+		Where(&Alarm{AlarmID: alarmID}).
+		First(&a)
+
+	if result.RowsAffected == 0 || errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+
+	device := Device{}
+	err := d.db.WithContext(ctx).
+		First(&device, a.DeviceID).
+		Error
+	if err != nil {
+		return "", err
+	}
+
+	err = d.db.WithContext(ctx).
+		Delete(&a).
+		Error
+
+	return device.DeviceID, err
 }
 
 func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
