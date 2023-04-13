@@ -299,11 +299,11 @@ func addAlarm(ctx context.Context, as AlarmService, id, desc, tenant string, ts 
 }
 
 const (
-	FuncTypeCounter string = "counter"
-	FuncTypeLevel string = "level"
+	FuncTypeCounter      string = "counter"
+	FuncTypeLevel        string = "level"
 	FuncTypeWaterQuality string = "waterquality"
-	FuncTypeTimer string = "timer"
-	FuncTypePresence string = "presence"
+	FuncTypeTimer        string = "timer"
+	FuncTypePresence     string = "presence"
 )
 
 func alarmTypeMinHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
@@ -379,6 +379,10 @@ func alarmTypeTrueHandler(ctx context.Context, f functionUpdated, cfg AlarmConfi
 	case FuncTypePresence:
 		if f.Presence.State {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Presence.State), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case FuncTypeTimer:
+		if f.Timer.State {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Timer.State), f.Tenant, time.Now().UTC(), cfg)
 		}
 	default:
 		return fmt.Errorf("not implemented")
