@@ -61,6 +61,13 @@ type functionUpdated struct {
 		State bool `json:"state"`
 	} `json:"presence,omitempty"`
 
+	Timer struct {
+		StartTime time.Time      `json:"startTime"`
+		EndTime   *time.Time     `json:"endTime,omitempty"`
+		Duration  *time.Duration `json:"duration,omitempty"`
+		State     bool           `json:"state"`
+	} `json:"timer,omitempty"`
+
 	WaterQuality struct {
 		Temperature float64 `json:"temperature"`
 	} `json:"waterquality,omitempty"`
@@ -291,17 +298,25 @@ func addAlarm(ctx context.Context, as AlarmService, id, desc, tenant string, ts 
 	return err
 }
 
+const (
+	FuncTypeCounter string = "counter"
+	FuncTypeLevel string = "level"
+	FuncTypeWaterQuality string = "waterquality"
+	FuncTypeTimer string = "timer"
+	FuncTypePresence string = "presence"
+)
+
 func alarmTypeMinHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
-	case "counter":
+	case FuncTypeCounter:
 		if f.Counter.Count < int(cfg.Min) {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "level":
+	case FuncTypeLevel:
 		if *f.Level.Percent < cfg.Min {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "waterquality":
+	case FuncTypeWaterQuality:
 		if f.WaterQuality.Temperature < cfg.Min {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
 		}
@@ -313,17 +328,21 @@ func alarmTypeMinHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig
 
 func alarmTypeMaxHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
-	case "counter":
+	case FuncTypeCounter:
 		if f.Counter.Count > int(cfg.Max) {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "level":
+	case FuncTypeLevel:
 		if *f.Level.Percent > cfg.Max {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "waterquality":
+	case FuncTypeWaterQuality:
 		if f.WaterQuality.Temperature > cfg.Max {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case FuncTypeTimer:
+		if f.Timer.State && f.Timer.Duration != nil && *f.Timer.Duration > time.Duration(cfg.Max) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Timer.Duration), f.Tenant, time.Now().UTC(), cfg)
 		}
 	default:
 		return fmt.Errorf("not implemented")
@@ -333,15 +352,15 @@ func alarmTypeMaxHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig
 
 func alarmTypeBetweenHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
-	case "counter":
+	case FuncTypeCounter:
 		if !(f.Counter.Count > int(cfg.Min) && f.Counter.Count < int(cfg.Max)) {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "level":
+	case FuncTypeLevel:
 		if !(*f.Level.Percent > cfg.Min && *f.Level.Percent < cfg.Max) {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "waterquality":
+	case FuncTypeWaterQuality:
 		if !(f.WaterQuality.Temperature > cfg.Min && f.WaterQuality.Temperature < cfg.Max) {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
 		}
@@ -353,11 +372,11 @@ func alarmTypeBetweenHandler(ctx context.Context, f functionUpdated, cfg AlarmCo
 
 func alarmTypeTrueHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
-	case "counter":
+	case FuncTypeCounter:
 		if f.Counter.State {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.State), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "presence":
+	case FuncTypePresence:
 		if f.Presence.State {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Presence.State), f.Tenant, time.Now().UTC(), cfg)
 		}
@@ -369,11 +388,11 @@ func alarmTypeTrueHandler(ctx context.Context, f functionUpdated, cfg AlarmConfi
 
 func alarmTypeFalseHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
 	switch f.Type {
-	case "counter":
+	case FuncTypeCounter:
 		if !f.Counter.State {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.State), f.Tenant, time.Now().UTC(), cfg)
 		}
-	case "presence":
+	case FuncTypePresence:
 		if !f.Presence.State {
 			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Presence.State), f.Tenant, time.Now().UTC(), cfg)
 		}
