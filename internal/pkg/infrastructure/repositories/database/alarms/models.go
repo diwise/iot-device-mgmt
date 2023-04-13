@@ -12,18 +12,13 @@ const (
 	AlarmSeverityHigh   = 3
 )
 
-type AlarmIdentifier struct {
-	DeviceID   string `json:"deviceID,omitempty"`
-	FunctionID string `json:"functionID,omitempty"`
-}
-
 type Alarm struct {
 	ID        uint           `gorm:"primarykey" json:"id"`
 	CreatedAt time.Time      `json:"-"`
 	UpdatedAt time.Time      `json:"-"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
 
-	RefID AlarmIdentifier `gorm:"embedded;embeddedPrefix:refID_" json:"refID"`
+	RefID string `json:"refID"`
 
 	Type        string    `json:"type"`
 	Severity    int       `json:"severity"`

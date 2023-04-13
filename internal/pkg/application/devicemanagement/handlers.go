@@ -57,9 +57,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update state on device")
 			return
-		}
-
-		logger.Debug().Msg("Ok")
+		}		
 	}
 }
 
@@ -69,10 +67,8 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 
 		message := struct {
 			Alarm struct {
-				ID    uint `json:"id"`
-				RefID struct {
-					DeviceID string `json:"deviceID,omitempty"`
-				} `json:"refID"`
+				ID         uint      `json:"id"`
+				RefID      string    `json:"refID"`
 				Severity   int       `json:"severity"`
 				ObservedAt time.Time `json:"observedAt"`
 			} `json:"alarm"`
@@ -85,19 +81,18 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 			return
 		}
 
-		if len(message.Alarm.RefID.DeviceID) == 0 {
+		if len(message.Alarm.RefID) == 0 {
 			return
 		}
 
-		deviceID := message.Alarm.RefID.DeviceID
-
+		deviceID := message.Alarm.RefID
 		logger = logger.With().Str("device_id", deviceID).Logger()
 
 		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to retrieve device")
+			logger.Debug().Msg("failed to retrieve device")
 			return
-		}
+		}		
 
 		dm.AddAlarm(ctx, deviceID, r.Alarm{
 			AlarmID:    int(message.Alarm.ID),
@@ -109,9 +104,7 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 			Online:     d.DeviceState.Online,
 			State:      r.DeviceStateUnknown,
 			ObservedAt: message.Timestamp,
-		})
-
-		logger.Debug().Msg("Ok")
+		})		
 	}
 }
 
@@ -137,8 +130,6 @@ func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to remove alarm")
 			return
-		}
-
-		logger.Debug().Msg("Ok")
+		}		
 	}
 }

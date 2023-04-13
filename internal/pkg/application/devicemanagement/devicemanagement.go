@@ -171,7 +171,7 @@ func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm 
 func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
 	logger := logging.GetFromContext(ctx).
 		With().Int("alarm_id", alarmID).Logger().
-		With().Str("func", "UpdateDeviceState").Logger()
+		With().Str("func", "RemoveAlarm").Logger()
 
 	deviceID, err := d.deviceRepository.RemoveAlarmByID(ctx, alarmID)
 	if err != nil {
