@@ -120,7 +120,7 @@ func parseConfigFile(f io.Reader) *Configuration {
 			continue
 		}
 
-		if cfg.Severity < db.AlarmSeverityLow || cfg.Severity > db.AlarmSeverityHigh {
+		if cfg.Severity != -1 && cfg.Severity != db.AlarmSeverityLow && cfg.Severity != db.AlarmSeverityMedium && cfg.Severity != db.AlarmSeverityHigh {
 			continue
 		}
 

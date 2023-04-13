@@ -57,9 +57,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update state on device")
 			return
-		}
-
-		logger.Debug().Msg("Ok")
+		}		
 	}
 }
 
@@ -106,9 +104,7 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 			Online:     d.DeviceState.Online,
 			State:      r.DeviceStateUnknown,
 			ObservedAt: message.Timestamp,
-		})
-
-		logger.Debug().Msg("Ok")
+		})		
 	}
 }
 
@@ -134,8 +130,6 @@ func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to remove alarm")
 			return
-		}
-
-		logger.Debug().Msg("Ok")
+		}		
 	}
 }

@@ -146,11 +146,11 @@ func TestDeviceStatusHandler(t *testing.T) {
 func TestParseConfigFile(t *testing.T) {
 	is := is.New(t)
 	config := parseConfigFile(bytes.NewBufferString(configFileJson))
-	is.Equal(7, len(config.AlarmConfigurations))
+	is.Equal(8, len(config.AlarmConfigurations))
 
 	is.Equal("net:test:iot:a81757", config.AlarmConfigurations[0].ID)
-	is.Equal("", config.AlarmConfigurations[5].ID)
 	is.Equal("", config.AlarmConfigurations[6].ID)
+	is.Equal("", config.AlarmConfigurations[7].ID)
 }
 
 func testSetup(t *testing.T) (*is.I, context.Context, zerolog.Logger) {
@@ -169,6 +169,7 @@ deviceID;functionID;alarmName;alarmType;min;max;severity;description
 ;;deviceNotObserved;-;;;1;
 net:test:iot:a81757;;batteryLevel;MIN;20;0;1;
 ;a817bf9e;counter;MAX;;10;1;
+;;payload error;-;;;-1;
 ;fbf9f;counter;BETWEEN;1;10;1;Count ska vara mellan {MIN} och {MAX} men är {VALUE}
 ;323c6;level;MAX;;4;1;
 ;70t589;waterquality;BETWEEN;4;35;1;Temp ska vara mellan {MIN} och {MAX} men är {VALUE}

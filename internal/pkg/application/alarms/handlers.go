@@ -285,6 +285,10 @@ func parseDescription(cfg AlarmConfig, id string, val any) string {
 }
 
 func addAlarm(ctx context.Context, as AlarmService, id, desc, tenant string, ts time.Time, cfg AlarmConfig) error {
+	if cfg.Severity == -1 {
+		return nil
+	}
+
 	err := as.AddAlarm(ctx, db.Alarm{
 		RefID:       id,
 		Type:        cfg.Name,
