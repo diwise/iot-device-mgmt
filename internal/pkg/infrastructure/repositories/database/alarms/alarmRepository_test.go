@@ -15,7 +15,7 @@ func TestAddAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
 
 	err := r.Add(ctx, Alarm{
-		RefID:       AlarmIdentifier{DeviceID: "deviceID"},
+		RefID:       "deviceID",
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
@@ -35,7 +35,7 @@ func TestAddTwoAlarms(t *testing.T) {
 	deviceID := uuid.New().String()
 
 	err := r.Add(ctx, Alarm{
-		RefID:       AlarmIdentifier{DeviceID: deviceID},
+		RefID:       "deviceID",
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
@@ -46,7 +46,7 @@ func TestAddTwoAlarms(t *testing.T) {
 	is.NoErr(err)
 
 	err = r.Add(ctx, Alarm{
-		RefID:       AlarmIdentifier{DeviceID: deviceID},
+		RefID:       deviceID,
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
@@ -64,7 +64,7 @@ func TestAddTwoAlarms(t *testing.T) {
 func TestGetAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
 	err := r.Add(ctx, Alarm{
-		RefID:       AlarmIdentifier{DeviceID: "deviceID"},
+		RefID:       "deviceID",
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",

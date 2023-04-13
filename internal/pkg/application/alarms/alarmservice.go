@@ -38,6 +38,7 @@ func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Configuration) Alarm
 	as.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusHandler(m, as))
 	as.messenger.RegisterTopicMessageHandler("watchdog.batteryLevelChanged", BatteryLevelChangedHandler(m, as))
 	as.messenger.RegisterTopicMessageHandler("watchdog.deviceNotObserved", DeviceNotObservedHandler(m, as))
+	as.messenger.RegisterTopicMessageHandler("function.updated", FunctionUpdatedHandler(m, as))
 
 	return as
 }
@@ -72,12 +73,12 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 
 	alarm, err := a.alarmRepository.GetByID(ctx, alarmID)
 	if err != nil {
-		logger.Debug().Msgf("alarm %d could not be fetched by ID")
+		logger.Debug().Msgf("alarm %d could not be fetched by ID", alarmID)
 		return err
 	}
 
 	if !alarm.Active {
-		logger.Debug().Msgf("alarm %d is not active")
+		logger.Debug().Msgf("alarm %d is not active", alarmID)
 		return nil
 	}
 

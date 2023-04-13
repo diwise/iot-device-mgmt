@@ -5,37 +5,46 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strconv"
+	"strings"
+
+	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 )
 
 type Configuration struct {
-	DeviceAlarmConfigurations   []DeviceAlarmConfig
-	FunctionAlarmConfigurations []FunctionAlarmConfig
+	AlarmConfigurations []AlarmConfig
 }
 type AlarmConfig struct {
-	Name     string
-	Type     string
-	Min      float64
-	Max      float64
-	Severity int
+	ID          string
+	Name        string
+	Type        string
+	Min         float64
+	Max         float64
+	Severity    int
+	Description string
 }
-type DeviceAlarmConfig struct {
-	DeviceID string
-	AlarmConfig
-}
-type FunctionAlarmConfig struct {
-	FunctionID string
-	AlarmConfig
-}
+
+const (
+	AlarmBatteryLevel      string = "batteryLevel"
+	AlarmDeviceNotObserved string = "deviceNotObserved"
+
+	AlarmTypeMIN     string = "MIN"
+	AlarmTypeMAX     string = "MAX"
+	AlarmTypeBETWEEN string = "BETWEEN"
+	AlarmTypeTRUE    string = "TRUE"
+	AlarmTypeFALSE   string = "FALSE"
+	AlarmTypeNOOP    string = "-"
+)
 
 func loadFile(configFile string) (io.ReadCloser, error) {
 	if _, err := os.Stat(configFile); os.IsNotExist(err) {
-		return nil, fmt.Errorf("file with known devices (%s) could not be found", configFile)
+		return nil, fmt.Errorf("file with alarm configuration (%s) could not be found", configFile)
 	}
 
 	f, err := os.Open(configFile)
 	if err != nil {
-		return nil, fmt.Errorf("file with known devices (%s) could not be opened", configFile)
+		return nil, fmt.Errorf("file with alarm configuration (%s) could not be opened", configFile)
 	}
 
 	return f, nil
@@ -48,13 +57,12 @@ func LoadConfiguration(configFile string) *Configuration {
 	}
 	defer f.Close()
 
+	return parseConfigFile(f)
+}
+
+func parseConfigFile(f io.Reader) *Configuration {
 	r := csv.NewReader(f)
 	r.Comma = ';'
-
-	//deviceID;functionID;alarmName;alarmType;min;max;severity
-	//deviceID;;batteryLevelChanged;MIN;20;;1
-	//deviceID;;deviceNotObserved;MAX;3600;;2
-	//;featureID;levelChanged;BETWEEN;20;100;3
 
 	strTof64 := func(s string) float64 {
 		f, err := strconv.ParseFloat(s, 64)
@@ -80,8 +88,7 @@ func LoadConfiguration(configFile string) *Configuration {
 	}
 
 	config := Configuration{
-		DeviceAlarmConfigurations:   make([]DeviceAlarmConfig, 0),
-		FunctionAlarmConfigurations: make([]FunctionAlarmConfig, 0),
+		AlarmConfigurations: make([]AlarmConfig, 0),
 	}
 
 	for i, row := range rows {
@@ -90,49 +97,56 @@ func LoadConfiguration(configFile string) *Configuration {
 		}
 
 		cfg := struct {
-			DeviceID   string
-			FunctionID string
-			Name       string
-			Type       string
-			Min        float64
-			Max        float64
-			Severity   int
+			DeviceID    string
+			FunctionID  string
+			Name        string
+			Type        string
+			Min         float64
+			Max         float64
+			Severity    int
+			Description string
 		}{
-			DeviceID:   row[0],
-			FunctionID: row[1],
-			Name:       row[2],
-			Type:       row[3],
-			Min:        strTof64(row[4]),
-			Max:        strTof64(row[5]),
-			Severity:   strToInt(row[6], 0),
+			DeviceID:    row[0],
+			FunctionID:  row[1],
+			Name:        row[2],
+			Type:        strings.ToUpper(row[3]),
+			Min:         strTof64(row[4]),
+			Max:         strTof64(row[5]),
+			Severity:    strToInt(row[6], 0),
+			Description: row[7],
+		}
+
+		if cfg.Type != AlarmTypeNOOP && cfg.Type != AlarmTypeMIN && cfg.Type != AlarmTypeMAX && cfg.Type != AlarmTypeBETWEEN && cfg.Type != AlarmTypeTRUE && cfg.Type != AlarmTypeFALSE {
+			continue
+		}
+
+		if cfg.Severity < db.AlarmSeverityLow || cfg.Severity > db.AlarmSeverityHigh {
+			continue
+		}
+
+		alarmConfig := AlarmConfig{
+			Description: cfg.Description,
+			Max:         cfg.Max,
+			Min:         cfg.Min,
+			Name:        cfg.Name,
+			Severity:    cfg.Severity,
+			Type:        cfg.Type, // MIN, MAX, BETWEEN
 		}
 
 		if len(cfg.DeviceID) > 0 && len(cfg.FunctionID) == 0 {
-			config.DeviceAlarmConfigurations = append(config.DeviceAlarmConfigurations, DeviceAlarmConfig{
-				DeviceID: cfg.DeviceID,
-				AlarmConfig: AlarmConfig{
-					Name:     cfg.Name,
-					Type:     cfg.Type,
-					Min:      cfg.Min,
-					Max:      cfg.Max,
-					Severity: cfg.Severity,
-				},
-			})
+			alarmConfig.ID = cfg.DeviceID
 		}
 
-		if len(cfg.FunctionID) > 0 && len(cfg.DeviceID) == 0 {
-			config.FunctionAlarmConfigurations = append(config.FunctionAlarmConfigurations, FunctionAlarmConfig{
-				FunctionID: cfg.FunctionID,
-				AlarmConfig: AlarmConfig{
-					Name:     cfg.Name,
-					Type:     cfg.Type,
-					Min:      cfg.Min,
-					Max:      cfg.Max,
-					Severity: cfg.Severity,
-				},
-			})
+		if len(cfg.DeviceID) == 0 && len(cfg.FunctionID) > 0 {
+			alarmConfig.ID = cfg.FunctionID
 		}
+
+		config.AlarmConfigurations = append(config.AlarmConfigurations, alarmConfig)
 	}
+
+	sort.Slice(config.AlarmConfigurations, func(i, j int) bool {
+		return config.AlarmConfigurations[i].ID > config.AlarmConfigurations[j].ID
+	})
 
 	return &config
 }

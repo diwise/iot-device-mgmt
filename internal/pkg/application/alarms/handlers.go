@@ -14,16 +14,63 @@ import (
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
 
+type batteryLevelChanged struct {
+	DeviceID     string    `json:"deviceID"`
+	BatteryLevel int       `json:"batteryLevel"`
+	Tenant       string    `json:"tenant"`
+	ObservedAt   time.Time `json:"observedAt"`
+}
+
+type deviceNotObserved struct {
+	DeviceID   string    `json:"deviceID"`
+	Tenant     string    `json:"tenant"`
+	ObservedAt time.Time `json:"observedAt"`
+}
+
+type deviceStatus struct {
+	DeviceID     string   `json:"deviceID"`
+	BatteryLevel int      `json:"batteryLevel"`
+	Code         int      `json:"statusCode"`
+	Messages     []string `json:"statusMessages,omitempty"`
+	Tenant       string   `json:"tenant"`
+	Timestamp    string   `json:"timestamp"`
+}
+
+type functionUpdated struct {
+	ID       string `json:"id"`
+	Type     string `json:"type"`
+	SubType  string `json:"subtype"`
+	Location struct {
+		Latitude  float64 `json:"latitude"`
+		Longitude float64 `json:"longitude"`
+	} `json:"location,omitempty"`
+	Tenant string `json:"tenant,omitempty"`
+
+	Counter struct {
+		Count int  `json:"count"`
+		State bool `json:"state"`
+	} `json:"counter,omitempty"`
+
+	Level struct {
+		Current float64  `json:"current"`
+		Percent *float64 `json:"percent,omitempty"`
+		Offset  *float64 `json:"offset,omitempty"`
+	} `json:"level,omitempty"`
+
+	Presence struct {
+		State bool `json:"state"`
+	} `json:"presence,omitempty"`
+
+	WaterQuality struct {
+		Temperature float64 `json:"temperature"`
+	} `json:"waterquality,omitempty"`
+}
+
 func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger = logger.With().Str("handler", "BatteryLevelChangedHandler").Logger()
 
-		message := struct {
-			DeviceID     string    `json:"deviceID"`
-			BatteryLevel int       `json:"batteryLevel"`
-			Tenant       string    `json:"tenant"`
-			ObservedAt   time.Time `json:"observedAt"`
-		}{}
+		message := batteryLevelChanged{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
@@ -33,30 +80,21 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
 
-		for _, cfg := range as.GetConfiguration().DeviceAlarmConfigurations {
-			if strings.EqualFold(cfg.DeviceID, message.DeviceID) {
-				if cfg.Name == "batteryLevel" && message.BatteryLevel < int(cfg.Min) {
-					err := as.AddAlarm(ctx, db.Alarm{
-						RefID: db.AlarmIdentifier{
-							DeviceID: message.DeviceID,
-						},
-						Type:        cfg.Type,
-						Severity:    cfg.Severity,
-						Active:      true,
-						Tenant:      message.Tenant,
-						ObservedAt:  time.Now().UTC(),
-						Description: fmt.Sprintf("Batterinivå låg %d (min: %d)", message.BatteryLevel, int(cfg.Min)),
-					})
-					if err != nil {
-						logger.Error().Err(err).Msg("could not add alarm")
-						return
-					}
-					break
+		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
+			if cfg.ID == message.DeviceID && cfg.Name == AlarmBatteryLevel {
+				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add batteryLevel alarm")
 				}
+				return
+			} else if cfg.ID == "" && cfg.Name == AlarmBatteryLevel {
+				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add batteryLevel alarm")
+				}
+				return
 			}
 		}
-
-		logger.Debug().Msg("Ok")
 	}
 }
 
@@ -64,11 +102,7 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger = logger.With().Str("handler", "DeviceNotObservedHandler").Logger()
 
-		message := struct {
-			DeviceID   string    `json:"deviceID"`
-			Tenant     string    `json:"tenant"`
-			ObservedAt time.Time `json:"observedAt"`
-		}{}
+		message := deviceNotObserved{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
@@ -78,11 +112,25 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
 
+		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
+			if cfg.ID == message.DeviceID && cfg.Name == AlarmDeviceNotObserved {
+				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add deviceNotObserved alarm")
+				}
+				return
+			} else if cfg.ID == "" && cfg.Name == AlarmDeviceNotObserved {
+				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add deviceNotObserved alarm")
+				}
+				return
+			}
+		}
+
 		err = as.AddAlarm(ctx, db.Alarm{
-			RefID: db.AlarmIdentifier{
-				DeviceID: message.DeviceID,
-			},
-			Type:        "deviceNotObserved",
+			RefID:       message.DeviceID,
+			Type:        AlarmDeviceNotObserved,
 			Severity:    db.AlarmSeverityMedium,
 			Active:      true,
 			Tenant:      message.Tenant,
@@ -93,8 +141,6 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 			logger.Error().Err(err).Msg("could not add alarm")
 			return
 		}
-
-		logger.Debug().Msg("Ok")
 	}
 }
 
@@ -102,18 +148,15 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
 		logger = logger.With().Str("handler", "DeviceStatusHandler").Logger()
 
-		message := struct {
-			DeviceID     string   `json:"deviceID"`
-			BatteryLevel int      `json:"batteryLevel"`
-			Code         int      `json:"statusCode"`
-			Messages     []string `json:"statusMessages,omitempty"`
-			Tenant       string   `json:"tenant"`
-			Timestamp    string   `json:"timestamp"`
-		}{}
+		message := deviceStatus{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to unmarshal message")
+			return
+		}
+
+		if message.Code == 0 {
 			return
 		}
 
@@ -124,7 +167,8 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
 
-		if message.Code == 0 {
+		if message.Tenant == "" {
+			logger.Error().Msg("no tenant information")
 			return
 		}
 
@@ -134,48 +178,197 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 			return
 		}
 
-		if message.Tenant == "" {
-			logger.Error().Msg("no tenant information")
+		alarmType := func() string {
+			if len(message.Messages) > 0 {
+				return message.Messages[0]
+			}
+			return fmt.Sprintf("%d", message.Code)
+		}
+
+		description := func(d string) string {
+			if len(message.Messages) > 0 {
+				return d + "\n" + strings.Join(message.Messages, "\n")
+			}
+			return d
+		}
+
+		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
+			if cfg.ID == message.DeviceID && cfg.Name == alarmType() {
+				err = addAlarm(ctx, as, message.DeviceID, description(cfg.Description), message.Tenant, ts, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add alarm")
+				}
+				return
+			} else if cfg.ID == "" && cfg.Name == alarmType() {
+				err = addAlarm(ctx, as, message.DeviceID, description(cfg.Description), message.Tenant, ts, cfg)
+				if err != nil {
+					logger.Error().Err(err).Msg("could not add alarm")
+				}
+				return
+			}
+		}
+
+		err = as.AddAlarm(ctx, db.Alarm{
+			RefID:       message.DeviceID,
+			Type:        alarmType(),
+			Severity:    db.AlarmSeverityLow,
+			Active:      true,
+			Tenant:      message.Tenant,
+			ObservedAt:  ts,
+			Description: description(""),
+		})
+		if err != nil {
+			logger.Error().Err(err).Msg("could not add alarm")
+			return
+		}
+	}
+}
+
+func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
+		logger = logger.With().Str("handler", "FunctionUpdatedHandler").Logger()
+
+		f := functionUpdated{}
+		err := json.Unmarshal(msg.Body, &f)
+		if err != nil {
+			logger.Error().Err(err).Msg("failed to unmarshal message")
 			return
 		}
 
-		if len(message.Messages) > 0 {
-			alarmType := message.Messages[0]
-			desc := strings.Join(message.Messages, "\n ")
+		logger = logger.With().Str("function_id", f.ID).Logger()
 
-			err = as.AddAlarm(ctx, db.Alarm{
-				RefID: db.AlarmIdentifier{
-					DeviceID: message.DeviceID,
-				},
-				Type:        alarmType,
-				Severity:    db.AlarmSeverityMedium,
-				Active:      true,
-				Tenant:      message.Tenant,
-				ObservedAt:  ts,
-				Description: desc,
-			})
-			if err != nil {
-				logger.Error().Err(err).Msg("could not add alarm")
-				return
+		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
+			if cfg.ID != "" && cfg.ID != f.ID {
+				continue
+			} else if cfg.ID == "" && cfg.Name != f.Type {
+				continue
 			}
-		} else {
-			err = as.AddAlarm(ctx, db.Alarm{
-				RefID: db.AlarmIdentifier{
-					DeviceID: message.DeviceID,
-				},
-				Type:        fmt.Sprintf("code: %d", message.Code),
-				Severity:    db.AlarmSeverityMedium,
-				Active:      true,
-				Tenant:      message.Tenant,
-				ObservedAt:  ts,
-				Description: fmt.Sprintf("code: %d", message.Code),
-			})
+
+			switch cfg.Type {
+			case AlarmTypeMIN:
+				err = alarmTypeMinHandler(ctx, f, cfg, as)
+			case AlarmTypeMAX:
+				err = alarmTypeMaxHandler(ctx, f, cfg, as)
+			case AlarmTypeBETWEEN:
+				err = alarmTypeBetweenHandler(ctx, f, cfg, as)
+			case AlarmTypeTRUE:
+				err = alarmTypeTrueHandler(ctx, f, cfg, as)
+			case AlarmTypeFALSE:
+				err = alarmTypeFalseHandler(ctx, f, cfg, as)
+			}
+
 			if err != nil {
-				logger.Error().Err(err).Msg("could not add alarm")
-				return
+				logger.Error().Err(err).Msg("could not handle function updated")
 			}
 		}
+	}
+}
 
-		logger.Debug().Msg("Ok")
+func parseDescription(cfg AlarmConfig, id string, val any) string {
+	desc := cfg.Description
+	desc = strings.ReplaceAll(desc, "{MIN}", fmt.Sprintf("%g", cfg.Min))
+	desc = strings.ReplaceAll(desc, "{MAX}", fmt.Sprintf("%g", cfg.Max))
+	if id != "" {
+		desc = strings.ReplaceAll(desc, "{ID}", id)
+	}
+	if val != nil {
+		desc = strings.ReplaceAll(desc, "{VALUE}", fmt.Sprintf("%v", val))
+	}
+	return desc
+}
+
+func addAlarm(ctx context.Context, as AlarmService, id, desc, tenant string, ts time.Time, cfg AlarmConfig) error {
+	err := as.AddAlarm(ctx, db.Alarm{
+		RefID:       id,
+		Type:        cfg.Name,
+		Severity:    cfg.Severity,
+		Active:      true,
+		Tenant:      tenant,
+		ObservedAt:  ts,
+		Description: desc,
+	})
+
+	return err
+}
+
+func alarmTypeMinHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
+	switch f.Type {
+	case "counter":
+		if f.Counter.Count < int(cfg.Min) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "level":
+		if *f.Level.Percent < cfg.Min {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "waterquality":
+		if f.WaterQuality.Temperature < cfg.Min {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
+		}
+	default:
+		return fmt.Errorf("not implemented")
+	}
+	return nil
+}
+
+func alarmTypeMaxHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
+	switch f.Type {
+	case "counter":
+		if f.Counter.Count > int(cfg.Max) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "level":
+		if *f.Level.Percent > cfg.Max {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "waterquality":
+		if f.WaterQuality.Temperature > cfg.Max {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
+		}
+	default:
+		return fmt.Errorf("not implemented")
+	}
+	return nil
+}
+
+func alarmTypeBetweenHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
+	switch f.Type {
+	case "counter":
+		if !(f.Counter.Count > int(cfg.Min) && f.Counter.Count < int(cfg.Max)) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.Counter.Count), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "level":
+		if !(*f.Level.Percent > cfg.Min && *f.Level.Percent < cfg.Max) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, *f.Level.Percent), f.Tenant, time.Now().UTC(), cfg)
+		}
+	case "waterquality":
+		if !(f.WaterQuality.Temperature > cfg.Min && f.WaterQuality.Temperature < cfg.Max) {
+			return addAlarm(ctx, as, f.ID, parseDescription(cfg, f.ID, f.WaterQuality.Temperature), f.Tenant, time.Now().UTC(), cfg)
+		}
+	default:
+		return fmt.Errorf("not implemented")
+	}
+	return nil
+}
+
+func alarmTypeTrueHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
+	switch f.Type {
+	case "counter":
+		return fmt.Errorf("counter not implemented")
+	case "presence":
+		return fmt.Errorf("presence not implemented")
+	default:
+		return fmt.Errorf("not implemented")
+	}
+}
+
+func alarmTypeFalseHandler(ctx context.Context, f functionUpdated, cfg AlarmConfig, as AlarmService) error {
+	switch f.Type {
+	case "counter":
+		return fmt.Errorf("counter not implemented")
+	case "presence":
+		return fmt.Errorf("presence not implemented")
+	default:
+		return fmt.Errorf("not implemented")
 	}
 }
