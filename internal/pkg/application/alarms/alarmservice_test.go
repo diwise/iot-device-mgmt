@@ -148,7 +148,7 @@ func TestParseConfigFile(t *testing.T) {
 	config := parseConfigFile(bytes.NewBufferString(configFileJson))
 	is.Equal(7, len(config.AlarmConfigurations))
 
-	is.Equal("net:serva:iot:a81758fffe075557", config.AlarmConfigurations[0].ID)
+	is.Equal("net:test:iot:a81757", config.AlarmConfigurations[0].ID)
 	is.Equal("", config.AlarmConfigurations[5].ID)
 	is.Equal("", config.AlarmConfigurations[6].ID)
 }
@@ -158,19 +158,19 @@ func testSetup(t *testing.T) (*is.I, context.Context, zerolog.Logger) {
 	return is, context.Background(), zerolog.Logger{}
 }
 
-const batteryLevelChangedJson = `{"deviceID":"net:serva:iot:a81758fffe075557","batteryLevel":10,"tenant":"default","observedAt":"2023-04-12T06:51:25.389495559Z"}`
-const counterOverflow1Json string = `{"id":"a81758fffe06bf9e","type":"counter","subtype":"overflow","counter":{"count":11,"state":true},"tenant":"default"}`
-const counterOverflow2Json string = `{"id":"a81758fffe06bf9f","type":"counter","subtype":"overflow","counter":{"count":11,"state":true},"tenant":"default"}`
-const levelSandJson string = `{"id":"323138375a308416","type":"level","subtype":"sand","level":{"current":1.4,"percent":19},"tenant":"default"}`
+const batteryLevelChangedJson = `{"deviceID":"net:test:iot:a81757","batteryLevel":10,"tenant":"default","observedAt":"2023-04-12T06:51:25.389495559Z"}`
+const counterOverflow1Json string = `{"id":"a817bf9e","type":"counter","subtype":"overflow","counter":{"count":11,"state":true},"tenant":"default"}`
+const counterOverflow2Json string = `{"id":"fbf9f","type":"counter","subtype":"overflow","counter":{"count":11,"state":true},"tenant":"default"}`
+const levelSandJson string = `{"id":"323c6","type":"level","subtype":"sand","level":{"current":1.4,"percent":19},"tenant":"default"}`
 const uplinkFcntRetransmissionJson string = `{"deviceID":"01","batteryLevel":10,"tenant":"default","statusCode":1,"statusMessages":["UPLINK_FCNT_RETRANSMISSION"],"timestamp":"2023-04-12T06:51:25.389495559Z"}`
 
 const configFileJson string = `
 deviceID;functionID;alarmName;alarmType;min;max;severity;description
 ;;deviceNotObserved;-;;;1;
-net:serva:iot:a81758fffe075557;;batteryLevel;MIN;20;0;1;
-;a81758fffe06bf9e;counter;MAX;;10;1;
-;a81758fffe06bf9f;counter;BETWEEN;1;10;1;Count ska vara mellan {MIN} och {MAX} men är {VALUE}
-;323138375a308416;level;MAX;;4;1;
-;70b3d580a010c589;waterquality;BETWEEN;4;35;1;Temp ska vara mellan {MIN} och {MAX} men är {VALUE}
+net:test:iot:a81757;;batteryLevel;MIN;20;0;1;
+;a817bf9e;counter;MAX;;10;1;
+;fbf9f;counter;BETWEEN;1;10;1;Count ska vara mellan {MIN} och {MAX} men är {VALUE}
+;323c6;level;MAX;;4;1;
+;70t589;waterquality;BETWEEN;4;35;1;Temp ska vara mellan {MIN} och {MAX} men är {VALUE}
 ;;UPLINK_FCNT_RETRANSMISSION;-;;;1;
 `
