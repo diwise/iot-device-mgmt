@@ -25,7 +25,7 @@ var _ AlarmService = &AlarmServiceMock{}
 //			CloseAlarmFunc: func(ctx context.Context, alarmID int) error {
 //				panic("mock out the CloseAlarm method")
 //			},
-//			GetAlarmsFunc: func(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
+//			GetAlarmsFunc: func(ctx context.Context) ([]db.Alarm, error) {
 //				panic("mock out the GetAlarms method")
 //			},
 //			GetConfigurationFunc: func() Configuration {
@@ -51,7 +51,7 @@ type AlarmServiceMock struct {
 	CloseAlarmFunc func(ctx context.Context, alarmID int) error
 
 	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, onlyActive bool) ([]db.Alarm, error)
+	GetAlarmsFunc func(ctx context.Context) ([]db.Alarm, error)
 
 	// GetConfigurationFunc mocks the GetConfiguration method.
 	GetConfigurationFunc func() Configuration
@@ -82,8 +82,6 @@ type AlarmServiceMock struct {
 		GetAlarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OnlyActive is the onlyActive argument value.
-			OnlyActive bool
 		}
 		// GetConfiguration holds details about calls to the GetConfiguration method.
 		GetConfiguration []struct {
@@ -176,21 +174,19 @@ func (mock *AlarmServiceMock) CloseAlarmCalls() []struct {
 }
 
 // GetAlarms calls GetAlarmsFunc.
-func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
+func (mock *AlarmServiceMock) GetAlarms(ctx context.Context) ([]db.Alarm, error) {
 	if mock.GetAlarmsFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsFunc: method is nil but AlarmService.GetAlarms was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		OnlyActive bool
+		Ctx context.Context
 	}{
-		Ctx:        ctx,
-		OnlyActive: onlyActive,
+		Ctx: ctx,
 	}
 	mock.lockGetAlarms.Lock()
 	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
 	mock.lockGetAlarms.Unlock()
-	return mock.GetAlarmsFunc(ctx, onlyActive)
+	return mock.GetAlarmsFunc(ctx)
 }
 
 // GetAlarmsCalls gets all the calls that were made to GetAlarms.
@@ -198,12 +194,10 @@ func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, onlyActive bool) ([
 //
 //	len(mockedAlarmService.GetAlarmsCalls())
 func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
-	Ctx        context.Context
-	OnlyActive bool
+	Ctx context.Context
 } {
 	var calls []struct {
-		Ctx        context.Context
-		OnlyActive bool
+		Ctx context.Context
 	}
 	mock.lockGetAlarms.RLock()
 	calls = mock.calls.GetAlarms

@@ -16,7 +16,7 @@ import (
 var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 
 type AlarmRepository interface {
-	GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error)
+	GetAll(ctx context.Context) ([]Alarm, error)
 	GetByID(ctx context.Context, alarmID int) (Alarm, error)
 	Add(ctx context.Context, alarm Alarm) error
 	Close(ctx context.Context, alarmID int) error
@@ -55,10 +55,9 @@ func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
 		}
 		return result.Error
 	}
-
-	a.Active = false
+	
 	err := d.db.Debug().WithContext(ctx).
-		Save(&a).
+		Delete(&a).
 		Error
 
 	return err
@@ -70,7 +69,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) error {
 	a := &Alarm{}
 
 	result := d.db.Debug().WithContext(ctx).
-		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID, Active: true}).
+		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID}).
 		First(&a)
 
 	if result.RowsAffected > 0 {
@@ -106,14 +105,10 @@ func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, erro
 	return *alarm, nil
 }
 
-func (d *alarmRepository) GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error) {
+func (d *alarmRepository) GetAll(ctx context.Context) ([]Alarm, error) {
 	var alarms []Alarm
 
 	query := d.db.WithContext(ctx)
-
-	if onlyActive {
-		query = query.Where(&Alarm{Active: true})
-	}
 
 	err := query.Find(&alarms).Error
 	if err != nil {

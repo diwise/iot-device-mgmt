@@ -246,9 +246,8 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-		onlyActive := r.URL.Query().Get("active") == "true"
-		alarms, err := svc.GetAlarms(ctx, onlyActive)
+		
+		alarms, err := svc.GetAlarms(ctx)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to fetch alarms")
 			w.WriteHeader(http.StatusInternalServerError)

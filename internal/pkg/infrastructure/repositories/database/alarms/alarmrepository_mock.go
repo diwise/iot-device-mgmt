@@ -24,7 +24,7 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //			CloseFunc: func(ctx context.Context, alarmID int) error {
 //				panic("mock out the Close method")
 //			},
-//			GetAllFunc: func(ctx context.Context, onlyActive bool) ([]Alarm, error) {
+//			GetAllFunc: func(ctx context.Context) ([]Alarm, error) {
 //				panic("mock out the GetAll method")
 //			},
 //			GetByIDFunc: func(ctx context.Context, alarmID int) (Alarm, error) {
@@ -44,7 +44,7 @@ type AlarmRepositoryMock struct {
 	CloseFunc func(ctx context.Context, alarmID int) error
 
 	// GetAllFunc mocks the GetAll method.
-	GetAllFunc func(ctx context.Context, onlyActive bool) ([]Alarm, error)
+	GetAllFunc func(ctx context.Context) ([]Alarm, error)
 
 	// GetByIDFunc mocks the GetByID method.
 	GetByIDFunc func(ctx context.Context, alarmID int) (Alarm, error)
@@ -69,8 +69,6 @@ type AlarmRepositoryMock struct {
 		GetAll []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// OnlyActive is the onlyActive argument value.
-			OnlyActive bool
 		}
 		// GetByID holds details about calls to the GetByID method.
 		GetByID []struct {
@@ -159,21 +157,19 @@ func (mock *AlarmRepositoryMock) CloseCalls() []struct {
 }
 
 // GetAll calls GetAllFunc.
-func (mock *AlarmRepositoryMock) GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error) {
+func (mock *AlarmRepositoryMock) GetAll(ctx context.Context) ([]Alarm, error) {
 	if mock.GetAllFunc == nil {
 		panic("AlarmRepositoryMock.GetAllFunc: method is nil but AlarmRepository.GetAll was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		OnlyActive bool
+		Ctx context.Context
 	}{
-		Ctx:        ctx,
-		OnlyActive: onlyActive,
+		Ctx: ctx,
 	}
 	mock.lockGetAll.Lock()
 	mock.calls.GetAll = append(mock.calls.GetAll, callInfo)
 	mock.lockGetAll.Unlock()
-	return mock.GetAllFunc(ctx, onlyActive)
+	return mock.GetAllFunc(ctx)
 }
 
 // GetAllCalls gets all the calls that were made to GetAll.
@@ -181,12 +177,10 @@ func (mock *AlarmRepositoryMock) GetAll(ctx context.Context, onlyActive bool) ([
 //
 //	len(mockedAlarmRepository.GetAllCalls())
 func (mock *AlarmRepositoryMock) GetAllCalls() []struct {
-	Ctx        context.Context
-	OnlyActive bool
+	Ctx context.Context
 } {
 	var calls []struct {
-		Ctx        context.Context
-		OnlyActive bool
+		Ctx context.Context
 	}
 	mock.lockGetAll.RLock()
 	calls = mock.calls.GetAll

@@ -15,7 +15,7 @@ type AlarmService interface {
 	Start()
 	Stop()
 
-	GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error)
+	GetAlarms(ctx context.Context) ([]db.Alarm, error)
 	AddAlarm(ctx context.Context, alarm db.Alarm) error
 	CloseAlarm(ctx context.Context, alarmID int) error
 
@@ -46,8 +46,8 @@ func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Configuration) Alarm
 func (a *alarmService) Start() {}
 func (a *alarmService) Stop()  {}
 
-func (a *alarmService) GetAlarms(ctx context.Context, onlyActive bool) ([]db.Alarm, error) {
-	alarms, err := a.alarmRepository.GetAll(ctx, onlyActive)
+func (a *alarmService) GetAlarms(ctx context.Context) ([]db.Alarm, error) {
+	alarms, err := a.alarmRepository.GetAll(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -75,11 +75,6 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 	if err != nil {
 		logger.Debug().Msgf("alarm %d could not be fetched by ID", alarmID)
 		return err
-	}
-
-	if !alarm.Active {
-		logger.Debug().Msgf("alarm %d is not active", alarmID)
-		return nil
 	}
 
 	err = a.alarmRepository.Close(ctx, alarmID)
