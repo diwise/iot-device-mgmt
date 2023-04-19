@@ -11,6 +11,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	aDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -40,6 +41,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", queryDevicesHandler(log, svc))
 				r.Get("/{deviceID}", getDeviceDetails(log, svc))
+				r.Get("/{deviceID}/alarms", getDeviceAlarms(log, svc, alarmSvc))
 
 				r.Post("/", createDeviceHandler(log, svc))
 				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
@@ -200,6 +202,63 @@ func getDeviceDetails(log zerolog.Logger, svc devicemanagement.DeviceManagement)
 	}
 }
 
+func getDeviceAlarms(log zerolog.Logger, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		deviceID := chi.URLParam(r, "deviceID")
+
+		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants...)
+		if errors.Is(err, dmDb.ErrDeviceNotFound) {
+			requestLogger.Debug().Msgf("%s not found", deviceID)
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("could not fetch data")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if len(device.Alarms) == 0 {
+			requestLogger.Debug().Msgf("alarms not found for %s", deviceID)
+			b, _ := json.Marshal([]aDb.Alarm{})
+			w.WriteHeader(http.StatusOK)
+			w.Write(b)
+			return
+		}
+
+		alarmIDs := func() []int {
+			ids := make([]int, 0)
+			for _, a := range device.Alarms {
+				ids = append(ids, a.AlarmID)
+			}
+			return ids
+		}
+
+		alarms, err := alarmSvc.GetAlarmsByID(ctx, alarmIDs()...)
+
+		bytes, err := json.Marshal(alarms)
+		if err != nil {
+			requestLogger.Error().Err(err).Msg("unable to marshal alarms to json")
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		requestLogger.Info().Msgf("returning information about %d alarms for device id: %s, url param: %s", len(alarms), device.DeviceID, deviceID)
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(bytes)
+	}
+}
+
 func patchDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -241,13 +300,13 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-		
-		alarms, err := svc.GetAlarms(ctx)
+
+		alarms, err := svc.GetAlarms(ctx, allowedTenants...)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to fetch alarms")
 			w.WriteHeader(http.StatusInternalServerError)

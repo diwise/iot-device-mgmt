@@ -23,7 +23,7 @@ type DeviceManagement interface {
 	CreateDevice(ctx context.Context, device t.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error
 
-	AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error
+	AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
 	RemoveAlarm(ctx context.Context, alarmID int) error
 }
 
@@ -151,21 +151,8 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	})
 }
 
-func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error {
-	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
-	if err != nil {
-		return err
-	}
-
-	for _, a := range device.Alarms {
-		if a.AlarmID == alarm.AlarmID {
-			return nil
-		}
-	}
-
-	device.Alarms = append(device.Alarms, alarm)
-
-	return d.deviceRepository.Save(ctx, &device)
+func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {	
+	return d.deviceRepository.AddAlarm(ctx, deviceID, alarmID, severity, observedAt)
 }
 
 func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {

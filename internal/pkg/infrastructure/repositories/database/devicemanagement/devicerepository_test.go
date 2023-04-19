@@ -145,13 +145,7 @@ func TestAlarms(t *testing.T) {
 	is.NoErr(err)
 	is.Equal(0, len(d.Alarms))
 
-	d.Alarms = append(d.Alarms, Alarm{
-		AlarmID:    1,
-		Severity:   1,
-		ObservedAt: time.Now(),
-	})
-
-	err = r.Save(ctx, &d)
+	err = r.AddAlarm(ctx, "device-50", 1, 1, time.Now())
 	is.NoErr(err)
 
 	d, err = r.GetDeviceByDeviceID(ctx, "device-50")

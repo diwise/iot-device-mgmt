@@ -8,6 +8,7 @@ import (
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
+	"time"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -20,7 +21,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarm r.Alarm) error {
+//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
 //				panic("mock out the AddAlarm method")
 //			},
 //			CreateDeviceFunc: func(ctx context.Context, device t.Device) error {
@@ -55,7 +56,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //	}
 type DeviceManagementMock struct {
 	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, deviceID string, alarm r.Alarm) error
+	AddAlarmFunc func(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
 
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(ctx context.Context, device t.Device) error
@@ -89,8 +90,12 @@ type DeviceManagementMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
-			// Alarm is the alarm argument value.
-			Alarm r.Alarm
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+			// Severity is the severity argument value.
+			Severity int
+			// ObservedAt is the observedAt argument value.
+			ObservedAt time.Time
 		}
 		// CreateDevice holds details about calls to the CreateDevice method.
 		CreateDevice []struct {
@@ -171,23 +176,27 @@ type DeviceManagementMock struct {
 }
 
 // AddAlarm calls AddAlarmFunc.
-func (mock *DeviceManagementMock) AddAlarm(ctx context.Context, deviceID string, alarm r.Alarm) error {
+func (mock *DeviceManagementMock) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
 	if mock.AddAlarmFunc == nil {
 		panic("DeviceManagementMock.AddAlarmFunc: method is nil but DeviceManagement.AddAlarm was just called")
 	}
 	callInfo := struct {
-		Ctx      context.Context
-		DeviceID string
-		Alarm    r.Alarm
+		Ctx        context.Context
+		DeviceID   string
+		AlarmID    int
+		Severity   int
+		ObservedAt time.Time
 	}{
-		Ctx:      ctx,
-		DeviceID: deviceID,
-		Alarm:    alarm,
+		Ctx:        ctx,
+		DeviceID:   deviceID,
+		AlarmID:    alarmID,
+		Severity:   severity,
+		ObservedAt: observedAt,
 	}
 	mock.lockAddAlarm.Lock()
 	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
 	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, deviceID, alarm)
+	return mock.AddAlarmFunc(ctx, deviceID, alarmID, severity, observedAt)
 }
 
 // AddAlarmCalls gets all the calls that were made to AddAlarm.
@@ -195,14 +204,18 @@ func (mock *DeviceManagementMock) AddAlarm(ctx context.Context, deviceID string,
 //
 //	len(mockedDeviceManagement.AddAlarmCalls())
 func (mock *DeviceManagementMock) AddAlarmCalls() []struct {
-	Ctx      context.Context
-	DeviceID string
-	Alarm    r.Alarm
+	Ctx        context.Context
+	DeviceID   string
+	AlarmID    int
+	Severity   int
+	ObservedAt time.Time
 } {
 	var calls []struct {
-		Ctx      context.Context
-		DeviceID string
-		Alarm    r.Alarm
+		Ctx        context.Context
+		DeviceID   string
+		AlarmID    int
+		Severity   int
+		ObservedAt time.Time
 	}
 	mock.lockAddAlarm.RLock()
 	calls = mock.calls.AddAlarm

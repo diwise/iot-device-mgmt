@@ -7,6 +7,7 @@ import (
 	"context"
 	"io"
 	"sync"
+	"time"
 )
 
 // Ensure, that DeviceRepositoryMock does implement DeviceRepository.
@@ -19,6 +20,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //		// make and configure a mocked DeviceRepository
 //		mockedDeviceRepository := &DeviceRepositoryMock{
+//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
+//				panic("mock out the AddAlarm method")
+//			},
 //			GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants ...string) (Device, error) {
 //				panic("mock out the GetDeviceByDeviceID method")
 //			},
@@ -56,6 +60,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //	}
 type DeviceRepositoryMock struct {
+	// AddAlarmFunc mocks the AddAlarm method.
+	AddAlarmFunc func(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
+
 	// GetDeviceByDeviceIDFunc mocks the GetDeviceByDeviceID method.
 	GetDeviceByDeviceIDFunc func(ctx context.Context, deviceID string, tenants ...string) (Device, error)
 
@@ -88,6 +95,19 @@ type DeviceRepositoryMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// AddAlarm holds details about calls to the AddAlarm method.
+		AddAlarm []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+			// Severity is the severity argument value.
+			Severity int
+			// ObservedAt is the observedAt argument value.
+			ObservedAt time.Time
+		}
 		// GetDeviceByDeviceID holds details about calls to the GetDeviceByDeviceID method.
 		GetDeviceByDeviceID []struct {
 			// Ctx is the ctx argument value.
@@ -167,6 +187,7 @@ type DeviceRepositoryMock struct {
 			DeviceStatus DeviceStatus
 		}
 	}
+	lockAddAlarm            sync.RWMutex
 	lockGetDeviceByDeviceID sync.RWMutex
 	lockGetDeviceBySensorID sync.RWMutex
 	lockGetDeviceID         sync.RWMutex
@@ -177,6 +198,54 @@ type DeviceRepositoryMock struct {
 	lockSeed                sync.RWMutex
 	lockUpdateDeviceState   sync.RWMutex
 	lockUpdateDeviceStatus  sync.RWMutex
+}
+
+// AddAlarm calls AddAlarmFunc.
+func (mock *DeviceRepositoryMock) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
+	if mock.AddAlarmFunc == nil {
+		panic("DeviceRepositoryMock.AddAlarmFunc: method is nil but DeviceRepository.AddAlarm was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		DeviceID   string
+		AlarmID    int
+		Severity   int
+		ObservedAt time.Time
+	}{
+		Ctx:        ctx,
+		DeviceID:   deviceID,
+		AlarmID:    alarmID,
+		Severity:   severity,
+		ObservedAt: observedAt,
+	}
+	mock.lockAddAlarm.Lock()
+	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
+	mock.lockAddAlarm.Unlock()
+	return mock.AddAlarmFunc(ctx, deviceID, alarmID, severity, observedAt)
+}
+
+// AddAlarmCalls gets all the calls that were made to AddAlarm.
+// Check the length with:
+//
+//	len(mockedDeviceRepository.AddAlarmCalls())
+func (mock *DeviceRepositoryMock) AddAlarmCalls() []struct {
+	Ctx        context.Context
+	DeviceID   string
+	AlarmID    int
+	Severity   int
+	ObservedAt time.Time
+} {
+	var calls []struct {
+		Ctx        context.Context
+		DeviceID   string
+		AlarmID    int
+		Severity   int
+		ObservedAt time.Time
+	}
+	mock.lockAddAlarm.RLock()
+	calls = mock.calls.AddAlarm
+	mock.lockAddAlarm.RUnlock()
+	return calls
 }
 
 // GetDeviceByDeviceID calls GetDeviceByDeviceIDFunc.

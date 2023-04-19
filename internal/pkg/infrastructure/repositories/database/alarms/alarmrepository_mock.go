@@ -18,16 +18,16 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //
 //		// make and configure a mocked AlarmRepository
 //		mockedAlarmRepository := &AlarmRepositoryMock{
-//			AddFunc: func(ctx context.Context, alarm Alarm) error {
+//			AddFunc: func(ctx context.Context, alarm Alarm) (int, error) {
 //				panic("mock out the Add method")
 //			},
 //			CloseFunc: func(ctx context.Context, alarmID int) error {
 //				panic("mock out the Close method")
 //			},
-//			GetAllFunc: func(ctx context.Context) ([]Alarm, error) {
+//			GetAllFunc: func(ctx context.Context, tenants ...string) ([]Alarm, error) {
 //				panic("mock out the GetAll method")
 //			},
-//			GetByIDFunc: func(ctx context.Context, alarmID int) (Alarm, error) {
+//			GetByIDFunc: func(ctx context.Context, alarmIDs ...int) ([]Alarm, error) {
 //				panic("mock out the GetByID method")
 //			},
 //		}
@@ -38,16 +38,16 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //	}
 type AlarmRepositoryMock struct {
 	// AddFunc mocks the Add method.
-	AddFunc func(ctx context.Context, alarm Alarm) error
+	AddFunc func(ctx context.Context, alarm Alarm) (int, error)
 
 	// CloseFunc mocks the Close method.
 	CloseFunc func(ctx context.Context, alarmID int) error
 
 	// GetAllFunc mocks the GetAll method.
-	GetAllFunc func(ctx context.Context) ([]Alarm, error)
+	GetAllFunc func(ctx context.Context, tenants ...string) ([]Alarm, error)
 
 	// GetByIDFunc mocks the GetByID method.
-	GetByIDFunc func(ctx context.Context, alarmID int) (Alarm, error)
+	GetByIDFunc func(ctx context.Context, alarmIDs ...int) ([]Alarm, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -69,13 +69,15 @@ type AlarmRepositoryMock struct {
 		GetAll []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Tenants is the tenants argument value.
+			Tenants []string
 		}
 		// GetByID holds details about calls to the GetByID method.
 		GetByID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// AlarmID is the alarmID argument value.
-			AlarmID int
+			// AlarmIDs is the alarmIDs argument value.
+			AlarmIDs []int
 		}
 	}
 	lockAdd     sync.RWMutex
@@ -85,7 +87,7 @@ type AlarmRepositoryMock struct {
 }
 
 // Add calls AddFunc.
-func (mock *AlarmRepositoryMock) Add(ctx context.Context, alarm Alarm) error {
+func (mock *AlarmRepositoryMock) Add(ctx context.Context, alarm Alarm) (int, error) {
 	if mock.AddFunc == nil {
 		panic("AlarmRepositoryMock.AddFunc: method is nil but AlarmRepository.Add was just called")
 	}
@@ -157,19 +159,21 @@ func (mock *AlarmRepositoryMock) CloseCalls() []struct {
 }
 
 // GetAll calls GetAllFunc.
-func (mock *AlarmRepositoryMock) GetAll(ctx context.Context) ([]Alarm, error) {
+func (mock *AlarmRepositoryMock) GetAll(ctx context.Context, tenants ...string) ([]Alarm, error) {
 	if mock.GetAllFunc == nil {
 		panic("AlarmRepositoryMock.GetAllFunc: method is nil but AlarmRepository.GetAll was just called")
 	}
 	callInfo := struct {
-		Ctx context.Context
+		Ctx     context.Context
+		Tenants []string
 	}{
-		Ctx: ctx,
+		Ctx:     ctx,
+		Tenants: tenants,
 	}
 	mock.lockGetAll.Lock()
 	mock.calls.GetAll = append(mock.calls.GetAll, callInfo)
 	mock.lockGetAll.Unlock()
-	return mock.GetAllFunc(ctx)
+	return mock.GetAllFunc(ctx, tenants...)
 }
 
 // GetAllCalls gets all the calls that were made to GetAll.
@@ -177,10 +181,12 @@ func (mock *AlarmRepositoryMock) GetAll(ctx context.Context) ([]Alarm, error) {
 //
 //	len(mockedAlarmRepository.GetAllCalls())
 func (mock *AlarmRepositoryMock) GetAllCalls() []struct {
-	Ctx context.Context
+	Ctx     context.Context
+	Tenants []string
 } {
 	var calls []struct {
-		Ctx context.Context
+		Ctx     context.Context
+		Tenants []string
 	}
 	mock.lockGetAll.RLock()
 	calls = mock.calls.GetAll
@@ -189,21 +195,21 @@ func (mock *AlarmRepositoryMock) GetAllCalls() []struct {
 }
 
 // GetByID calls GetByIDFunc.
-func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
+func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmIDs ...int) ([]Alarm, error) {
 	if mock.GetByIDFunc == nil {
 		panic("AlarmRepositoryMock.GetByIDFunc: method is nil but AlarmRepository.GetByID was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		AlarmID int
+		Ctx      context.Context
+		AlarmIDs []int
 	}{
-		Ctx:     ctx,
-		AlarmID: alarmID,
+		Ctx:      ctx,
+		AlarmIDs: alarmIDs,
 	}
 	mock.lockGetByID.Lock()
 	mock.calls.GetByID = append(mock.calls.GetByID, callInfo)
 	mock.lockGetByID.Unlock()
-	return mock.GetByIDFunc(ctx, alarmID)
+	return mock.GetByIDFunc(ctx, alarmIDs...)
 }
 
 // GetByIDCalls gets all the calls that were made to GetByID.
@@ -211,12 +217,12 @@ func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmID int) (Alar
 //
 //	len(mockedAlarmRepository.GetByIDCalls())
 func (mock *AlarmRepositoryMock) GetByIDCalls() []struct {
-	Ctx     context.Context
-	AlarmID int
+	Ctx      context.Context
+	AlarmIDs []int
 } {
 	var calls []struct {
-		Ctx     context.Context
-		AlarmID int
+		Ctx      context.Context
+		AlarmIDs []int
 	}
 	mock.lockGetByID.RLock()
 	calls = mock.calls.GetByID

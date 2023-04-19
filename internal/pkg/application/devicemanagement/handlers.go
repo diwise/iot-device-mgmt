@@ -57,7 +57,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("could not update state on device")
 			return
-		}		
+		}
 	}
 }
 
@@ -86,25 +86,30 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 		}
 
 		deviceID := message.Alarm.RefID
-		logger = logger.With().Str("device_id", deviceID).Logger()
+		logger = logger.With().Str("device_id", deviceID).Logger().With().Int("alarm_id", int(message.Alarm.ID)).Logger()
+
+		if message.Alarm.ID == 0 {
+			logger.Error().Msg("alarm ID should not be 0")
+			return
+		}
 
 		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
 		if err != nil {
 			logger.Debug().Msg("failed to retrieve device")
 			return
-		}		
+		}
 
-		dm.AddAlarm(ctx, deviceID, r.Alarm{
-			AlarmID:    int(message.Alarm.ID),
-			Severity:   message.Alarm.Severity,
-			ObservedAt: message.Alarm.ObservedAt,
-		})
+		err = dm.AddAlarm(ctx, deviceID, int(message.Alarm.ID), message.Alarm.Severity, message.Alarm.ObservedAt)
+		if err != nil {
+			logger.Debug().Msg("failed to add alarm")
+			return
+		}
 
 		dm.UpdateDeviceState(ctx, deviceID, r.DeviceState{
 			Online:     d.DeviceState.Online,
 			State:      r.DeviceStateUnknown,
 			ObservedAt: message.Timestamp,
-		})		
+		})
 	}
 }
 
@@ -130,6 +135,6 @@ func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		if err != nil {
 			logger.Error().Err(err).Msg("failed to remove alarm")
 			return
-		}		
+		}
 	}
 }

@@ -2,6 +2,7 @@ package alarms
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms/events"
@@ -15,7 +16,8 @@ type AlarmService interface {
 	Start()
 	Stop()
 
-	GetAlarms(ctx context.Context) ([]db.Alarm, error)
+	GetAlarms(ctx context.Context, tenants ...string) ([]db.Alarm, error)
+	GetAlarmsByID(ctx context.Context, id ...int) ([]db.Alarm, error)
 	AddAlarm(ctx context.Context, alarm db.Alarm) error
 	CloseAlarm(ctx context.Context, alarmID int) error
 
@@ -46,7 +48,7 @@ func New(d db.AlarmRepository, m messaging.MsgContext, cfg *Configuration) Alarm
 func (a *alarmService) Start() {}
 func (a *alarmService) Stop()  {}
 
-func (a *alarmService) GetAlarms(ctx context.Context) ([]db.Alarm, error) {
+func (a *alarmService) GetAlarms(ctx context.Context, tenants ...string) ([]db.Alarm, error) {
 	alarms, err := a.alarmRepository.GetAll(ctx)
 	if err != nil {
 		return nil, err
@@ -55,16 +57,30 @@ func (a *alarmService) GetAlarms(ctx context.Context) ([]db.Alarm, error) {
 	return alarms, nil
 }
 
+func (a *alarmService) GetAlarmsByID(ctx context.Context, id ...int) ([]db.Alarm, error) {
+	alarms, err := a.alarmRepository.GetByID(ctx, id...)
+	if err != nil {
+		return nil, err
+	}
+
+	return alarms, nil
+}
+
 func (a *alarmService) AddAlarm(ctx context.Context, alarm db.Alarm) error {
-	err := a.alarmRepository.Add(ctx, alarm)
+	id, err := a.alarmRepository.Add(ctx, alarm)
 	if err != nil {
 		return err
 	}
 
+	alarms, err := a.alarmRepository.GetByID(ctx, id)
+	if err != nil || len(alarms) != 1 {
+		return fmt.Errorf("failed to add alarm, could not fetch newly created alarm")
+	}
+
 	return a.messenger.PublishOnTopic(ctx, &AlarmCreated{
-		Alarm:     alarm,
-		Tenant:    alarm.Tenant,
-		Timestamp: alarm.ObservedAt,
+		Alarm:     alarms[0],
+		Tenant:    alarms[0].Tenant,
+		Timestamp: alarms[0].ObservedAt,
 	})
 }
 
@@ -72,7 +88,7 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 	logger := logging.GetFromContext(ctx)
 
 	alarm, err := a.alarmRepository.GetByID(ctx, alarmID)
-	if err != nil {
+	if len(alarm) == 0 || err != nil {
 		logger.Debug().Msgf("alarm %d could not be fetched by ID", alarmID)
 		return err
 	}
@@ -82,7 +98,7 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 		return err
 	}
 
-	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Tenant: alarm.Tenant, Timestamp: time.Now().UTC()})
+	return a.messenger.PublishOnTopic(ctx, &AlarmClosed{ID: alarmID, Tenant: alarm[0].Tenant, Timestamp: time.Now().UTC()})
 }
 
 func (a *alarmService) GetConfiguration() Configuration {
