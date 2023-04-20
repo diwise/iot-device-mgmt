@@ -103,9 +103,26 @@ func TestGetByID(t *testing.T) {
 	is.NoErr(err)
 	is.True(len(alarms) > 0)
 
-	alarmsByID, err := r.GetByID(ctx, int(alarms[0].ID), 999)
+	alarmByID, err := r.GetByID(ctx, int(alarms[0].ID))
 	is.NoErr(err)
-	is.True(len(alarmsByID) > 0)
+	is.True(alarmByID.ID > 0)
+}
+
+func TestGetByRefID(t *testing.T) {
+	is, ctx, r := testSetupAlarmRepository(t)
+	i, err := r.Add(ctx, Alarm{
+		RefID:       "deviceID",
+		Type:        "type",
+		Severity:    AlarmSeverityHigh,
+		Description: "desc",
+		ObservedAt:  time.Now(),
+	})
+	is.NoErr(err)
+	is.True(i > 0)
+
+	alarms, err := r.GetByRefID(ctx, "deviceID")
+	is.NoErr(err)
+	is.True(len(alarms) > 0 && alarms[0].ID > 0 && alarms[0].Severity == AlarmSeverityHigh)
 }
 
 func testSetupAlarmRepository(t *testing.T) (*is.I, context.Context, AlarmRepository) {

@@ -27,8 +27,11 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //			GetAllFunc: func(ctx context.Context, tenants ...string) ([]Alarm, error) {
 //				panic("mock out the GetAll method")
 //			},
-//			GetByIDFunc: func(ctx context.Context, alarmIDs ...int) ([]Alarm, error) {
+//			GetByIDFunc: func(ctx context.Context, alarmID int) (Alarm, error) {
 //				panic("mock out the GetByID method")
+//			},
+//			GetByRefIDFunc: func(ctx context.Context, refID string) ([]Alarm, error) {
+//				panic("mock out the GetByRefID method")
 //			},
 //		}
 //
@@ -47,7 +50,10 @@ type AlarmRepositoryMock struct {
 	GetAllFunc func(ctx context.Context, tenants ...string) ([]Alarm, error)
 
 	// GetByIDFunc mocks the GetByID method.
-	GetByIDFunc func(ctx context.Context, alarmIDs ...int) ([]Alarm, error)
+	GetByIDFunc func(ctx context.Context, alarmID int) (Alarm, error)
+
+	// GetByRefIDFunc mocks the GetByRefID method.
+	GetByRefIDFunc func(ctx context.Context, refID string) ([]Alarm, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -76,14 +82,22 @@ type AlarmRepositoryMock struct {
 		GetByID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// AlarmIDs is the alarmIDs argument value.
-			AlarmIDs []int
+			// AlarmID is the alarmID argument value.
+			AlarmID int
+		}
+		// GetByRefID holds details about calls to the GetByRefID method.
+		GetByRefID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// RefID is the refID argument value.
+			RefID string
 		}
 	}
-	lockAdd     sync.RWMutex
-	lockClose   sync.RWMutex
-	lockGetAll  sync.RWMutex
-	lockGetByID sync.RWMutex
+	lockAdd        sync.RWMutex
+	lockClose      sync.RWMutex
+	lockGetAll     sync.RWMutex
+	lockGetByID    sync.RWMutex
+	lockGetByRefID sync.RWMutex
 }
 
 // Add calls AddFunc.
@@ -195,21 +209,21 @@ func (mock *AlarmRepositoryMock) GetAllCalls() []struct {
 }
 
 // GetByID calls GetByIDFunc.
-func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmIDs ...int) ([]Alarm, error) {
+func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
 	if mock.GetByIDFunc == nil {
 		panic("AlarmRepositoryMock.GetByIDFunc: method is nil but AlarmRepository.GetByID was just called")
 	}
 	callInfo := struct {
-		Ctx      context.Context
-		AlarmIDs []int
+		Ctx     context.Context
+		AlarmID int
 	}{
-		Ctx:      ctx,
-		AlarmIDs: alarmIDs,
+		Ctx:     ctx,
+		AlarmID: alarmID,
 	}
 	mock.lockGetByID.Lock()
 	mock.calls.GetByID = append(mock.calls.GetByID, callInfo)
 	mock.lockGetByID.Unlock()
-	return mock.GetByIDFunc(ctx, alarmIDs...)
+	return mock.GetByIDFunc(ctx, alarmID)
 }
 
 // GetByIDCalls gets all the calls that were made to GetByID.
@@ -217,15 +231,51 @@ func (mock *AlarmRepositoryMock) GetByID(ctx context.Context, alarmIDs ...int) (
 //
 //	len(mockedAlarmRepository.GetByIDCalls())
 func (mock *AlarmRepositoryMock) GetByIDCalls() []struct {
-	Ctx      context.Context
-	AlarmIDs []int
+	Ctx     context.Context
+	AlarmID int
 } {
 	var calls []struct {
-		Ctx      context.Context
-		AlarmIDs []int
+		Ctx     context.Context
+		AlarmID int
 	}
 	mock.lockGetByID.RLock()
 	calls = mock.calls.GetByID
 	mock.lockGetByID.RUnlock()
+	return calls
+}
+
+// GetByRefID calls GetByRefIDFunc.
+func (mock *AlarmRepositoryMock) GetByRefID(ctx context.Context, refID string) ([]Alarm, error) {
+	if mock.GetByRefIDFunc == nil {
+		panic("AlarmRepositoryMock.GetByRefIDFunc: method is nil but AlarmRepository.GetByRefID was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		RefID string
+	}{
+		Ctx:   ctx,
+		RefID: refID,
+	}
+	mock.lockGetByRefID.Lock()
+	mock.calls.GetByRefID = append(mock.calls.GetByRefID, callInfo)
+	mock.lockGetByRefID.Unlock()
+	return mock.GetByRefIDFunc(ctx, refID)
+}
+
+// GetByRefIDCalls gets all the calls that were made to GetByRefID.
+// Check the length with:
+//
+//	len(mockedAlarmRepository.GetByRefIDCalls())
+func (mock *AlarmRepositoryMock) GetByRefIDCalls() []struct {
+	Ctx   context.Context
+	RefID string
+} {
+	var calls []struct {
+		Ctx   context.Context
+		RefID string
+	}
+	mock.lockGetByRefID.RLock()
+	calls = mock.calls.GetByRefID
+	mock.lockGetByRefID.RUnlock()
 	return calls
 }
