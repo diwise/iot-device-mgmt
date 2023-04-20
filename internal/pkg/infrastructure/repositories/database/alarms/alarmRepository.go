@@ -16,9 +16,10 @@ import (
 var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 
 type AlarmRepository interface {
-	GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error)
+	GetAll(ctx context.Context, tenants ...string) ([]Alarm, error)
 	GetByID(ctx context.Context, alarmID int) (Alarm, error)
-	Add(ctx context.Context, alarm Alarm) error
+	GetByRefID(ctx context.Context, refID string) ([]Alarm, error)
+	Add(ctx context.Context, alarm Alarm) (int, error)
 	Close(ctx context.Context, alarmID int) error
 }
 
@@ -56,66 +57,69 @@ func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
 		return result.Error
 	}
 
-	a.Active = false
 	err := d.db.Debug().WithContext(ctx).
-		Save(&a).
+		Delete(&a).
 		Error
 
 	return err
 }
 
-func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) error {
+func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 	logger := logging.GetFromContext(ctx)
 
 	a := &Alarm{}
 
 	result := d.db.Debug().WithContext(ctx).
-		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID, Active: true}).
+		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID}).
 		First(&a)
 
 	if result.RowsAffected > 0 {
-		logger.Debug().Msgf("found an active alarm to update time on")
-		a.ObservedAt = alarm.ObservedAt
-		err := d.db.Debug().WithContext(ctx).
-			Save(&a).
-			Error
-		return err
+		err := d.db.Model(&a).Update("observed_at", alarm.ObservedAt).Error
+		return int(a.ID), err
 	}
 
-	logger.Debug().Msg("add new alarm")
+	logger.Debug().Msgf("add new alarm, refID: %s, type: %s, tenant: %s", alarm.RefID, alarm.Type, alarm.Tenant)
 
-	err := d.db.Debug().WithContext(ctx).
-		Save(&alarm).
-		Error
+	result = d.db.Debug().WithContext(ctx).
+		Create(&alarm)
+	if result.Error != nil {
+		return 0, result.Error
+	}
 
-	return err
+	return int(alarm.ID), nil
 }
 
 func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
-	alarm := &Alarm{}
+	alarm := Alarm{}
 
-	err := d.db.WithContext(ctx).
-		Where(&Alarm{ID: uint(alarmID)}).
-		First(&alarm).
+	err := d.db.Debug().WithContext(ctx).First(&alarm, alarmID).Error
+
+	if err != nil {
+		return Alarm{}, err
+	}
+
+	return alarm, nil
+}
+
+func (d *alarmRepository) GetByRefID(ctx context.Context, refID string) ([]Alarm, error) {
+	alarms := []Alarm{}
+
+	err := d.db.Debug().WithContext(ctx).
+		Where(&Alarm{RefID: refID}).
+		Find(&alarms).
 		Error
 
 	if err != nil {
-		return Alarm{}, nil
+		return []Alarm{}, err
 	}
 
-	return *alarm, nil
+	return alarms, nil
 }
 
-func (d *alarmRepository) GetAll(ctx context.Context, onlyActive bool) ([]Alarm, error) {
+func (d *alarmRepository) GetAll(ctx context.Context, tenants ...string) ([]Alarm, error) {
 	var alarms []Alarm
 
-	query := d.db.WithContext(ctx)
-
-	if onlyActive {
-		query = query.Where(&Alarm{Active: true})
-	}
-
-	err := query.Find(&alarms).Error
+	err := d.db.WithContext(ctx).Find(&alarms).Error
 	if err != nil {
 		return []Alarm{}, err
 	}

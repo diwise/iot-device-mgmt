@@ -142,6 +142,10 @@ type Alarm struct {
 	ObservedAt time.Time `json:"-"`
 }
 
+func (Alarm) TableName() string {
+	return "device_alarms"
+}
+
 func (d *Device) HasActiveAlarms() (bool, int, []Alarm) {
 	highestSeverityLevel := 0
 

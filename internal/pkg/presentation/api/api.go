@@ -10,6 +10,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	aDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -40,7 +41,6 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 			r.Route("/devices", func(r chi.Router) {
 				r.Get("/", queryDevicesHandler(log, svc))
 				r.Get("/{deviceID}", getDeviceDetails(log, svc))
-
 				r.Post("/", createDeviceHandler(log, svc))
 				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
 			})
@@ -241,19 +241,27 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		onlyActive := r.URL.Query().Get("active") == "true"
-		alarms, err := svc.GetAlarms(ctx, onlyActive)
+		var alarms []aDb.Alarm
+
+		refID := r.URL.Query().Get("refID")
+
+		if len(refID) > 0 {
+			alarms, err = svc.GetAlarmsByRefID(ctx, refID, allowedTenants...)
+		} else {
+			alarms, err = svc.GetAlarms(ctx, allowedTenants...)
+		}
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to fetch alarms")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 		b, err := json.Marshal(alarms)
 		if err != nil {
 			requestLogger.Error().Err(err).Msg("unable to marshal alarms")

@@ -14,70 +14,115 @@ import (
 func TestAddAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
 
-	err := r.Add(ctx, Alarm{
+	i, err := r.Add(ctx, Alarm{
 		RefID:       "deviceID",
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
-		Active:      true,
 		ObservedAt:  time.Now(),
 	})
 
 	is.NoErr(err)
+	is.True(i > 0)
 }
 
 func TestAddTwoAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
 
-	alarms, _ := r.GetAll(ctx, false)
+	alarms, _ := r.GetAll(ctx)
 	l := len(alarms)
 
-	deviceID := uuid.New().String()
-
-	err := r.Add(ctx, Alarm{
-		RefID:       "deviceID",
+	_, err := r.Add(ctx, Alarm{
+		RefID:       uuid.New().String(),
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
-		Active:      true,
 		ObservedAt:  time.Now(),
 	})
-
 	is.NoErr(err)
 
-	err = r.Add(ctx, Alarm{
+	deviceID := uuid.New().String()
+
+	_, err = r.Add(ctx, Alarm{
 		RefID:       deviceID,
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
-		Active:      true,
 		ObservedAt:  time.Now(),
 	})
-
 	is.NoErr(err)
 
-	alarms, _ = r.GetAll(ctx, false)
+	alarms, _ = r.GetAll(ctx)
+	is.Equal(l+2, len(alarms))
 
-	is.Equal(l+1, len(alarms))
+	_, err = r.Add(ctx, Alarm{
+		RefID:       deviceID,
+		Type:        "type",
+		Severity:    AlarmSeverityHigh,
+		Description: "desc",
+		ObservedAt:  time.Now(),
+	})
+	is.NoErr(err)
+
+	alarms, _ = r.GetAll(ctx)
+	is.Equal(l+2, len(alarms))
 }
 
 func TestGetAlarms(t *testing.T) {
 	is, ctx, r := testSetupAlarmRepository(t)
-	err := r.Add(ctx, Alarm{
+	i, err := r.Add(ctx, Alarm{
 		RefID:       "deviceID",
 		Type:        "type",
 		Severity:    AlarmSeverityHigh,
 		Description: "desc",
-		Active:      true,
 		ObservedAt:  time.Now(),
 	})
 	is.NoErr(err)
+	is.True(i > 0)
 
-	alarms, err := r.GetAll(ctx, true)
+	alarms, err := r.GetAll(ctx)
 	is.NoErr(err)
 
 	is.True(len(alarms) > 0)
 
+}
+
+func TestGetByID(t *testing.T) {
+	is, ctx, r := testSetupAlarmRepository(t)
+	i, err := r.Add(ctx, Alarm{
+		RefID:       "deviceID",
+		Type:        "type",
+		Severity:    AlarmSeverityHigh,
+		Description: "desc",
+		ObservedAt:  time.Now(),
+	})
+	is.NoErr(err)
+	is.True(i > 0)
+
+	alarms, err := r.GetAll(ctx)
+	is.NoErr(err)
+	is.True(len(alarms) > 0)
+
+	alarmByID, err := r.GetByID(ctx, int(alarms[0].ID))
+	is.NoErr(err)
+	is.True(alarmByID.ID > 0)
+}
+
+func TestGetByRefID(t *testing.T) {
+	is, ctx, r := testSetupAlarmRepository(t)
+	i, err := r.Add(ctx, Alarm{
+		RefID:       "deviceID",
+		Type:        "type",
+		Severity:    AlarmSeverityHigh,
+		Description: "desc",
+		ObservedAt:  time.Now(),
+	})
+	is.NoErr(err)
+	is.True(i > 0)
+
+	alarms, err := r.GetByRefID(ctx, "deviceID")
+	is.NoErr(err)
+	is.True(len(alarms) > 0 && alarms[0].ID > 0 && alarms[0].Severity == AlarmSeverityHigh)
 }
 
 func testSetupAlarmRepository(t *testing.T) (*is.I, context.Context, AlarmRepository) {
