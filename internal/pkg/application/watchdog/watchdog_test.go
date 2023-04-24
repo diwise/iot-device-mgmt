@@ -57,11 +57,11 @@ func TestBatteryLevelChangedPublish(t *testing.T) {
 	err := json.Unmarshal([]byte(devicesJson), &devices)
 	is.NoErr(err)
 
-	var msg messaging.TopicMessage	
+	var msg messaging.TopicMessage
 
 	m := &messaging.MsgContextMock{
 		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			msg = message			
+			msg = message
 			return nil
 		},
 	}
@@ -88,7 +88,7 @@ func TestBatteryLevelChangedPublish(t *testing.T) {
 	err = bw.publish(ctx, devices[0].DeviceID)
 	is.NoErr(err)
 
-	is.Equal("watchdog.batteryLevelChanged", msg.TopicName())	
+	is.Equal("watchdog.batteryLevelChanged", msg.TopicName())
 }
 
 func TestCheckBatteryLevel(t *testing.T) {

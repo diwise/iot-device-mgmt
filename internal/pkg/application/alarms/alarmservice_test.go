@@ -153,6 +153,15 @@ func TestParseConfigFile(t *testing.T) {
 	is.Equal("", config.AlarmConfigurations[7].ID)
 }
 
+func TestWithNoConfigFile(t *testing.T) {
+	is := is.New(t)
+	config := LoadConfiguration("")
+	is.Equal(nil, config)
+
+	svc := New(&alarms.AlarmRepositoryMock{}, &messaging.MsgContextMock{}, config)
+	is.True(nil != svc.GetConfiguration().AlarmConfigurations)
+}
+
 func testSetup(t *testing.T) (*is.I, context.Context, zerolog.Logger) {
 	is := is.New(t)
 	return is, context.Background(), zerolog.Logger{}

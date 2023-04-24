@@ -1,9 +1,3 @@
 deviceID;functionID;alarmName;alarmType;min;max;severity;description
 ;;deviceNotObserved;-;;;1;
-net:test:iot:a81757;;batteryLevel;MIN;20;0;1;
-;a817bf9e;counter;MAX;;10;1;
-;fbf9f;counter;BETWEEN;1;10;1;Count ska vara mellan {MIN} och {MAX} men är {VALUE}
-;323c6;level;MAX;;4;1;
-;70t589;waterquality;BETWEEN;4;35;1;Temp ska vara mellan {MIN} och {MAX} men är {VALUE}
 ;;UPLINK_FCNT_RETRANSMISSION;-;;;1;
-	

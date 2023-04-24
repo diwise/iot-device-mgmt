@@ -111,5 +111,11 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 }
 
 func (a *alarmService) GetConfiguration() Configuration {
+	if a.config == nil {
+		return Configuration{
+			AlarmConfigurations: make([]AlarmConfig, 0),
+		}
+	}
+
 	return *a.config
 }

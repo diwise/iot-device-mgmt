@@ -151,7 +151,7 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	})
 }
 
-func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {	
+func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
 	return d.deviceRepository.AddAlarm(ctx, deviceID, alarmID, severity, observedAt)
 }
 

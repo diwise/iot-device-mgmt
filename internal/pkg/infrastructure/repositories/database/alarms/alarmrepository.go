@@ -117,7 +117,7 @@ func (d *alarmRepository) GetByRefID(ctx context.Context, refID string) ([]Alarm
 }
 
 func (d *alarmRepository) GetAll(ctx context.Context, tenants ...string) ([]Alarm, error) {
-	var alarms []Alarm
+	alarms := []Alarm{}
 
 	err := d.db.WithContext(ctx).Find(&alarms).Error
 	if err != nil {
