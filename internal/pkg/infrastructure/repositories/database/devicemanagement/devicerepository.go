@@ -243,7 +243,7 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
 	device := Device{}
 
-	result := d.Db(ctx).Debug().
+	result := d.Db(ctx).
 		Preload("Alarms").
 		Where(&Device{DeviceID: deviceID}).
 		First(&device)
@@ -253,7 +253,7 @@ func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmI
 
 	device.Alarms = append(device.Alarms, Alarm{AlarmID: alarmID, Severity: severity, ObservedAt: observedAt})
 
-	return d.Db(ctx).Debug().Save(&device).Error
+	return d.Db(ctx).Save(&device).Error
 }
 
 func (d *deviceRepository) RemoveAlarmByID(ctx context.Context, alarmID int) (string, error) {
