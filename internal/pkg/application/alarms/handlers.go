@@ -138,7 +138,7 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 		err = as.AddAlarm(ctx, db.Alarm{
 			RefID:       message.DeviceID,
 			Type:        AlarmDeviceNotObserved,
-			Severity:    db.AlarmSeverityMedium,			
+			Severity:    db.AlarmSeverityMedium,
 			Tenant:      message.Tenant,
 			ObservedAt:  time.Now().UTC(),
 			Description: fmt.Sprintf("Ingen kommunikation registrerad från %s", message.DeviceID),
@@ -217,7 +217,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 		err = as.AddAlarm(ctx, db.Alarm{
 			RefID:       message.DeviceID,
 			Type:        alarmType(),
-			Severity:    db.AlarmSeverityLow,			
+			Severity:    db.AlarmSeverityLow,
 			Tenant:      message.Tenant,
 			ObservedAt:  ts,
 			Description: description(""),
@@ -290,7 +290,7 @@ func addAlarm(ctx context.Context, as AlarmService, id, desc, tenant string, ts 
 	err := as.AddAlarm(ctx, db.Alarm{
 		RefID:       id,
 		Type:        cfg.Name,
-		Severity:    cfg.Severity,		
+		Severity:    cfg.Severity,
 		Tenant:      tenant,
 		ObservedAt:  ts,
 		Description: desc,

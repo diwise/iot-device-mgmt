@@ -22,7 +22,7 @@ type Alarm struct {
 
 	Type        string    `json:"type"`
 	Severity    int       `json:"severity"`
-	Description string    `json:"description"`	
+	Description string    `json:"description"`
 	Tenant      string    `json:"tenant"`
 	ObservedAt  time.Time `json:"observedAt"`
 }
