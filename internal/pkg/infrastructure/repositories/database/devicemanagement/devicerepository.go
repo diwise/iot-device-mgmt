@@ -362,6 +362,7 @@ func (dr deviceRecord) Device() Device {
 			Altitude:  0.0,
 		},
 		Environment: dr.where,
+		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: DeviceProfile{
 			Name:     dr.sensorType,
