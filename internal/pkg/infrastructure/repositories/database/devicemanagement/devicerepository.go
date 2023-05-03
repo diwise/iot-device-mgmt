@@ -335,6 +335,7 @@ type deviceRecord struct {
 	active      bool
 	tenant      string
 	interval    int
+	source      string
 }
 
 func (dr deviceRecord) Device() Device {
@@ -421,6 +422,7 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		active:      strToBool(r[9]),
 		tenant:      r[10],
 		interval:    strToInt(r[11], 3600),
+		source:      r[12],
 	}
 
 	err := validateDeviceRecord(dr)
