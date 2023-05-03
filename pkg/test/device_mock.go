@@ -5,8 +5,7 @@ package test
 
 import (
 	"sync"
-
-	"github.com/diwise/iot-device-mgmt/pkg/client"
+	 "github.com/diwise/iot-device-mgmt/pkg/client"
 )
 
 // Ensure, that DeviceMock does implement Device.
@@ -36,6 +35,9 @@ var _ client.Device = &DeviceMock{}
 //			},
 //			SensorTypeFunc: func() string {
 //				panic("mock out the SensorType method")
+//			},
+//			SourceFunc: func() string {
+//				panic("mock out the Source method")
 //			},
 //			TenantFunc: func() string {
 //				panic("mock out the Tenant method")
@@ -68,6 +70,9 @@ type DeviceMock struct {
 	// SensorTypeFunc mocks the SensorType method.
 	SensorTypeFunc func() string
 
+	// SourceFunc mocks the Source method.
+	SourceFunc func() string
+
 	// TenantFunc mocks the Tenant method.
 	TenantFunc func() string
 
@@ -94,6 +99,9 @@ type DeviceMock struct {
 		// SensorType holds details about calls to the SensorType method.
 		SensorType []struct {
 		}
+		// Source holds details about calls to the Source method.
+		Source []struct {
+		}
 		// Tenant holds details about calls to the Tenant method.
 		Tenant []struct {
 		}
@@ -107,6 +115,7 @@ type DeviceMock struct {
 	lockLatitude    sync.RWMutex
 	lockLongitude   sync.RWMutex
 	lockSensorType  sync.RWMutex
+	lockSource      sync.RWMutex
 	lockTenant      sync.RWMutex
 	lockTypes       sync.RWMutex
 }
@@ -270,6 +279,33 @@ func (mock *DeviceMock) SensorTypeCalls() []struct {
 	mock.lockSensorType.RLock()
 	calls = mock.calls.SensorType
 	mock.lockSensorType.RUnlock()
+	return calls
+}
+
+// Source calls SourceFunc.
+func (mock *DeviceMock) Source() string {
+	if mock.SourceFunc == nil {
+		panic("DeviceMock.SourceFunc: method is nil but Device.Source was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockSource.Lock()
+	mock.calls.Source = append(mock.calls.Source, callInfo)
+	mock.lockSource.Unlock()
+	return mock.SourceFunc()
+}
+
+// SourceCalls gets all the calls that were made to Source.
+// Check the length with:
+//
+//	len(mockedDevice.SourceCalls())
+func (mock *DeviceMock) SourceCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockSource.RLock()
+	calls = mock.calls.Source
+	mock.lockSource.RUnlock()
 	return calls
 }
 
