@@ -190,13 +190,14 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 // change "var _ Device = &DeviceMock{}" to "var _ client.Device = &DeviceMock{}"
 type Device interface {
 	ID() string
+	Environment() string
+	IsActive() bool
 	Latitude() float64
 	Longitude() float64
-	Environment() string
-	Types() []string
 	SensorType() string
-	IsActive() bool
+	Source() string
 	Tenant() string
+	Types() []string
 }
 
 type deviceWrapper struct {
@@ -237,4 +238,8 @@ func (d *deviceWrapper) IsActive() bool {
 
 func (d *deviceWrapper) Tenant() string {
 	return d.impl.Tenant.Name
+}
+
+func (d *deviceWrapper) Source() string {
+	return d.impl.Source
 }
