@@ -18,6 +18,7 @@ type Device struct {
 	Description string   `json:"description"`
 	Location    Location `json:"location"`
 	Environment string   `json:"environment"`
+	Source      string   `json:"source"`
 
 	Lwm2mTypes []Lwm2mType `gorm:"many2many:device_lwm2mType;" json:"types"`
 	Tags       []Tag       `gorm:"many2many:device_tags;" json:"tags"`

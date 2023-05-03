@@ -335,6 +335,7 @@ type deviceRecord struct {
 	active      bool
 	tenant      string
 	interval    int
+	source      string
 }
 
 func (dr deviceRecord) Device() Device {
@@ -361,6 +362,7 @@ func (dr deviceRecord) Device() Device {
 			Altitude:  0.0,
 		},
 		Environment: dr.where,
+		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: DeviceProfile{
 			Name:     dr.sensorType,
@@ -421,6 +423,7 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		active:      strToBool(r[9]),
 		tenant:      r[10],
 		interval:    strToInt(r[11], 3600),
+		source:      r[12],
 	}
 
 	err := validateDeviceRecord(dr)
