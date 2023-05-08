@@ -113,7 +113,7 @@ func (d *deviceRepository) GetDeviceID(ctx context.Context, sensorID string) (st
 	var device = Device{}
 
 	result := d.Db(ctx).
-		Where(&Device{SensorID: sensorID}).
+		Where(&Device{SensorID: strings.ToLower(sensorID)}).
 		First(&device)
 
 	return device.DeviceID, result.Error
@@ -127,10 +127,10 @@ func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID str
 	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
-		query = query.Where(&Device{SensorID: sensorID})
+		query = query.Where(&Device{SensorID: strings.ToLower(sensorID)})
 	} else {
 		t := d.getTenantIDs(ctx, tenants...)
-		query = query.Where("sensor_id = ? AND tenant_id IN ?", sensorID, t)
+		query = query.Where("sensor_id = ? AND tenant_id IN ?", strings.ToLower(sensorID), t)
 	}
 
 	result := query.First(&device)
@@ -155,10 +155,10 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 	query := d.getDeviceQuery(ctx)
 
 	if len(tenants) == 0 {
-		query = query.Where(&Device{DeviceID: deviceID})
+		query = query.Where(&Device{DeviceID: strings.ToLower(deviceID)})
 	} else {
 		t := d.getTenantIDs(ctx, tenants...)
-		query = query.Where("device_id = ? AND tenant_id IN ?", deviceID, t)
+		query = query.Where("device_id = ? AND tenant_id IN ?", strings.ToLower(deviceID), t)
 	}
 
 	result := query.First(&device)
@@ -200,7 +200,7 @@ func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID stri
 	var device = Device{}
 	err := d.Db(ctx).
 		Preload("DeviceStatus").
-		Where(&Device{DeviceID: deviceID}).
+		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device).
 		Error
 
@@ -222,7 +222,7 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 	var device = Device{}
 	err := d.Db(ctx).
 		Preload("DeviceState").
-		Where(&Device{DeviceID: deviceID}).
+		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device).
 		Error
 
@@ -245,7 +245,7 @@ func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmI
 
 	result := d.Db(ctx).
 		Preload("Alarms").
-		Where(&Device{DeviceID: deviceID}).
+		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device)
 	if result.RowsAffected == 0 || errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return fmt.Errorf("device %s not found", deviceID)
@@ -417,7 +417,7 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		lon:         strTof64(r[3]),
 		where:       r[4],
 		types:       strToArr(r[5]),
-		sensorType:  r[6],
+		sensorType:  strings.ToLower(r[6]),
 		name:        r[7],
 		description: r[8],
 		active:      strToBool(r[9]),
