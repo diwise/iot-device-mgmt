@@ -17,6 +17,7 @@ flowchart LR
         watchdog-->watchdog
     end 
 ```
+
 ## Dependencies 
 # Storage
 When the service is started data will be loaded from configuration files and stored in a database. If `DIWISE_SQLDB_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
