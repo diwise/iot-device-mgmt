@@ -32,6 +32,7 @@ The only requirement is that the policy evaluation result is an object that cont
 A [basic policy file](./assets/config/authz.rego) is included in the built image by default, but is expected to be replaced with an organisational specific policy at the time of deployment.
 
 # Configuration
+
 ## Environment variables
 ```json
 "RABBITMQ_HOST": "<rabbit mq hostname>"
