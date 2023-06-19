@@ -102,5 +102,6 @@ notifications:
     subscribers:
     - endpoint: http://endpoint/api/cloudevents
 ```
+
 # Links
 [iot-device-mgmt](https://diwise.github.io/) on diwise.github.io
