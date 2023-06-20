@@ -67,7 +67,7 @@ func main() {
 
 func setupDatabaseConnection(logger zerolog.Logger) db.ConnectorFunc {
 	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
-		return db.NewPostgreSQLConnector(logger)
+		return db.NewPostgreSQLConnector(logger, db.LoadConfigFromEnv(logger))
 	}
 
 	logger.Info().Msg("no sql database configured, using builtin sqlite instead")

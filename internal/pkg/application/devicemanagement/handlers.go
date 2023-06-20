@@ -11,11 +11,13 @@ import (
 	"github.com/rs/zerolog"
 
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+
+	"github.com/samber/lo"
 )
 
 func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "DeviceStatusHandler").Logger()
+		log := logger.With().Str("handler", "devicemanagement.DeviceStatusHandler").Logger()
 
 		status := struct {
 			DeviceID     string   `json:"deviceID"`
@@ -28,34 +30,38 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 
 		err := json.Unmarshal(msg.Body, &status)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			log.Error().Err(err).Msg("failed to unmarshal message")
 			return
 		}
 
-		logger = logger.With().Str("device_id", status.DeviceID).Logger()
+		log = log.With().Str("device_id", status.DeviceID).Logger()
 
 		lastObserved, err := time.Parse(time.RFC3339Nano, status.Timestamp)
 		if err != nil {
-			logger.Error().Err(err).Msg("no valid timestamp")
+			log.Error().Err(err).Msg("no valid timestamp")
 			return
 		}
 
-		err = dm.UpdateDeviceStatus(ctx, status.DeviceID, r.DeviceStatus{
-			BatteryLevel: status.BatteryLevel,
-			LastObserved: lastObserved,
+		_, _, err = lo.AttemptWithDelay(3, 1*time.Second, func(index int, duration time.Duration) error {
+			return dm.UpdateDeviceStatus(ctx, status.DeviceID, r.DeviceStatus{
+				BatteryLevel: status.BatteryLevel,
+				LastObserved: lastObserved,
+			})
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("could not update status on device")
+			log.Error().Err(err).Msg("could not update status on device")
 			return
 		}
 
-		err = dm.UpdateDeviceState(ctx, status.DeviceID, r.DeviceState{
-			Online:     true,
-			State:      r.DeviceStateOK,
-			ObservedAt: lastObserved,
+		_, _, err = lo.AttemptWithDelay(3, 1*time.Second, func(index int, duration time.Duration) error {
+			return dm.UpdateDeviceState(ctx, status.DeviceID, r.DeviceState{
+				Online:     true,
+				State:      r.DeviceStateOK,
+				ObservedAt: lastObserved,
+			})
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("could not update state on device")
+			log.Error().Err(err).Msg("could not update state on device")
 			return
 		}
 	}

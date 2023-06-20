@@ -46,7 +46,7 @@ func NewAlarmRepository(connect ConnectorFunc) (AlarmRepository, error) {
 func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
 	a := Alarm{}
 
-	result := d.db.WithContext(ctx).
+	result := d.db.
 		Where(&Alarm{ID: uint(alarmID)}).
 		First(&a)
 
@@ -57,7 +57,7 @@ func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
 		return result.Error
 	}
 
-	err := d.db.WithContext(ctx).
+	err := d.db.
 		Delete(&a).
 		Error
 
@@ -69,7 +69,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 
 	a := &Alarm{}
 
-	result := d.db.WithContext(ctx).
+	result := d.db.
 		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID}).
 		First(&a)
 
@@ -80,8 +80,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 
 	logger.Debug().Msgf("add new alarm, refID: %s, type: %s, tenant: %s", alarm.RefID, alarm.Type, alarm.Tenant)
 
-	result = d.db.WithContext(ctx).
-		Create(&alarm)
+	result = d.db.Create(&alarm)
 	if result.Error != nil {
 		return 0, result.Error
 	}
@@ -92,7 +91,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, error) {
 	alarm := Alarm{}
 
-	err := d.db.WithContext(ctx).First(&alarm, alarmID).Error
+	err := d.db.First(&alarm, alarmID).Error
 
 	if err != nil {
 		return Alarm{}, err
@@ -104,7 +103,7 @@ func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, erro
 func (d *alarmRepository) GetByRefID(ctx context.Context, refID string) ([]Alarm, error) {
 	alarms := []Alarm{}
 
-	err := d.db.WithContext(ctx).
+	err := d.db.
 		Where(&Alarm{RefID: refID}).
 		Find(&alarms).
 		Error
@@ -119,7 +118,7 @@ func (d *alarmRepository) GetByRefID(ctx context.Context, refID string) ([]Alarm
 func (d *alarmRepository) GetAll(ctx context.Context, tenants ...string) ([]Alarm, error) {
 	alarms := []Alarm{}
 
-	err := d.db.WithContext(ctx).Find(&alarms).Error
+	err := d.db.Find(&alarms).Error
 	if err != nil {
 		return []Alarm{}, err
 	}
