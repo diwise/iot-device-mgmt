@@ -17,6 +17,7 @@ flowchart LR
         watchdog-->watchdog
     end 
 ```
+
 ## Dependencies 
 # Storage
 When the service is started data will be loaded from configuration files and stored in a database. If `DIWISE_SQLDB_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
@@ -31,6 +32,7 @@ The only requirement is that the policy evaluation result is an object that cont
 A [basic policy file](./assets/config/authz.rego) is included in the built image by default, but is expected to be replaced with an organisational specific policy at the time of deployment.
 
 # Configuration
+
 ## Environment variables
 ```json
 "RABBITMQ_HOST": "<rabbit mq hostname>"
@@ -100,5 +102,6 @@ notifications:
     subscribers:
     - endpoint: http://endpoint/api/cloudevents
 ```
+
 # Links
 [iot-device-mgmt](https://diwise.github.io/) on diwise.github.io

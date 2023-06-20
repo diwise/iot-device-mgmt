@@ -13,6 +13,7 @@ import (
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
@@ -27,7 +28,7 @@ func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 	}
 
 	return &deviceRepository{
-		_db: impl,
+		db: impl,
 	}, nil
 }
 
@@ -36,7 +37,6 @@ func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 type DeviceRepository interface {
 	GetDevices(ctx context.Context, tenants ...string) ([]Device, error)
 	GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error)
-	GetDeviceID(ctx context.Context, sensorID string) (string, error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (Device, error)
 	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (Device, error)
 
@@ -55,29 +55,13 @@ var ErrDeviceNotFound = fmt.Errorf("device not found")
 var ErrRepositoryError = fmt.Errorf("could not fetch data from repository")
 
 type deviceRepository struct {
-	_db *gorm.DB
-}
-
-func (d *deviceRepository) Db(ctx context.Context) (tx *gorm.DB) {
-	return d._db.WithContext(ctx)
-}
-
-func (d *deviceRepository) getDeviceQuery(ctx context.Context) (tx *gorm.DB) {
-	return d.Db(ctx).
-		Preload("Location").
-		Preload("Tenant").
-		Preload("DeviceProfile").
-		Preload("Lwm2mTypes").
-		Preload("DeviceStatus").
-		Preload("DeviceState").
-		Preload("Tags").
-		Preload("Alarms")
+	db *gorm.DB
 }
 
 func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.getDeviceQuery(ctx)
+	query := d.db.Preload(clause.Associations)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -91,7 +75,7 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.getDeviceQuery(ctx)
+	query := d.db.Preload(clause.Associations)
 
 	if len(tenants) > 0 {
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
@@ -109,22 +93,12 @@ func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...stri
 	return online, result.Error
 }
 
-func (d *deviceRepository) GetDeviceID(ctx context.Context, sensorID string) (string, error) {
-	var device = Device{}
-
-	result := d.Db(ctx).
-		Where(&Device{SensorID: strings.ToLower(sensorID)}).
-		First(&device)
-
-	return device.DeviceID, result.Error
-}
-
 func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (Device, error) {
 	logger := logging.GetFromContext(ctx)
 
 	var device = Device{}
 
-	query := d.getDeviceQuery(ctx)
+	query := d.db.Preload(clause.Associations)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{SensorID: strings.ToLower(sensorID)})
@@ -152,7 +126,7 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 	logger := logging.GetFromContext(ctx)
 
 	var device = Device{}
-	query := d.getDeviceQuery(ctx)
+	query := d.db.Preload(clause.Associations)
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: strings.ToLower(deviceID)})
@@ -188,17 +162,20 @@ func (d *deviceRepository) Save(ctx context.Context, device *Device) error {
 		}
 	}
 
-	err := d.Db(ctx).
-		Session(&gorm.Session{FullSaveAssociations: true}).
-		Save(device).
-		Error
+	tx := d.db.Session(&gorm.Session{
+		FullSaveAssociations:   true,
+		SkipDefaultTransaction: true,
+	})
+
+	tx = tx.Save(device)
+	err := tx.Error
 
 	return err
 }
 
 func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error {
 	var device = Device{}
-	err := d.Db(ctx).
+	err := d.db.
 		Preload("DeviceStatus").
 		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device).
@@ -210,7 +187,7 @@ func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID stri
 
 	device.DeviceStatus = deviceStatus
 
-	err = d.Db(ctx).Save(&device).Error
+	err = d.db.Save(&device).Error
 	if err != nil {
 		return err
 	}
@@ -220,7 +197,7 @@ func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID stri
 
 func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error {
 	var device = Device{}
-	err := d.Db(ctx).
+	err := d.db.
 		Preload("DeviceState").
 		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device).
@@ -232,7 +209,7 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 
 	device.DeviceState = deviceState
 
-	err = d.Db(ctx).Save(&device).Error
+	err = d.db.Save(&device).Error
 	if err != nil {
 		return err
 	}
@@ -243,7 +220,7 @@ func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID strin
 func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
 	device := Device{}
 
-	result := d.Db(ctx).
+	result := d.db.
 		Preload("Alarms").
 		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
 		First(&device)
@@ -253,13 +230,13 @@ func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmI
 
 	device.Alarms = append(device.Alarms, Alarm{AlarmID: alarmID, Severity: severity, ObservedAt: observedAt})
 
-	return d.Db(ctx).Save(&device).Error
+	return d.db.Save(&device).Error
 }
 
 func (d *deviceRepository) RemoveAlarmByID(ctx context.Context, alarmID int) (string, error) {
 	a := Alarm{}
 
-	result := d.Db(ctx).
+	result := d.db.
 		Where(&Alarm{AlarmID: alarmID}).
 		First(&a)
 
@@ -268,14 +245,14 @@ func (d *deviceRepository) RemoveAlarmByID(ctx context.Context, alarmID int) (st
 	}
 
 	device := Device{}
-	err := d.Db(ctx).
+	err := d.db.
 		First(&device, a.DeviceID).
 		Error
 	if err != nil {
 		return "", err
 	}
 
-	err = d.Db(ctx).
+	err = d.db.
 		Delete(&a).
 		Error
 
@@ -309,7 +286,7 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
 
 func (d *deviceRepository) getTenantIDs(ctx context.Context, tenants ...string) []int {
 	var ten = []Tenant{}
-	d.Db(ctx).
+	d.db.
 		Select("id").
 		Where("name IN ?", tenants).
 		Find(&ten)
