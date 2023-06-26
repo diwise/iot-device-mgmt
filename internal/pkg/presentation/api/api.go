@@ -57,6 +57,7 @@ func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, s
 func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "create-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -92,6 +93,7 @@ func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
@@ -157,6 +159,7 @@ func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 func getDeviceDetails(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
@@ -203,6 +206,7 @@ func getDeviceDetails(log zerolog.Logger, svc devicemanagement.DeviceManagement)
 func patchDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "patch-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -240,6 +244,7 @@ func patchDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagemen
 func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
@@ -278,6 +283,7 @@ func getAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerF
 func patchAlarmsHandler(log zerolog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		defer r.Body.Close()
 
 		//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
