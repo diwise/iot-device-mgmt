@@ -9,6 +9,7 @@ import (
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
+	"github.com/samber/lo"
 
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -152,7 +153,7 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 
 func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "DeviceStatusHandler").Logger()
+		logger = logger.With().Str("handler", "alarms.DeviceStatusHandler").Logger()
 
 		message := deviceStatus{}
 
@@ -214,13 +215,15 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 			}
 		}
 
-		err = as.AddAlarm(ctx, db.Alarm{
-			RefID:       message.DeviceID,
-			Type:        alarmType(),
-			Severity:    db.AlarmSeverityLow,
-			Tenant:      message.Tenant,
-			ObservedAt:  ts,
-			Description: description(""),
+		_, _, err = lo.AttemptWithDelay(3, 1*time.Second, func(index int, duration time.Duration) error {
+			return as.AddAlarm(ctx, db.Alarm{
+				RefID:       message.DeviceID,
+				Type:        alarmType(),
+				Severity:    db.AlarmSeverityLow,
+				Tenant:      message.Tenant,
+				ObservedAt:  ts,
+				Description: description(""),
+			})
 		})
 		if err != nil {
 			logger.Error().Err(err).Msg("could not add alarm")

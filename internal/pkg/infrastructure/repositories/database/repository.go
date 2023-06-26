@@ -13,6 +13,30 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+type ConnectorConfig struct {
+	Host     string
+	Username string
+	DbName   string
+	Password string
+	SslMode  string
+}
+
+func LoadConfigFromEnv(log zerolog.Logger) ConnectorConfig {
+	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
+	username := os.Getenv("DIWISE_SQLDB_USER")
+	dbName := os.Getenv("DIWISE_SQLDB_NAME")
+	password := os.Getenv("DIWISE_SQLDB_PASSWORD")
+	sslMode := env.GetVariableOrDefault(log, "DIWISE_SQLDB_SSLMODE", "require")
+
+	return ConnectorConfig{
+		Host:     dbHost,
+		Username: username,
+		DbName:   dbName,
+		Password: password,
+		SslMode:  sslMode,
+	}
+}
+
 type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
 
 func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
@@ -32,12 +56,12 @@ func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 	}
 }
 
-func NewPostgreSQLConnector(log zerolog.Logger) ConnectorFunc {
-	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
-	username := os.Getenv("DIWISE_SQLDB_USER")
-	dbName := os.Getenv("DIWISE_SQLDB_NAME")
-	password := os.Getenv("DIWISE_SQLDB_PASSWORD")
-	sslMode := env.GetVariableOrDefault(log, "DIWISE_SQLDB_SSLMODE", "require")
+func NewPostgreSQLConnector(log zerolog.Logger, cfg ConnectorConfig) ConnectorFunc {
+	dbHost := cfg.Host
+	username := cfg.Username
+	dbName := cfg.DbName
+	password := cfg.Password
+	sslMode := cfg.SslMode
 
 	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=%s password=%s", dbHost, username, dbName, sslMode, password)
 

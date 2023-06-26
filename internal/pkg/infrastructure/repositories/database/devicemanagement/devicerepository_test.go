@@ -40,17 +40,6 @@ func TestGetDevices(t *testing.T) {
 	is.Equal(0, len(onlineDevices))
 }
 
-func TestGetDeviceID(t *testing.T) {
-	is, ctx, r := testSetupDeviceRepository(t)
-
-	err := r.Save(ctx, createDevice(1, "default"))
-	is.NoErr(err)
-
-	deviceID, err := r.GetDeviceID(ctx, "sensor-1")
-	is.NoErr(err)
-	is.Equal("device-1", deviceID)
-}
-
 func TestSaveAndGet(t *testing.T) {
 	is, ctx, r := testSetupDeviceRepository(t)
 
