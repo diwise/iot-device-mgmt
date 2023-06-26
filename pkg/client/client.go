@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -20,9 +21,18 @@ type DeviceManagementClient interface {
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 }
 
+type lookupResult struct {
+	device Device
+	err    error
+	when   time.Time
+}
+
 type devManagementClient struct {
 	url               string
 	clientCredentials *clientcredentials.Config
+
+	cache map[string]lookupResult
+	inbox chan (func())
 }
 
 var tracer = otel.Tracer("device-mgmt-client")
@@ -46,12 +56,51 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 	dmc := &devManagementClient{
 		url:               devMgmtUrl,
 		clientCredentials: oauthConfig,
+
+		cache: make(map[string]lookupResult, 100),
+		inbox: make(chan func()),
 	}
+
+	go func() {
+		for f := range dmc.inbox {
+			f()
+		}
+	}()
 
 	return dmc, nil
 }
 
 func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
+	resultchan := make(chan Device)
+	errchan := make(chan error)
+
+	dmc.inbox <- func() {
+		r, ok := dmc.cache[devEUI]
+
+		if !ok {
+			d, err := dmc.findDeviceFromDevEUI(ctx, devEUI)
+			r = lookupResult{device: d, err: err, when: time.Now()}
+			dmc.cache[devEUI] = r
+			dmc.cache[d.ID()] = r
+		}
+
+		if r.err != nil {
+			errchan <- r.err
+			return
+		}
+
+		resultchan <- r.device
+	}
+
+	select {
+	case d := <-resultchan:
+		return d, nil
+	case e := <-errchan:
+		return nil, e
+	}
+}
+
+func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
 	var err error
 	ctx, span := tracer.Start(ctx, "find-device-from-deveui")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -122,6 +171,35 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 }
 
 func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
+	resultchan := make(chan Device)
+	errchan := make(chan error)
+
+	dmc.inbox <- func() {
+		r, ok := dmc.cache[deviceID]
+
+		if !ok {
+			d, err := dmc.findDeviceFromInternalID(ctx, deviceID)
+			r = lookupResult{device: d, err: err, when: time.Now()}
+			dmc.cache[deviceID] = r
+		}
+
+		if r.err != nil {
+			errchan <- r.err
+			return
+		}
+
+		resultchan <- r.device
+	}
+
+	select {
+	case d := <-resultchan:
+		return d, nil
+	case e := <-errchan:
+		return nil, e
+	}
+}
+
+func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
 	var err error
 	ctx, span := tracer.Start(ctx, "find-device-from-id")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
