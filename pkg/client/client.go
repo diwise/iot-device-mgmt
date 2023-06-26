@@ -86,6 +86,7 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
@@ -155,6 +156,7 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 		err = fmt.Errorf("failed to retrieve information for device: %w", err)
 		return nil, err
 	}
+	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
