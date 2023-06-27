@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
@@ -35,6 +36,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 		}
 
 		log = log.With().Str("device_id", status.DeviceID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, log)
 
 		lastObserved, err := time.Parse(time.RFC3339Nano, status.Timestamp)
 		if err != nil {
@@ -69,7 +71,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 
 func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "AlarmsCreatedHandler").Logger()
+		log := logger.With().Str("handler", "AlarmsCreatedHandler").Logger()
 
 		message := struct {
 			Alarm struct {
@@ -83,7 +85,7 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			log.Error().Err(err).Msg("failed to unmarshal message")
 			return
 		}
 
@@ -92,22 +94,23 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 		}
 
 		deviceID := message.Alarm.RefID
-		logger = logger.With().Str("device_id", deviceID).Logger().With().Int("alarm_id", int(message.Alarm.ID)).Logger()
+		log = log.With().Str("device_id", deviceID).Logger().With().Int("alarm_id", int(message.Alarm.ID)).Logger()
+		ctx = logging.NewContextWithLogger(ctx, log)
 
 		if message.Alarm.ID == 0 {
-			logger.Error().Msg("alarm ID should not be 0")
+			log.Error().Msg("alarm ID should not be 0")
 			return
 		}
 
 		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
 		if err != nil {
-			logger.Debug().Msg("failed to retrieve device")
+			log.Debug().Msg("failed to retrieve device")
 			return
 		}
 
 		err = dm.AddAlarm(ctx, deviceID, int(message.Alarm.ID), message.Alarm.Severity, message.Alarm.ObservedAt)
 		if err != nil {
-			logger.Debug().Msg("failed to add alarm")
+			log.Debug().Msg("failed to add alarm")
 			return
 		}
 
@@ -121,7 +124,7 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 
 func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "AlarmsClosedHandler").Logger()
+		log := logger.With().Str("handler", "AlarmsClosedHandler").Logger()
 
 		message := struct {
 			ID        int       `json:"id"`
@@ -131,15 +134,16 @@ func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) me
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			log.Error().Err(err).Msg("failed to unmarshal message")
 			return
 		}
 
-		logger = logger.With().Int("alarm_id", message.ID).Logger()
+		log = logger.With().Int("alarm_id", message.ID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, log)
 
 		err = dm.RemoveAlarm(ctx, message.ID)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to remove alarm")
+			log.Error().Err(err).Msg("failed to remove alarm")
 			return
 		}
 	}
