@@ -80,9 +80,7 @@ func (d *deviceManagement) GetDeviceByDeviceID(ctx context.Context, deviceID str
 }
 
 func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus r.DeviceStatus) error {
-	logger := logging.GetFromContext(ctx).
-		With().Str("device_id", deviceID).Logger().
-		With().Str("func", "UpdateDeviceStatus").Logger()
+	logger := logging.GetFromContext(ctx).With().Str("func", "UpdateDeviceStatus").Logger()
 
 	if deviceStatus.LastObserved.IsZero() {
 		logger.Debug().Msgf("lastObserved is zero, set to Now")
@@ -107,9 +105,7 @@ func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID stri
 }
 
 func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID string, deviceState r.DeviceState) error {
-	logger := logging.GetFromContext(ctx).
-		With().Str("device_id", deviceID).Logger().
-		With().Str("func", "UpdateDeviceState").Logger()
+	logger := logging.GetFromContext(ctx).With().Str("func", "UpdateDeviceState").Logger()
 
 	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
@@ -159,13 +155,12 @@ func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
 	logger := logging.GetFromContext(ctx).
 		With().Int("alarm_id", alarmID).Logger().
 		With().Str("func", "RemoveAlarm").Logger()
+	ctx = logging.NewContextWithLogger(ctx, logger)
 
 	deviceID, err := d.deviceRepository.RemoveAlarmByID(ctx, alarmID)
 	if err != nil {
 		return err
 	}
-
-	logger = logger.With().Str("device_id", deviceID).Logger()
 
 	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
 	if err != nil {
