@@ -20,10 +20,13 @@ var _ client.DeviceManagementClient = &DeviceManagementClientMock{}
 //
 //		// make and configure a mocked DeviceManagementClient
 //		mockedDeviceManagementClient := &DeviceManagementClientMock{
-//			FindDeviceFromDevEUIFunc: func(ctx context.Context, devEUI string) (Device, error) {
+//			CloseFunc: func(ctx context.Context)  {
+//				panic("mock out the Close method")
+//			},
+//			FindDeviceFromDevEUIFunc: func(ctx context.Context, devEUI string) (client.Device, error) {
 //				panic("mock out the FindDeviceFromDevEUI method")
 //			},
-//			FindDeviceFromInternalIDFunc: func(ctx context.Context, deviceID string) (Device, error) {
+//			FindDeviceFromInternalIDFunc: func(ctx context.Context, deviceID string) (client.Device, error) {
 //				panic("mock out the FindDeviceFromInternalID method")
 //			},
 //		}
@@ -33,6 +36,9 @@ var _ client.DeviceManagementClient = &DeviceManagementClientMock{}
 //
 //	}
 type DeviceManagementClientMock struct {
+	// CloseFunc mocks the Close method.
+	CloseFunc func(ctx context.Context)
+
 	// FindDeviceFromDevEUIFunc mocks the FindDeviceFromDevEUI method.
 	FindDeviceFromDevEUIFunc func(ctx context.Context, devEUI string) (client.Device, error)
 
@@ -41,6 +47,11 @@ type DeviceManagementClientMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// Close holds details about calls to the Close method.
+		Close []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 		// FindDeviceFromDevEUI holds details about calls to the FindDeviceFromDevEUI method.
 		FindDeviceFromDevEUI []struct {
 			// Ctx is the ctx argument value.
@@ -56,8 +67,41 @@ type DeviceManagementClientMock struct {
 			DeviceID string
 		}
 	}
+	lockClose                    sync.RWMutex
 	lockFindDeviceFromDevEUI     sync.RWMutex
 	lockFindDeviceFromInternalID sync.RWMutex
+}
+
+// Close calls CloseFunc.
+func (mock *DeviceManagementClientMock) Close(ctx context.Context) {
+	if mock.CloseFunc == nil {
+		panic("DeviceManagementClientMock.CloseFunc: method is nil but DeviceManagementClient.Close was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockClose.Lock()
+	mock.calls.Close = append(mock.calls.Close, callInfo)
+	mock.lockClose.Unlock()
+	mock.CloseFunc(ctx)
+}
+
+// CloseCalls gets all the calls that were made to Close.
+// Check the length with:
+//
+//	len(mockedDeviceManagementClient.CloseCalls())
+func (mock *DeviceManagementClientMock) CloseCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockClose.RLock()
+	calls = mock.calls.Close
+	mock.lockClose.RUnlock()
+	return calls
 }
 
 // FindDeviceFromDevEUI calls FindDeviceFromDevEUIFunc.

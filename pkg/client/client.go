@@ -3,9 +3,12 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -19,9 +22,25 @@ import (
 type DeviceManagementClient interface {
 	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
+	Close(ctx context.Context)
+}
+
+type deviceState int
+
+const (
+	Refreshing deviceState = iota
+	Ready
+	Error
+)
+
+type devEUIState struct {
+	state      deviceState
+	err        error
+	internalID string
 }
 
 type lookupResult struct {
+	state  deviceState
 	device Device
 	err    error
 	when   time.Time
@@ -31,8 +50,12 @@ type devManagementClient struct {
 	url               string
 	clientCredentials *clientcredentials.Config
 
-	cache map[string]lookupResult
-	inbox chan (func())
+	cacheByInternalID map[string]lookupResult
+	knownDevEUI       map[string]devEUIState
+	queue             chan (func())
+
+	keepRunning *atomic.Bool
+	wg          sync.WaitGroup
 }
 
 var tracer = otel.Tracer("device-mgmt-client")
@@ -57,47 +80,114 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 		url:               devMgmtUrl,
 		clientCredentials: oauthConfig,
 
-		cache: make(map[string]lookupResult, 100),
-		inbox: make(chan func()),
+		cacheByInternalID: make(map[string]lookupResult, 100),
+		knownDevEUI:       make(map[string]devEUIState, 100),
+		queue:             make(chan func()),
+		keepRunning:       &atomic.Bool{},
 	}
 
-	go func() {
-		for f := range dmc.inbox {
-			f()
-		}
-	}()
+	go dmc.run(ctx)
 
 	return dmc, nil
 }
 
+func (dmc *devManagementClient) run(ctx context.Context) {
+	dmc.wg.Add(1)
+	defer dmc.wg.Done()
+
+	logger := logging.GetFromContext(ctx)
+	logger.Info().Msg("starting up device management client")
+
+	// use atomic swap to avoid startup races
+	alreadyStarted := dmc.keepRunning.Swap(true)
+	if alreadyStarted {
+		logger.Error().Msg("attempt to start the device management client multiple times")
+		return
+	}
+
+	for dmc.keepRunning.Load() {
+		fn := <-dmc.queue
+		fn()
+	}
+
+	logger.Info().Msg("device management client exiting")
+}
+
+func (dmc *devManagementClient) Close(ctx context.Context) {
+	dmc.queue <- func() {
+		dmc.keepRunning.Store(false)
+	}
+
+	dmc.wg.Wait()
+}
+
+var ErrDeviceNotFound error = errors.New("not found")
+
+var errInternal error = errors.New("internal error")
+var errRetry error = errors.New("retry")
+
 func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
+
 	resultchan := make(chan Device)
 	errchan := make(chan error)
 
-	dmc.inbox <- func() {
-		r, ok := dmc.cache[devEUI]
+	dmc.queue <- func() {
+		device, ok := dmc.knownDevEUI[devEUI]
 
-		if !ok {
-			d, err := dmc.findDeviceFromDevEUI(ctx, devEUI)
-			r = lookupResult{device: d, err: err, when: time.Now()}
-			dmc.cache[devEUI] = r
-			dmc.cache[d.ID()] = r
-		}
+		if ok {
+			switch device.state {
+			case Ready:
+				go func() {
+					deviceByID, err := dmc.FindDeviceFromInternalID(ctx, device.internalID)
+					if err != nil {
+						errchan <- err
+					} else {
+						resultchan <- deviceByID
+					}
+				}()
+			case Error:
+				errchan <- device.err
+			case Refreshing:
+				errchan <- errRetry
+			default:
+				errchan <- errInternal
+			}
 
-		if r.err != nil {
-			errchan <- r.err
 			return
 		}
 
-		resultchan <- r.device
+		dmc.knownDevEUI[devEUI] = devEUIState{state: Refreshing}
+		go func() {
+			dmc.updateDeviceCacheFromDevEUI(ctx, devEUI)
+		}()
+		errchan <- errRetry
 	}
 
 	select {
 	case d := <-resultchan:
 		return d, nil
 	case e := <-errchan:
+		if errors.Is(e, errRetry) {
+			time.Sleep(10 * time.Millisecond)
+			return dmc.FindDeviceFromDevEUI(ctx, devEUI)
+		}
 		return nil, e
 	}
+}
+
+func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context, devEUI string) error {
+	device, err := dmc.findDeviceFromDevEUI(ctx, devEUI)
+
+	dmc.queue <- func() {
+		if err != nil {
+			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
+		} else {
+			dmc.knownDevEUI[devEUI] = devEUIState{state: Ready, internalID: device.ID()}
+			dmc.cacheByInternalID[device.ID()] = lookupResult{state: Ready, device: device, when: time.Now()}
+		}
+	}
+
+	return err
 }
 
 func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
@@ -142,6 +232,10 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrDeviceNotFound
+	}
+
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
 		return nil, err
@@ -171,32 +265,63 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 }
 
 func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
+
 	resultchan := make(chan Device)
 	errchan := make(chan error)
 
-	dmc.inbox <- func() {
-		r, ok := dmc.cache[deviceID]
+	dmc.queue <- func() {
+		r, ok := dmc.cacheByInternalID[deviceID]
 
-		if !ok {
-			d, err := dmc.findDeviceFromInternalID(ctx, deviceID)
-			r = lookupResult{device: d, err: err, when: time.Now()}
-			dmc.cache[deviceID] = r
-		}
+		if ok {
+			switch r.state {
+			case Ready:
+				resultchan <- r.device
+			case Error:
+				errchan <- r.err
+			case Refreshing:
+				errchan <- errRetry
+			default:
+				errchan <- errInternal
+			}
 
-		if r.err != nil {
-			errchan <- r.err
 			return
 		}
 
-		resultchan <- r.device
+		// if not in cache, send request to device management
+		r = lookupResult{state: Refreshing, when: time.Now()}
+		dmc.cacheByInternalID[deviceID] = r
+
+		go func() {
+			dmc.updateDeviceCacheFromInternalID(ctx, deviceID)
+		}()
+
+		errchan <- errRetry
 	}
 
 	select {
 	case d := <-resultchan:
 		return d, nil
 	case e := <-errchan:
+		if errors.Is(e, errRetry) {
+			time.Sleep(10 * time.Millisecond)
+			return dmc.FindDeviceFromInternalID(ctx, deviceID)
+		}
 		return nil, e
 	}
+}
+
+func (dmc *devManagementClient) updateDeviceCacheFromInternalID(ctx context.Context, deviceID string) error {
+	device, err := dmc.findDeviceFromInternalID(ctx, deviceID)
+
+	dmc.queue <- func() {
+		if err != nil {
+			dmc.cacheByInternalID[deviceID] = lookupResult{state: Error, err: err, when: time.Now()}
+		} else {
+			dmc.cacheByInternalID[deviceID] = lookupResult{state: Ready, device: device, when: time.Now()}
+		}
+	}
+
+	return err
 }
 
 func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
@@ -239,6 +364,10 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
 		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrDeviceNotFound
 	}
 
 	if resp.StatusCode != http.StatusOK {
