@@ -180,6 +180,9 @@ func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context,
 
 	dmc.queue <- func() {
 		if err != nil {
+			log := logging.GetFromContext(ctx)
+			log.Error().Err(err).Msg("failed to update device cache")
+
 			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
 		} else {
 			dmc.knownDevEUI[devEUI] = devEUIState{state: Ready, internalID: device.ID()}
@@ -315,6 +318,9 @@ func (dmc *devManagementClient) updateDeviceCacheFromInternalID(ctx context.Cont
 
 	dmc.queue <- func() {
 		if err != nil {
+			log := logging.GetFromContext(ctx)
+			log.Error().Err(err).Msg("failed to update device cache")
+
 			dmc.cacheByInternalID[deviceID] = lookupResult{state: Error, err: err, when: time.Now()}
 		} else {
 			dmc.cacheByInternalID[deviceID] = lookupResult{state: Ready, device: device, when: time.Now()}
