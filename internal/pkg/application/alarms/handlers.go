@@ -13,6 +13,7 @@ import (
 
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
 type batteryLevelChanged struct {
@@ -87,6 +88,7 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 		}
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID == message.DeviceID && cfg.Name == AlarmBatteryLevel {
@@ -119,6 +121,7 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 		}
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID == message.DeviceID && cfg.Name == AlarmDeviceNotObserved {
@@ -173,6 +176,7 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 		}
 
 		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		if message.Tenant == "" {
 			logger.Error().Msg("no tenant information")
@@ -244,6 +248,7 @@ func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) mes
 		}
 
 		logger = logger.With().Str("function_id", f.ID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID != "" && cfg.ID != f.ID {

@@ -94,7 +94,7 @@ func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) m
 		}
 
 		deviceID := message.Alarm.RefID
-		log = log.With().Str("device_id", deviceID).Logger().With().Int("alarm_id", int(message.Alarm.ID)).Logger()
+		log = log.With().Str("device_id", deviceID).Int("alarm_id", int(message.Alarm.ID)).Logger()
 		ctx = logging.NewContextWithLogger(ctx, log)
 
 		if message.Alarm.ID == 0 {
