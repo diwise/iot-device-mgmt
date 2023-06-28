@@ -248,6 +248,7 @@ func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) mes
 		}
 
 		logger = logger.With().Str("function_id", f.ID).Logger()
+		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID != "" && cfg.ID != f.ID {
