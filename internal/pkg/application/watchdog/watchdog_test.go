@@ -152,8 +152,8 @@ const devicesJson string = `
         ],
         "tags": [],
         "deviceProfile": {
-            "name": "elsys_codec",
-            "decoder": "elsys_codec",
+            "name": "elsys",
+            "decoder": "elsys",
             "interval": 3600
         },
         "deviceStatus": {
@@ -188,8 +188,8 @@ const devicesJson string = `
         ],
         "tags": [],
         "deviceProfile": {
-            "name": "elsys_codec",
-            "decoder": "elsys_codec",
+            "name": "elsys",
+            "decoder": "elsys",
             "interval": 3600
         },
         "deviceStatus": {
