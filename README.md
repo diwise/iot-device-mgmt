@@ -52,34 +52,10 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 
 ## Configuration files
 First row of csv-files contains headers.
-### 10.sensorTypes.csv
-```
-name;description;interval
-qalcosonic;;3600
-presence;;3600
-elsys_codec;;3600
-enviot;;3600
-tem_lab_14ns;;3600
-strips_lora_ms_h;;3600
-cube02;;3600
-```
- - `name` - name of decoder for the type of sensor
- - `description` - description, free text
- - `interval` - number of seconds between readings, if longer status will be set to warning
-### 20.environments
-```
-name
-water
-air
-indoors
-lifebuoy
-soil
-```
- - `name` - name of environment
-### 30.devices.csv
+### devices.csv
 ```
 devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;elsys;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0
 ```
  - `devEUI` - id of physical sensor
  - `internalID` - internal id that will be used within the diwise plattform
