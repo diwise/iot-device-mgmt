@@ -17,12 +17,12 @@ require (
 
 require (
 	github.com/go-chi/jwtauth/v5 v5.1.1
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.3.1
 	github.com/open-policy-agent/opa v0.55.0
 	github.com/rabbitmq/amqp091-go v1.8.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.42.0
 	golang.org/x/oauth2 v0.11.0
-	gorm.io/driver/sqlite v1.5.2
+	gorm.io/driver/sqlite v1.5.3
 )
 
 require (
