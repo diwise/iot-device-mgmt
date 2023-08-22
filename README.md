@@ -20,7 +20,7 @@ flowchart LR
 
 ## Dependencies 
 # Storage
-When the service is started data will be loaded from configuration files and stored in a database. If `DIWISE_SQLDB_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
+When the service is started data will be loaded from configuration files and stored in a database. If `POSTGRES_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
 # Watchdog
 Watchdog is a feature that will periodically verify the sensors. Currently only last observed time is checked. If larger than `interval` a warning status will be set. 
 
@@ -43,7 +43,7 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 "RABBITMQ_PASS": "bitnami"
 "RABBITMQ_DISABLED": "false"
 "SERVICE_PORT": "<8080>",
-"DIWISE_SQLDB_HOST": "url to postgreSql database"
+"POSTGRES_HOST": "url to postgreSql database"
 ```
 ## CLI flags
  - `devices` - A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)
