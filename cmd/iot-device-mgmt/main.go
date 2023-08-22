@@ -19,6 +19,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
 )
@@ -40,7 +41,7 @@ func main() {
 	flag.Parse()
 
 	conn := setupDatabaseConnection(logger)
-	deviceDB := setupDeviceDatabaseOrDie(logger, conn)
+	deviceDB := setupDeviceDatabaseOrDie(ctx, conn)
 	alarmDB := setupAlarmDatabaseOrDie(logger, conn)
 
 	messenger := setupMessagingOrDie(serviceName, logger)
@@ -69,7 +70,7 @@ func main() {
 }
 
 func setupDatabaseConnection(logger zerolog.Logger) db.ConnectorFunc {
-	if os.Getenv("DIWISE_SQLDB_HOST") != "" {
+	if os.Getenv("POSTGRES_HOST") != "" {
 		return db.NewPostgreSQLConnector(logger, db.LoadConfigFromEnv(logger))
 	}
 
@@ -89,9 +90,11 @@ func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) aDb.A
 	return db
 }
 
-func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) dmDb.DeviceRepository {
+func setupDeviceDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) dmDb.DeviceRepository {
 	var db dmDb.DeviceRepository
 	var err error
+
+	logger := logging.GetFromContext(ctx)
 
 	db, err = dmDb.NewDeviceRepository(conn)
 	if err != nil {
@@ -108,7 +111,7 @@ func setupDeviceDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) dmDb
 	}
 	defer f.Close()
 
-	err = db.Seed(context.Background(), f)
+	err = db.Seed(ctx, f)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("could not seed database with devices")
 	}

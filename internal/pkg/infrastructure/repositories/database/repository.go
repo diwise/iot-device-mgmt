@@ -22,11 +22,11 @@ type ConnectorConfig struct {
 }
 
 func LoadConfigFromEnv(log zerolog.Logger) ConnectorConfig {
-	dbHost := os.Getenv("DIWISE_SQLDB_HOST")
-	username := os.Getenv("DIWISE_SQLDB_USER")
-	dbName := os.Getenv("DIWISE_SQLDB_NAME")
-	password := os.Getenv("DIWISE_SQLDB_PASSWORD")
-	sslMode := env.GetVariableOrDefault(log, "DIWISE_SQLDB_SSLMODE", "require")
+	dbHost := os.Getenv("POSTGRES_HOST")
+	username := os.Getenv("POSTGRES_USER")
+	dbName := os.Getenv("POSTGRES_DBNAME")
+	password := os.Getenv("POSTGRES_PASSWORD")
+	sslMode := env.GetVariableOrDefault(log, "POSTGRES_SSLMODE", "disable")
 
 	return ConnectorConfig{
 		Host:     dbHost,
