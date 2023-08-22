@@ -31,7 +31,7 @@ var alarmConfigFile string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
-	_, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
+	ctx, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
 	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
@@ -55,11 +55,14 @@ func main() {
 	watchdog.Start()
 	defer watchdog.Stop()
 
-	r := setupRouter(logger, serviceName, mgmtSvc, alarmSvc)
+	r, err := setupRouter(ctx, serviceName, mgmtSvc, alarmSvc)
+	if err != nil {
+		logger.Fatal().Err(err).Msg("failed to setup router")
+	}
 
 	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
 
-	err := http.ListenAndServe(apiPort, r)
+	err = http.ListenAndServe(apiPort, r)
 	if err != nil {
 		logger.Fatal().Err(err).Msg("failed to start router")
 	}
@@ -123,14 +126,14 @@ func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.Ms
 	return messenger
 }
 
-func setupRouter(logger zerolog.Logger, serviceName string, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
+func setupRouter(ctx context.Context, serviceName string, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) (*chi.Mux, error) {
 	r := router.New(serviceName)
 
 	policies, err := os.Open(opaFilePath)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("unable to open opa policy file")
+		return nil, fmt.Errorf("unable to open opa policy file: %s", err.Error())
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(logger, r, policies, svc, alarmSvc)
+	return api.RegisterHandlers(ctx, r, policies, svc, alarmSvc), nil
 }

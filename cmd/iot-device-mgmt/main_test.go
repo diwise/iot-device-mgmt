@@ -122,9 +122,8 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
-	log := zerolog.Logger{}
 
-	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(log))
+	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(zerolog.Logger{}))
 	is.NoErr(err)
 
 	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))
@@ -134,7 +133,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)
-	api.RegisterHandlers(log, router, policies, app, &alarms.AlarmServiceMock{})
+	api.RegisterHandlers(context.Background(), router, policies, app, &alarms.AlarmServiceMock{})
 
 	return router, is
 }
