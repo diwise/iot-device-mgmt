@@ -15,6 +15,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog"
@@ -23,16 +24,18 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(log zerolog.Logger, router *chi.Mux, policies io.Reader, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
+func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) *chi.Mux {
 
 	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	})
 
+	log := logging.GetFromContext(ctx)
+
 	router.Route("/api/v0", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			// Handle valid / invalid tokens.
-			authenticator, err := auth.NewAuthenticator(context.Background(), log, policies)
+			authenticator, err := auth.NewAuthenticator(ctx, log, policies)
 			if err != nil {
 				log.Fatal().Err(err).Msg("failed to create api authenticator")
 			}
