@@ -23,15 +23,15 @@ func TestGetDevices(t *testing.T) {
 	r.Save(ctx, createDevice(5, "test"))
 	r.Save(ctx, createDevice(6, "secret"))
 
-	defaultTenantDevices, err := r.GetDevices(ctx, "default")
+	_, defaultTenantDevices, err := r.GetDevices(ctx, 0, 100, "default")
 	is.NoErr(err)
 	is.Equal(3, len(defaultTenantDevices))
 
-	testTenantDevices, err := r.GetDevices(ctx, "test")
+	_, testTenantDevices, err := r.GetDevices(ctx, 0, 100, "test")
 	is.NoErr(err)
 	is.Equal(2, len(testTenantDevices))
 
-	allTenantDevices, err := r.GetDevices(ctx, "default", "test", "secret")
+	_, allTenantDevices, err := r.GetDevices(ctx, 0, 100, "default", "test", "secret")
 	is.NoErr(err)
 	is.Equal(6, len(allTenantDevices))
 
@@ -110,12 +110,13 @@ func TestSeed(t *testing.T) {
 	err := r.Seed(ctx, csv)
 	is.NoErr(err)
 
-	devices, err := r.GetDevices(ctx, "_default")
+	count, devices, err := r.GetDevices(ctx, 0, 100, "_default")
 	is.NoErr(err)
+	is.Equal(count, uint64(2))
 	is.Equal(2, len(devices))
 	is.Equal("_default", devices[0].Tenant.Name)
 
-	devices, err = r.GetDevices(ctx, "_test")
+	_, devices, err = r.GetDevices(ctx, 0, 100, "_test")
 	is.NoErr(err)
 	is.Equal(2, len(devices))
 	is.Equal("_test", devices[0].Tenant.Name)

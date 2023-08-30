@@ -35,7 +35,7 @@ func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
 //go:generate moq -rm -out devicerepository_mock.go . DeviceRepository
 
 type DeviceRepository interface {
-	GetDevices(ctx context.Context, tenants ...string) ([]Device, error)
+	GetDevices(ctx context.Context, offset, limit uint64, tenants ...string) (uint64, []Device, error)
 	GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (Device, error)
 	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (Device, error)
@@ -58,18 +58,23 @@ type deviceRepository struct {
 	db *gorm.DB
 }
 
-func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
+func (d *deviceRepository) GetDevices(ctx context.Context, offset, limit uint64, tenants ...string) (uint64, []Device, error) {
+	var count int64
 	var devices []Device
 
+	counter := d.db.Model(&Device{})
 	query := d.db.Preload(clause.Associations)
 
 	if len(tenants) > 0 {
+		counter = counter.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
 		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
 	}
 
-	result := query.Find(&devices)
+	counter.Count(&count)
 
-	return devices, result.Error
+	result := query.Offset(int(offset)).Limit(int(limit)).Find(&devices)
+
+	return uint64(count), devices, result.Error
 }
 
 func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {

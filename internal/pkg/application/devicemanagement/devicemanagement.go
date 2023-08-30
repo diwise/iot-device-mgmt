@@ -13,7 +13,7 @@ import (
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	GetDevices(ctx context.Context, tenants ...string) ([]r.Device, error)
+	GetDevices(ctx context.Context, offset, limit uint64, tenants ...string) (uint64, []r.Device, error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (r.Device, error)
 	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (r.Device, error)
 
@@ -67,8 +67,8 @@ func (d *deviceManagement) UpdateDevice(ctx context.Context, deviceID string, fi
 	return nil
 }
 
-func (d *deviceManagement) GetDevices(ctx context.Context, tenants ...string) ([]r.Device, error) {
-	return d.deviceRepository.GetDevices(ctx, tenants...)
+func (d *deviceManagement) GetDevices(ctx context.Context, offset, limit uint64, tenants ...string) (uint64, []r.Device, error) {
+	return d.deviceRepository.GetDevices(ctx, offset, limit, tenants...)
 }
 
 func (d *deviceManagement) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (r.Device, error) {

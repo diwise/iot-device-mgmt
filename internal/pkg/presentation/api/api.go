@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -57,6 +58,149 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 	return router
 }
 
+type meta struct {
+	TotalRecords uint64  `json:"totalRecords"`
+	Offset       *uint64 `json:"offset,omitempty"`
+	Limit        *uint64 `json:"limit,omitempty"`
+	Count        uint64  `json:"count"`
+}
+
+type links struct {
+	Self  *string `json:"self,omitempty"`
+	First *string `json:"first,omitempty"`
+	Prev  *string `json:"prev,omitempty"`
+	Next  *string `json:"next,omitempty"`
+	Last  *string `json:"last,omitempty"`
+}
+
+type CollectionResponse struct {
+	Meta  meta  `json:"meta"`
+	Data  any   `json:"data"`
+	Links links `json:"links"`
+}
+
+func NewCollectionResponse(total, offset, limit, count uint64, results any, baseUrl string) *CollectionResponse {
+	r := &CollectionResponse{
+		Meta: meta{
+			TotalRecords: total,
+			Count:        count,
+		},
+		Data: results,
+	}
+
+	if total == 1 && offset == 1 && limit == 1 && count == 1 {
+		r.Links.Self = &baseUrl
+	} else {
+		r.Meta.Offset = &offset
+		r.Meta.Limit = &limit
+
+		// self, always
+		if total > 1 {
+			link := baseUrl + fmt.Sprintf("page[offset]=%d&page[limit]=%d", offset, limit)
+			r.Links.Self = &link
+		} else {
+			r.Links.Self = &baseUrl
+		}
+
+		// first if total > 0
+		if total > 0 {
+			link := baseUrl + fmt.Sprintf("page[offset]=0&page[limit]=%d", limit)
+			r.Links.First = &link
+		}
+
+		// prev if offset > 0
+		if offset > 0 {
+			newOffset := offset - limit
+			newLimit := limit
+			if offset > limit {
+				newOffset = 0
+				newLimit = offset
+			}
+			link := baseUrl + fmt.Sprintf("page[offset]=%d&page[limit]=%d", newOffset, newLimit)
+			r.Links.Prev = &link
+		}
+
+		// next if offset+limit < total
+		if offset+limit < total {
+			link := baseUrl + fmt.Sprintf("page[offset]=%d&page[limit]=%d", offset+limit, limit)
+			r.Links.Next = &link
+		}
+
+		// last if total > 0
+		if total > 0 {
+			newOffset := total - limit
+			if total < limit {
+				newOffset = 0
+			}
+			link := baseUrl + fmt.Sprintf("page[offset]=%d&page[limit]=%d", newOffset, limit)
+			r.Links.Last = &link
+		}
+	}
+
+	return r
+}
+
+func getProtocolAndHostFromRequest(ctx context.Context, r *http.Request) string {
+	proto := r.Header.Get("X-Forwarded-Proto")
+	if proto == "" {
+		proto = "http"
+	}
+
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+
+	return fmt.Sprintf("%s://%s", proto, host)
+}
+
+func getOffsetAndLimitFromRequest(ctx context.Context, r *http.Request) (uint64, uint64, error) {
+
+	offset := uint64(0)
+	limit := uint64(50)
+	var err error
+
+	limitParam := r.URL.Query().Get("page[limit]")
+	if limitParam == "" {
+		limitParam = r.URL.Query().Get("limit")
+	}
+	if limitParam != "" {
+		limit, err = strconv.ParseUint(limitParam, 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid limit parameter in query")
+		}
+		if limit < 10 {
+			limit = 10
+		} else if limit > 100 {
+			limit = 100
+		}
+	}
+
+	offsetParam := r.URL.Query().Get("page[offset]")
+	if offsetParam == "" {
+		offsetParam = r.URL.Query().Get("offset")
+		if offsetParam == "" {
+			page := r.URL.Query().Get("page")
+			if page != "" {
+				offset, err = strconv.ParseUint(page, 10, 64)
+				if err != nil || offset == 0 {
+					return 0, 0, errors.New("invalid page parameter in query")
+				}
+				offset = (offset - 1) * limit
+				offsetParam = strconv.FormatUint(offset, 10)
+			}
+		}
+	}
+	if offsetParam != "" {
+		offset, err = strconv.ParseUint(offsetParam, 10, 64)
+		if err != nil {
+			return 0, 0, errors.New("invalid offset parameter in query")
+		}
+	}
+
+	return offset, limit, nil
+}
+
 func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -106,6 +250,10 @@ func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 
 		var devices []types.Device
 
+		offset, limit, err := getOffsetAndLimitFromRequest(ctx, r)
+		host := getProtocolAndHostFromRequest(ctx, r)
+		var result *CollectionResponse
+
 		sensorID := r.URL.Query().Get("devEUI") // TODO: change to sensorID?
 		if sensorID != "" {
 			device, err := svc.GetDeviceBySensorID(ctx, sensorID, allowedTenants...)
@@ -122,14 +270,15 @@ func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 
 			d, err := devicemanagement.MapTo[types.Device](device)
 			if err != nil {
-				requestLogger.Error().Err(err).Msg("unable map device")
+				requestLogger.Error().Err(err).Msg("unable to map device")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 
 			devices = append(devices, d)
+			result = NewCollectionResponse(1, 1, 1, 1, devices, host+"/api/v0/devices?devEUI="+sensorID)
 		} else {
-			fromDb, err := svc.GetDevices(ctx, allowedTenants...)
+			totalCount, fromDb, err := svc.GetDevices(ctx, offset, limit, allowedTenants...)
 			if err != nil {
 				requestLogger.Error().Err(err).Msg("unable to fetch all devices")
 				w.WriteHeader(http.StatusInternalServerError)
@@ -138,17 +287,19 @@ func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 			for _, device := range fromDb {
 				d, err := devicemanagement.MapTo[types.Device](device)
 				if err != nil {
-					requestLogger.Error().Err(err).Msg("unable map device")
+					requestLogger.Error().Err(err).Msg("unable to map device")
 					w.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 				devices = append(devices, d)
 			}
+
+			result = NewCollectionResponse(totalCount, offset, limit, uint64(len(devices)), devices, host+"/api/v0/devices?")
 		}
 
-		b, err := json.Marshal(devices)
+		b, err := json.Marshal(result)
 		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to fetch all devices")
+			requestLogger.Error().Err(err).Msg("unable to marshal result")
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

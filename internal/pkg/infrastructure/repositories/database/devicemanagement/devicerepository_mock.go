@@ -29,7 +29,7 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string, tenants ...string) (Device, error) {
 //				panic("mock out the GetDeviceBySensorID method")
 //			},
-//			GetDevicesFunc: func(ctx context.Context, tenants ...string) ([]Device, error) {
+//			GetDevicesFunc: func(ctx context.Context, offset uint64, limit uint64, tenants ...string) (uint64, []Device, error) {
 //				panic("mock out the GetDevices method")
 //			},
 //			GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]Device, error) {
@@ -67,7 +67,7 @@ type DeviceRepositoryMock struct {
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string, tenants ...string) (Device, error)
 
 	// GetDevicesFunc mocks the GetDevices method.
-	GetDevicesFunc func(ctx context.Context, tenants ...string) ([]Device, error)
+	GetDevicesFunc func(ctx context.Context, offset uint64, limit uint64, tenants ...string) (uint64, []Device, error)
 
 	// GetOnlineDevicesFunc mocks the GetOnlineDevices method.
 	GetOnlineDevicesFunc func(ctx context.Context, tenants ...string) ([]Device, error)
@@ -124,6 +124,10 @@ type DeviceRepositoryMock struct {
 		GetDevices []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Offset is the offset argument value.
+			Offset uint64
+			// Limit is the limit argument value.
+			Limit uint64
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -315,21 +319,25 @@ func (mock *DeviceRepositoryMock) GetDeviceBySensorIDCalls() []struct {
 }
 
 // GetDevices calls GetDevicesFunc.
-func (mock *DeviceRepositoryMock) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
+func (mock *DeviceRepositoryMock) GetDevices(ctx context.Context, offset uint64, limit uint64, tenants ...string) (uint64, []Device, error) {
 	if mock.GetDevicesFunc == nil {
 		panic("DeviceRepositoryMock.GetDevicesFunc: method is nil but DeviceRepository.GetDevices was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
+		Offset  uint64
+		Limit   uint64
 		Tenants []string
 	}{
 		Ctx:     ctx,
+		Offset:  offset,
+		Limit:   limit,
 		Tenants: tenants,
 	}
 	mock.lockGetDevices.Lock()
 	mock.calls.GetDevices = append(mock.calls.GetDevices, callInfo)
 	mock.lockGetDevices.Unlock()
-	return mock.GetDevicesFunc(ctx, tenants...)
+	return mock.GetDevicesFunc(ctx, offset, limit, tenants...)
 }
 
 // GetDevicesCalls gets all the calls that were made to GetDevices.
@@ -338,10 +346,14 @@ func (mock *DeviceRepositoryMock) GetDevices(ctx context.Context, tenants ...str
 //	len(mockedDeviceRepository.GetDevicesCalls())
 func (mock *DeviceRepositoryMock) GetDevicesCalls() []struct {
 	Ctx     context.Context
+	Offset  uint64
+	Limit   uint64
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
+		Offset  uint64
+		Limit   uint64
 		Tenants []string
 	}
 	mock.lockGetDevices.RLock()

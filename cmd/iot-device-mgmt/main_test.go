@@ -54,14 +54,8 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
-	d := []struct {
-		DevEui string `json:"sensorID"`
-	}{}
-	json.Unmarshal([]byte(body), &d)
-
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d[0].DevEui)
-	//is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}]`)
+	is.Equal(body, `{"meta":{"totalRecords":1,"count":1},"data":[{"active":true,"sensorID":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","tenant":{"name":"default"},"name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","source":"source","types":[{"urn":"urn:oma:lwm2m:ext:3303"},{"urn":"urn:oma:lwm2m:ext:3302"},{"urn":"urn:oma:lwm2m:ext:3301"}],"tags":[],"deviceProfile":{"name":"elsys_codec","decoder":"elsys_codec","interval":60},"deviceStatus":{"batteryLevel":-1,"lastObservedAt":"0001-01-01T00:00:00Z"},"deviceState":{"online":false,"state":-1,"observedAt":"0001-01-01T00:00:00Z"}}],"links":{"self":"https://diwise.io/api/v0/devices?devEUI=a81758fffe06bfa3"}}`)
 }
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
@@ -144,6 +138,9 @@ func testRequest(is *is.I, ts *httptest.Server, method, path string, token strin
 	if len(token) > 0 {
 		req.Header.Add("Authorization", "Bearer "+token)
 	}
+
+	req.Header.Add("X-Forwarded-Host", "diwise.io")
+	req.Header.Add("X-Forwarded-Proto", "https")
 
 	resp, _ := http.DefaultClient.Do(req)
 	respBody, _ := io.ReadAll(resp.Body)
