@@ -197,24 +197,35 @@ func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID stri
 
 func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error {
 	var device = Device{}
-	err := d.db.
-		Preload("DeviceState").
-		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
-		First(&device).
-		Error
 
-	if err != nil {
-		return err
+	// find device.id from device_id
+	r := d.db.Select("id").Where("device_id = (?)", deviceID).First(&device)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected == 0 {
+		return errors.New("no such device")
 	}
 
-	device.DeviceState = deviceState
+	var storedState = DeviceState{}
 
-	err = d.db.Save(&device).Error
-	if err != nil {
-		return err
+	// find device_state from device_id
+	r = d.db.Where(&DeviceState{DeviceID: device.ID}).First(&storedState)
+	if r.Error != nil {
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			// no such device state exists, so lets create one
+			deviceState.DeviceID = device.ID
+			return d.db.Save(&deviceState).Error
+		}
+		return r.Error
 	}
 
-	return nil
+	// update the stored state with the new values
+	storedState.Online = deviceState.Online
+	storedState.State = deviceState.State
+	storedState.ObservedAt = deviceState.ObservedAt
+
+	return d.db.Save(&storedState).Error
 }
 
 func (d *deviceRepository) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
