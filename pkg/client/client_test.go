@@ -50,8 +50,9 @@ func TestGetDeviceByDevEUI(t *testing.T) {
 		url: s.URL(),
 	}
 
-	_, err := dmc.findDeviceFromDevEUI(context.Background(), "test")
+	d, err := dmc.findDeviceFromDevEUI(context.Background(), "a81758fffe06bfa3")
 	is.NoErr(err)
+	is.Equal(d.ID(), "intern-a81758fffe06bfa3")
 }
 
 const DeviceByDevEUIResponse string = `{"meta":{"totalRecords":1,"count":1},"data":[{"active":true,"sensorID":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","tenant":{"name":"default"},"name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","source":"source","types":[{"urn":"urn:oma:lwm2m:ext:3303"},{"urn":"urn:oma:lwm2m:ext:3302"},{"urn":"urn:oma:lwm2m:ext:3301"}],"tags":[],"deviceProfile":{"name":"elsys_codec","decoder":"elsys_codec","interval":60},"deviceStatus":{"batteryLevel":-1,"lastObservedAt":"0001-01-01T00:00:00Z"},"deviceState":{"online":false,"state":-1,"observedAt":"0001-01-01T00:00:00Z"}}],"links":{"self":"https://diwise.io/api/v0/devices?devEUI=a81758fffe06bfa3"}}`
