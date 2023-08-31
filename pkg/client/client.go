@@ -250,7 +250,9 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	impls := []types.Device{}
+	impls := struct {
+		Devices []types.Device `json:"data"`
+	}{}
 
 	err = json.Unmarshal(respBody, &impls)
 	if err != nil {
@@ -258,12 +260,12 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	if len(impls) == 0 {
+	if len(impls.Devices) == 0 {
 		err = fmt.Errorf("device management returned an empty list of devices")
 		return nil, err
 	}
 
-	device := impls[0]
+	device := impls.Devices[0]
 	return &deviceWrapper{&device}, nil
 }
 
