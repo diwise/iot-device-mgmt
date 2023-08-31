@@ -26,8 +26,10 @@ type Device struct {
 	DeviceProfileID uint          `gorm:"foreignKey:DeviceProfileID" json:"-"`
 	DeviceProfile   DeviceProfile `json:"deviceProfile"`
 
-	DeviceStatus DeviceStatus `json:"deviceStatus"`
-	DeviceState  DeviceState  `json:"deviceState"`
+	DeviceStatusID uint         `gorm:"foreignKey:DeviceStatusID" json:"-"`
+	DeviceStatus   DeviceStatus `json:"deviceStatus"`
+	DeviceStateID  uint         `gorm:"foreignKey:DeviceStateID" json:"-"`
+	DeviceState    DeviceState  `json:"deviceState"`
 
 	Alarms []Alarm `json:"-"`
 }
@@ -64,11 +66,28 @@ func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
 
 	if d.DeviceProfileID == 0 && d.DeviceProfile.ID == 0 {
 		existing := DeviceProfile{}
-
 		result := tx.Where(&DeviceProfile{Name: d.DeviceProfile.Name}).First(&existing)
 		if result.RowsAffected > 0 {
 			d.DeviceProfile = existing
 			d.DeviceProfileID = existing.ID
+		}
+	}
+
+	if d.DeviceStateID == 0 && d.DeviceProfile.ID == 0 {
+		existing := DeviceState{}
+		result := tx.Where(&DeviceState{DeviceID: d.ID} ).First(&existing)
+		if result.RowsAffected > 0 {
+			d.DeviceState.ID = existing.ID
+			d.DeviceStateID = existing.ID
+		}
+	}
+
+	if d.DeviceStatusID == 0 && d.DeviceStatus.ID == 0 {
+		existing := DeviceStatus{}
+		result := tx.Where(&DeviceStatus{DeviceID: d.ID}).First(&existing)
+		if result.RowsAffected > 0 {
+			d.DeviceStatus.ID = existing.ID
+			d.DeviceStatusID = existing.ID
 		}
 	}
 

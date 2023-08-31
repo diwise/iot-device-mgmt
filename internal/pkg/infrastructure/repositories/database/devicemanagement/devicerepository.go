@@ -13,7 +13,6 @@ import (
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
@@ -58,13 +57,21 @@ type deviceRepository struct {
 	db *gorm.DB
 }
 
+func getDevicesQuery(db *gorm.DB) *gorm.DB {
+	query := db.Joins("DeviceProfile").Joins("Tenant").Joins("Location").Joins("DeviceStatus").Joins("DeviceState")
+	query = query.Preload("Lwm2mTypes")
+	query = query.Preload("Tags")
+	
+	return query
+}
+
 func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.db.Preload(clause.Associations)
+	query := getDevicesQuery(d.db)
 
 	if len(tenants) > 0 {
-		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
+		query = query.Where("devices.tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
 	}
 
 	result := query.Find(&devices)
@@ -75,10 +82,10 @@ func (d *deviceRepository) GetDevices(ctx context.Context, tenants ...string) ([
 func (d *deviceRepository) GetOnlineDevices(ctx context.Context, tenants ...string) ([]Device, error) {
 	var devices []Device
 
-	query := d.db.Preload(clause.Associations)
+	query := getDevicesQuery(d.db)
 
 	if len(tenants) > 0 {
-		query = query.Where("tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
+		query = query.Where("devices.tenant_id IN (?)", d.getTenantIDs(ctx, tenants...))
 	}
 
 	result := query.Find(&devices)
@@ -98,13 +105,14 @@ func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID str
 
 	var device = Device{}
 
-	query := d.db.Preload(clause.Associations)
+	query := getDevicesQuery(d.db)
+	query = query.Preload("Alarms")
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{SensorID: strings.ToLower(sensorID)})
 	} else {
 		t := d.getTenantIDs(ctx, tenants...)
-		query = query.Where("sensor_id = ? AND tenant_id IN ?", strings.ToLower(sensorID), t)
+		query = query.Where("devices.sensor_id = ? AND devices.tenant_id IN ?", strings.ToLower(sensorID), t)
 	}
 
 	result := query.First(&device)
@@ -126,13 +134,14 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 	logger := logging.GetFromContext(ctx)
 
 	var device = Device{}
-	query := d.db.Preload(clause.Associations)
+	query := getDevicesQuery(d.db)
+	query = query.Preload("Alarms")
 
 	if len(tenants) == 0 {
 		query = query.Where(&Device{DeviceID: strings.ToLower(deviceID)})
 	} else {
 		t := d.getTenantIDs(ctx, tenants...)
-		query = query.Where("device_id = ? AND tenant_id IN ?", strings.ToLower(deviceID), t)
+		query = query.Where("devices.device_id = ? AND devices.tenant_id IN ?", strings.ToLower(deviceID), t)
 	}
 
 	result := query.First(&device)
@@ -175,31 +184,40 @@ func (d *deviceRepository) Save(ctx context.Context, device *Device) error {
 
 func (d *deviceRepository) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus DeviceStatus) error {
 	var device = Device{}
-	err := d.db.
-		Preload("DeviceStatus").
-		Where(&Device{DeviceID: strings.ToLower(deviceID)}).
-		First(&device).
-		Error
 
-	if err != nil {
-		return err
+	// find device.id from device_id
+	r := d.db.Select("id").Where("device_id = ?", deviceID).First(&device)
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected == 0 {
+		return errors.New("no such device")
 	}
 
-	device.DeviceStatus = deviceStatus
+	var storedStatus = DeviceStatus{}
 
-	err = d.db.Save(&device).Error
-	if err != nil {
-		return err
+	r = d.db.Where(&DeviceStatus{DeviceID: device.ID}).First(&storedStatus)
+	if r.Error != nil {
+		if errors.Is(r.Error, gorm.ErrRecordNotFound) {
+			// no such device state exists, so lets create one
+			deviceStatus.DeviceID = device.ID
+			return d.db.Save(&deviceStatus).Error
+		}
+		return r.Error
 	}
 
-	return nil
+	// update the stored state with the new values
+	storedStatus.BatteryLevel = deviceStatus.BatteryLevel
+	storedStatus.LastObserved = deviceStatus.LastObserved
+
+	return d.db.Save(&storedStatus).Error
 }
 
 func (d *deviceRepository) UpdateDeviceState(ctx context.Context, deviceID string, deviceState DeviceState) error {
 	var device = Device{}
 
 	// find device.id from device_id
-	r := d.db.Select("id").Where("device_id = (?)", deviceID).First(&device)
+	r := d.db.Select("id").Where("device_id = ?", deviceID).First(&device)
 	if r.Error != nil {
 		return r.Error
 	}
