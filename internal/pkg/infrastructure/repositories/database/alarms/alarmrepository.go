@@ -57,9 +57,7 @@ func (d *alarmRepository) Close(ctx context.Context, alarmID int) error {
 		return result.Error
 	}
 
-	err := d.db.
-		Delete(&a).
-		Error
+	err := d.db.Delete(&a).Error
 
 	return err
 }
@@ -69,9 +67,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 
 	a := &Alarm{}
 
-	result := d.db.
-		Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID}).
-		First(&a)
+	result := d.db.Where(&Alarm{Type: alarm.Type, RefID: alarm.RefID}).First(&a)
 
 	if result.RowsAffected > 0 {
 		err := d.db.Model(&a).Update("observed_at", alarm.ObservedAt).Error
@@ -103,10 +99,7 @@ func (d *alarmRepository) GetByID(ctx context.Context, alarmID int) (Alarm, erro
 func (d *alarmRepository) GetByRefID(ctx context.Context, refID string) ([]Alarm, error) {
 	alarms := []Alarm{}
 
-	err := d.db.
-		Where(&Alarm{RefID: refID}).
-		Find(&alarms).
-		Error
+	err := d.db.Where(&Alarm{RefID: refID}).Find(&alarms).Error
 
 	if err != nil {
 		return []Alarm{}, err
