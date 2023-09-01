@@ -9,38 +9,46 @@ import (
 type Device struct {
 	gorm.Model `json:"-"`
 
-	Active      bool     `json:"active"`
-	SensorID    string   `gorm:"uniqueIndex" json:"sensorID"`
-	DeviceID    string   `gorm:"uniqueIndex" json:"deviceID"`
-	TenantID    uint     `gorm:"foreignKey:TenantID" json:"-"`
-	Tenant      Tenant   `json:"tenant"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Location    Location `json:"location"`
-	Environment string   `json:"environment"`
-	Source      string   `json:"source"`
+	SensorID string `gorm:"uniqueIndex" json:"sensorID"`
+	DeviceID string `gorm:"uniqueIndex" json:"deviceID"`
 
-	Lwm2mTypes []Lwm2mType `gorm:"many2many:device_lwm2mType;" json:"types"`
-	Tags       []Tag       `gorm:"many2many:device_tags;" json:"tags"`
+	Active       bool         `json:"active"`
+	Name         string       `json:"name"`
+	Description  string       `json:"description"`
+	Location     Location     `json:"location"`
+	Environment  string       `json:"environment"`
+	Source       string       `json:"source"`
+	DeviceStatus DeviceStatus `json:"deviceStatus"`
+	DeviceState  DeviceState  `json:"deviceState"`
+
+	TenantID uint   `gorm:"foreignKey:TenantID" json:"-"`
+	Tenant   Tenant `json:"tenant"`
 
 	DeviceProfileID uint          `gorm:"foreignKey:DeviceProfileID" json:"-"`
 	DeviceProfile   DeviceProfile `json:"deviceProfile"`
 
-	DeviceStatusID uint         `gorm:"foreignKey:DeviceStatusID" json:"-"`
-	DeviceStatus   DeviceStatus `json:"deviceStatus"`
-	DeviceStateID  uint         `gorm:"foreignKey:DeviceStateID" json:"-"`
-	DeviceState    DeviceState  `json:"deviceState"`
+	Lwm2mTypes []Lwm2mType `gorm:"many2many:device_lwm2mType;" json:"types"`
+	Tags       []Tag       `gorm:"many2many:device_tags;" json:"tags"`
 
 	Alarms []Alarm `json:"-"`
 }
 
 func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
-	if d.TenantID == 0 && d.Tenant.ID == 0 {
+	if d.TenantID == 0 {
 		var t = Tenant{}
 		result := tx.Where(Tenant{Name: d.Tenant.Name}).First(&t)
 		if result.RowsAffected > 0 {
 			d.TenantID = t.ID
 			d.Tenant = t
+		}
+	}
+
+	if d.DeviceProfileID == 0 {
+		existing := DeviceProfile{}
+		result := tx.Where(&DeviceProfile{Name: d.DeviceProfile.Name}).First(&existing)
+		if result.RowsAffected > 0 {
+			d.DeviceProfileID = existing.ID
+			d.DeviceProfile = existing
 		}
 	}
 
@@ -64,33 +72,6 @@ func (d *Device) BeforeSave(tx *gorm.DB) (err error) {
 		}
 	}
 
-	if d.DeviceProfileID == 0 && d.DeviceProfile.ID == 0 {
-		existing := DeviceProfile{}
-		result := tx.Where(&DeviceProfile{Name: d.DeviceProfile.Name}).First(&existing)
-		if result.RowsAffected > 0 {
-			d.DeviceProfile = existing
-			d.DeviceProfileID = existing.ID
-		}
-	}
-
-	if d.DeviceStateID == 0 && d.DeviceProfile.ID == 0 {
-		existing := DeviceState{}
-		result := tx.Where(&DeviceState{DeviceID: d.ID} ).First(&existing)
-		if result.RowsAffected > 0 {
-			d.DeviceState.ID = existing.ID
-			d.DeviceStateID = existing.ID
-		}
-	}
-
-	if d.DeviceStatusID == 0 && d.DeviceStatus.ID == 0 {
-		existing := DeviceStatus{}
-		result := tx.Where(&DeviceStatus{DeviceID: d.ID}).First(&existing)
-		if result.RowsAffected > 0 {
-			d.DeviceStatus.ID = existing.ID
-			d.DeviceStatusID = existing.ID
-		}
-	}
-
 	return nil
 }
 
@@ -109,12 +90,6 @@ type Tenant struct {
 	Name string `gorm:"uniqueIndex" json:"name"`
 }
 
-type Tag struct {
-	gorm.Model `json:"-"`
-
-	Name string `json:"name"`
-}
-
 type DeviceProfile struct {
 	gorm.Model `json:"-"`
 
@@ -130,8 +105,11 @@ type Lwm2mType struct {
 }
 
 type DeviceStatus struct {
-	gorm.Model `json:"-"`
-	DeviceID   uint `json:"-"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+
+	DeviceID uint `gorm:"primarykey" json:"-"`
 
 	BatteryLevel int       `json:"batteryLevel"`
 	LastObserved time.Time `json:"lastObservedAt"`
@@ -145,12 +123,21 @@ const (
 )
 
 type DeviceState struct {
-	gorm.Model `json:"-"`
-	DeviceID   uint `json:"-"`
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt `gorm:"index"`
+
+	DeviceID uint `gorm:"primarykey" json:"-"`
 
 	Online     bool      `json:"online"`
 	State      int       `json:"state"`
 	ObservedAt time.Time `json:"observedAt"`
+}
+
+type Tag struct {
+	gorm.Model `json:"-"`
+
+	Name string `json:"name"`
 }
 
 type Alarm struct {
