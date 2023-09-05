@@ -1,6 +1,6 @@
 module github.com/diwise/iot-device-mgmt
 
-go 1.20
+go 1.21
 
 require (
 	github.com/diwise/messaging-golang v0.0.0-20230629123559-858deb75d29d

@@ -41,7 +41,7 @@ type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
 
 func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 	return func() (*gorm.DB, zerolog.Logger, error) {
-		db, err := gorm.Open(sqlite.Open("file::memory:?cache=shared"), &gorm.Config{
+		db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{
 			Logger:          logger.Default.LogMode(logger.Silent),
 			CreateBatchSize: 1000,
 		})
