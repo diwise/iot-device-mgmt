@@ -113,7 +113,7 @@ func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 			return
 		}
 
-		requestLogger.Error().Err(err).Msg("Unsupported MediaType")
+		requestLogger.Error().Msg("Unsupported MediaType")
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 	}
 }
