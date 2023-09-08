@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
@@ -66,31 +67,65 @@ func createDeviceHandler(log zerolog.Logger, svc devicemanagement.DeviceManageme
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to read body")
-			w.WriteHeader(http.StatusBadRequest)
+		if isMultipartFormData(r) {
+			file, _, err := r.FormFile("fileupload")
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to read file")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			err = svc.Import(ctx, file)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("failed to import data")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
+			return
+		} else if isAapplicationJson(r) {
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to read body")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			var d types.Device
+			err = json.Unmarshal(body, &d)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to unmarshal body")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			err = svc.CreateDevice(ctx, d)
+			if err != nil {
+				requestLogger.Error().Err(err).Msg("unable to create device")
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
+			w.Header().Add("Content-Type", "application/json")
+			w.WriteHeader(http.StatusCreated)
 			return
 		}
 
-		var d types.Device
-		err = json.Unmarshal(body, &d)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to unmarshal body")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		err = svc.CreateDevice(ctx, d)
-		if err != nil {
-			requestLogger.Error().Err(err).Msg("unable to create device")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusCreated)
+		requestLogger.Error().Msg("Unsupported MediaType")
+		w.WriteHeader(http.StatusUnsupportedMediaType)
 	}
+}
+
+func isMultipartFormData(r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+	return strings.Contains(contentType, "multipart/form-data")
+}
+
+func isAapplicationJson(r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+	return strings.Contains(contentType, "application/json")
 }
 
 func queryDevicesHandler(log zerolog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {

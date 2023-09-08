@@ -7,6 +7,7 @@ import (
 	"context"
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
+	"io"
 	"sync"
 	"time"
 )
@@ -35,6 +36,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			},
 //			GetDevicesFunc: func(ctx context.Context, tenants ...string) ([]r.Device, error) {
 //				panic("mock out the GetDevices method")
+//			},
+//			ImportFunc: func(ctx context.Context, reader io.Reader) error {
+//				panic("mock out the Import method")
 //			},
 //			RemoveAlarmFunc: func(ctx context.Context, alarmID int) error {
 //				panic("mock out the RemoveAlarm method")
@@ -69,6 +73,9 @@ type DeviceManagementMock struct {
 
 	// GetDevicesFunc mocks the GetDevices method.
 	GetDevicesFunc func(ctx context.Context, tenants ...string) ([]r.Device, error)
+
+	// ImportFunc mocks the Import method.
+	ImportFunc func(ctx context.Context, reader io.Reader) error
 
 	// RemoveAlarmFunc mocks the RemoveAlarm method.
 	RemoveAlarmFunc func(ctx context.Context, alarmID int) error
@@ -129,6 +136,13 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// Import holds details about calls to the Import method.
+		Import []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Reader is the reader argument value.
+			Reader io.Reader
+		}
 		// RemoveAlarm holds details about calls to the RemoveAlarm method.
 		RemoveAlarm []struct {
 			// Ctx is the ctx argument value.
@@ -169,6 +183,7 @@ type DeviceManagementMock struct {
 	lockGetDeviceByDeviceID sync.RWMutex
 	lockGetDeviceBySensorID sync.RWMutex
 	lockGetDevices          sync.RWMutex
+	lockImport              sync.RWMutex
 	lockRemoveAlarm         sync.RWMutex
 	lockUpdateDevice        sync.RWMutex
 	lockUpdateDeviceState   sync.RWMutex
@@ -372,6 +387,42 @@ func (mock *DeviceManagementMock) GetDevicesCalls() []struct {
 	mock.lockGetDevices.RLock()
 	calls = mock.calls.GetDevices
 	mock.lockGetDevices.RUnlock()
+	return calls
+}
+
+// Import calls ImportFunc.
+func (mock *DeviceManagementMock) Import(ctx context.Context, reader io.Reader) error {
+	if mock.ImportFunc == nil {
+		panic("DeviceManagementMock.ImportFunc: method is nil but DeviceManagement.Import was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Reader io.Reader
+	}{
+		Ctx:    ctx,
+		Reader: reader,
+	}
+	mock.lockImport.Lock()
+	mock.calls.Import = append(mock.calls.Import, callInfo)
+	mock.lockImport.Unlock()
+	return mock.ImportFunc(ctx, reader)
+}
+
+// ImportCalls gets all the calls that were made to Import.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.ImportCalls())
+func (mock *DeviceManagementMock) ImportCalls() []struct {
+	Ctx    context.Context
+	Reader io.Reader
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Reader io.Reader
+	}
+	mock.lockImport.RLock()
+	calls = mock.calls.Import
+	mock.lockImport.RUnlock()
 	return calls
 }
 
