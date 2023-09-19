@@ -27,11 +27,9 @@ func TestMe(t *testing.T) {
 	ctx := context.Background()
 
 	c, err := New(ctx, s.URL(), s.URL()+"/token", "", "")
-	if err != nil {
-		defer c.Close(ctx)
-	}
-
 	is.NoErr(err)
+
+	c.Close(ctx)
 }
 
 const TokenResponse string = `{"access_token":"testtoken","expires_in":300,"refresh_expires_in":0,"token_type":"Bearer","not-before-policy":0,"scope":"email profile"}`
