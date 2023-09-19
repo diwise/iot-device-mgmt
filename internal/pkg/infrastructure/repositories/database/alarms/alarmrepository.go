@@ -28,7 +28,7 @@ type alarmRepository struct {
 }
 
 func NewAlarmRepository(connect ConnectorFunc) (AlarmRepository, error) {
-	impl, _, err := connect()
+	impl, err := connect()
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (d *alarmRepository) Add(ctx context.Context, alarm Alarm) (int, error) {
 		return int(a.ID), err
 	}
 
-	logger.Debug().Msgf("add new alarm, refID: %s, type: %s, tenant: %s", alarm.RefID, alarm.Type, alarm.Tenant)
+	logger.Debug(fmt.Sprintf("add new alarm, refID: %s, type: %s, tenant: %s", alarm.RefID, alarm.Type, alarm.Tenant))
 
 	result = d.db.Create(&alarm)
 	if result.Error != nil {

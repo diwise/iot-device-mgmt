@@ -98,7 +98,7 @@ func (a *alarmService) CloseAlarm(ctx context.Context, alarmID int) error {
 
 	alarm, err := a.alarmRepository.GetByID(ctx, alarmID)
 	if alarm.ID == 0 || err != nil {
-		logger.Debug().Msgf("alarm %d could not be fetched by ID", alarmID)
+		logger.Debug("alarm could not be fetched by ID", "alarm_id", alarmID)
 		return err
 	}
 

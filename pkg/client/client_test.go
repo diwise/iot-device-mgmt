@@ -27,7 +27,9 @@ func TestMe(t *testing.T) {
 	ctx := context.Background()
 
 	c, err := New(ctx, s.URL(), s.URL()+"/token", "", "")
-	defer c.Close(ctx)
+	if err != nil {
+		defer c.Close(ctx)
+	}
 
 	is.NoErr(err)
 }

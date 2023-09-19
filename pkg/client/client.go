@@ -96,12 +96,12 @@ func (dmc *devManagementClient) run(ctx context.Context) {
 	defer dmc.wg.Done()
 
 	logger := logging.GetFromContext(ctx)
-	logger.Info().Msg("starting up device management client")
+	logger.Info("starting up device management client")
 
 	// use atomic swap to avoid startup races
 	alreadyStarted := dmc.keepRunning.Swap(true)
 	if alreadyStarted {
-		logger.Error().Msg("attempt to start the device management client multiple times")
+		logger.Error("attempt to start the device management client multiple times")
 		return
 	}
 
@@ -110,7 +110,7 @@ func (dmc *devManagementClient) run(ctx context.Context) {
 		fn()
 	}
 
-	logger.Info().Msg("device management client exiting")
+	logger.Info("device management client exiting")
 }
 
 func (dmc *devManagementClient) Close(ctx context.Context) {
@@ -181,7 +181,7 @@ func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context,
 	dmc.queue <- func() {
 		if err != nil {
 			log := logging.GetFromContext(ctx)
-			log.Error().Err(err).Msg("failed to update device cache")
+			log.Error("failed to update device cache", "err", err.Error())
 
 			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
 		} else {
@@ -199,7 +199,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 	log := logging.GetFromContext(ctx)
-	log.Info().Msgf("looking up internal id and types for devEUI %s", devEUI)
+	log.Info("looking up internal id and types", "devEUI", devEUI)
 
 	httpClient := http.Client{
 		Transport: otelhttp.NewTransport(http.DefaultTransport),
@@ -319,7 +319,7 @@ func (dmc *devManagementClient) updateDeviceCacheFromInternalID(ctx context.Cont
 	dmc.queue <- func() {
 		if err != nil {
 			log := logging.GetFromContext(ctx)
-			log.Error().Err(err).Msg("failed to update device cache")
+			log.Error("failed to update device cache", "err", err.Error())
 
 			dmc.cacheByInternalID[deviceID] = lookupResult{state: Error, err: err, when: time.Now()}
 		} else {
@@ -336,7 +336,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 	log := logging.GetFromContext(ctx)
-	log.Info().Msgf("looking up properties for device %s", deviceID)
+	log.Info("looking up properties for device", "device_id", deviceID)
 
 	httpClient := http.Client{
 		Transport: otelhttp.NewTransport(http.DefaultTransport),

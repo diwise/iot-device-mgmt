@@ -2,7 +2,10 @@ package devicemanagement
 
 import (
 	"context"
+	"fmt"
 	"time"
+
+	"log/slog"
 
 	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	t "github.com/diwise/iot-device-mgmt/pkg/types"
@@ -80,11 +83,11 @@ func (d *deviceManagement) GetDeviceByDeviceID(ctx context.Context, deviceID str
 }
 
 func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus r.DeviceStatus) error {
-	logger := logging.GetFromContext(ctx).With().Str("func", "UpdateDeviceStatus").Logger()
+	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceStatus"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
 	if deviceStatus.LastObserved.IsZero() {
-		logger.Debug().Msgf("lastObserved is zero, set to Now")
+		logger.Debug("lastObserved is zero, set to Now")
 		deviceStatus.LastObserved = time.Now().UTC()
 	}
 
@@ -106,7 +109,7 @@ func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID stri
 }
 
 func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID string, deviceState r.DeviceState) error {
-	logger := logging.GetFromContext(ctx).With().Str("func", "UpdateDeviceState").Logger()
+	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceState"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
 	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
@@ -115,11 +118,11 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 	}
 
 	if deviceState.ObservedAt.IsZero() {
-		logger.Debug().Msgf("observedAt is zero, set to Now")
+		logger.Debug("observedAt is zero, set to Now")
 		deviceState.ObservedAt = time.Now().UTC()
 	}
 
-	logger.Debug().Msgf("online: %t, state: %d", deviceState.Online, deviceState.State)
+	logger.Debug(fmt.Sprintf("online: %t, state: %d", deviceState.Online, deviceState.State))
 
 	if has, highestSeverity, _ := device.HasActiveAlarms(); has {
 		switch highestSeverity {
@@ -133,7 +136,7 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 			deviceState.State = r.DeviceStateUnknown
 		}
 
-		logger.Debug().Msgf("has alarms with severity %d, state set to %d", highestSeverity, deviceState.State)
+		logger.Debug(fmt.Sprintf("has alarms with severity %d, state set to %d", highestSeverity, deviceState.State))
 	}
 
 	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
@@ -154,7 +157,7 @@ func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarmI
 }
 
 func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
-	logger := logging.GetFromContext(ctx).With().Str("func", "RemoveAlarm").Logger()
+	logger := logging.GetFromContext(ctx).With(slog.String("func", "RemoveAlarm"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
 	deviceID, err := d.deviceRepository.RemoveAlarmByID(ctx, alarmID)
@@ -168,7 +171,7 @@ func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
 	}
 
 	if device.HasAlarm(alarmID) {
-		logger.Warn().Msg("alarm not removed!")
+		logger.Warn("alarm not removed!")
 	}
 
 	deviceState := device.DeviceState

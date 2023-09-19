@@ -8,26 +8,24 @@ import (
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/rs/zerolog"
 )
 
 const DefaultTimespan = 3600
 
 type Watchdog interface {
-	Start()
-	Stop()
+	Start(context.Context)
+	Stop(context.Context)
 }
+
 type watchdogImpl struct {
 	done             chan bool
-	log              zerolog.Logger
 	deviceRepository db.DeviceRepository
 	messenger        messaging.MsgContext
 }
 
-func New(d db.DeviceRepository, m messaging.MsgContext, logger zerolog.Logger) Watchdog {
+func New(d db.DeviceRepository, m messaging.MsgContext) Watchdog {
 	w := &watchdogImpl{
 		done:             make(chan bool),
-		log:              logger,
 		deviceRepository: d,
 		messenger:        m,
 	}
@@ -35,16 +33,15 @@ func New(d db.DeviceRepository, m messaging.MsgContext, logger zerolog.Logger) W
 	return w
 }
 
-func (w *watchdogImpl) Start() {
-	go w.run()
+func (w *watchdogImpl) Start(ctx context.Context) {
+	go w.run(ctx)
 }
 
-func (w *watchdogImpl) Stop() {
+func (w *watchdogImpl) Stop(ctx context.Context) {
 	w.done <- true
 }
 
-func (w *watchdogImpl) run() {
-	ctx := logging.NewContextWithLogger(context.Background(), w.log)
+func (w *watchdogImpl) run(ctx context.Context) {
 
 	b := &batteryLevelWatcher{
 		deviceRepository: w.deviceRepository,
@@ -88,13 +85,13 @@ func (b *batteryLevelWatcher) Watch(ctx context.Context) {
 		case <-ticker.C:
 			changed, err := b.checkBatteryLevels(ctx)
 			if err != nil {
-				logger.Error().Err(err).Msg("could not check batteryLevels")
+				logger.Error("could not check batteryLevels", "err", err.Error())
 			}
 
 			for _, c := range changed {
 				err := b.publish(ctx, c)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not publish BatteryLevelChanged")
+					logger.Error("could not publish BatteryLevelChanged", "err", err.Error())
 				}
 			}
 		}
@@ -155,15 +152,15 @@ func (l *lastObservedWatcher) Watch(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checked, err := l.checkLastObserved(ctx, logger)
+			checked, err := l.checkLastObserved(ctx)
 			if err != nil {
-				logger.Error().Err(err).Msg("failed to check last observed")
+				logger.Error("failed to check last observed", "err", err.Error())
 				break
 			}
 			for _, c := range checked {
 				err := l.publish(ctx, c)
 				if err != nil {
-					logger.Error().Err(err).Msg("failed to publish last observed")
+					logger.Error("failed to publish last observed", "err", err.Error())
 					break
 				}
 			}
@@ -171,7 +168,7 @@ func (l *lastObservedWatcher) Watch(ctx context.Context) {
 	}
 }
 
-func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, logger zerolog.Logger) ([]string, error) {
+func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) ([]string, error) {
 	devices, err := l.deviceRepository.GetOnlineDevices(ctx)
 	if err != nil {
 		return nil, err
@@ -180,8 +177,7 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, logger zero
 	checkedDeviceIDs := []string{}
 
 	for _, d := range devices {
-		if !checkLastObservedIsAfter(logger, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
-			logger.Debug().Msgf("lastObserved status on %s with profile %s and interval %d seconds", d.DeviceID, d.DeviceProfile.Name, d.DeviceProfile.Interval)
+		if !checkLastObservedIsAfter(ctx, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
 			checkedDeviceIDs = append(checkedDeviceIDs, d.DeviceID)
 		}
 	}
@@ -189,10 +185,9 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, logger zero
 	return checkedDeviceIDs, nil
 }
 
-func checkLastObservedIsAfter(logger zerolog.Logger, lastObserved time.Time, t time.Time, i int) bool {
+func checkLastObservedIsAfter(ctx context.Context, lastObserved time.Time, t time.Time, i int) bool {
 	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
 	after := lastObserved.After(shouldHaveBeenCalledAfter)
-	logger.Debug().Msgf("lastObserved: %s, after:%s, return: %t", lastObserved.Format(time.RFC3339Nano), shouldHaveBeenCalledAfter.Format(time.RFC3339Nano), after)
 	return after
 }
 

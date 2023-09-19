@@ -10,7 +10,6 @@ import (
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 func TestGetDevices(t *testing.T) {
@@ -163,10 +162,10 @@ func testSetupDeviceRepository(t *testing.T) (*is.I, context.Context, DeviceRepo
 
 func setup(t *testing.T) (*is.I, context.Context, ConnectorFunc) {
 	is := is.New(t)
+	ctx := context.Background()
+	conn := NewSQLiteConnector(ctx)
 
-	conn := NewSQLiteConnector(zerolog.Logger{})
-
-	return is, context.Background(), conn
+	return is, ctx, conn
 }
 
 func createDevice(n int, tenant string) *Device {

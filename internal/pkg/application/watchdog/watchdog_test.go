@@ -10,7 +10,6 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 func TestCheckLastObserved(t *testing.T) {
@@ -31,24 +30,24 @@ func TestCheckLastObserved(t *testing.T) {
 		messenger:        m,
 	}
 
-	checked, err := lw.checkLastObserved(ctx, zerolog.Logger{})
+	checked, err := lw.checkLastObserved(ctx)
 	is.NoErr(err)
 
 	is.Equal(1, len(checked))
 }
 
 func TestCheckLastObservedIsAfter(t *testing.T) {
-	is, _ := testSetup(t)
+	is, ctx := testSetup(t)
 
 	observed, err := time.Parse(time.RFC3339, "2006-01-02T15:04:05Z")
 	is.NoErr(err)
 	now, err := time.Parse(time.RFC3339, "2006-01-02T15:03:54Z")
 	is.NoErr(err)
 
-	is.True(checkLastObservedIsAfter(zerolog.Logger{}, observed, now, 10))
+	is.True(checkLastObservedIsAfter(ctx, observed, now, 10))
 
 	now = now.Add(30 * time.Second)
-	is.True(!checkLastObservedIsAfter(zerolog.Logger{}, observed, now, 10))
+	is.True(!checkLastObservedIsAfter(ctx, observed, now, 10))
 }
 
 func TestBatteryLevelChangedPublish(t *testing.T) {

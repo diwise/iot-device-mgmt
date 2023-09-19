@@ -17,7 +17,7 @@ import (
 )
 
 func NewDeviceRepository(connect ConnectorFunc) (DeviceRepository, error) {
-	impl, _, err := connect()
+	impl, err := connect()
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +114,7 @@ func (d *deviceRepository) GetDeviceBySensorID(ctx context.Context, sensorID str
 			return Device{}, ErrDeviceNotFound
 		}
 
-		logger.Error().Err(result.Error).Msg("gorm error")
+		logger.Error("gorm error", "err", result.Error.Error())
 
 		return Device{}, ErrRepositoryError
 	}
@@ -142,7 +142,7 @@ func (d *deviceRepository) GetDeviceByDeviceID(ctx context.Context, deviceID str
 			return Device{}, ErrDeviceNotFound
 		}
 
-		logger.Error().Err(result.Error).Msg("gorm error")
+		logger.Error("gorm error", "err", result.Error.Error())
 
 		return Device{}, ErrRepositoryError
 	}
