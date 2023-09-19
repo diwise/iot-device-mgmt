@@ -123,8 +123,7 @@ func setupMessagingOrDie(ctx context.Context, serviceName string) messaging.MsgC
 	config := messaging.LoadConfiguration(ctx, serviceName, logger)
 	messenger, err := messaging.Initialize(ctx, config)
 	if err != nil {
-		logger.Error("failed to init messenger", "err", err.Error())
-		os.Exit(1)
+		fatal(ctx, "failed to init messenger", err)
 	}
 
 	return messenger
