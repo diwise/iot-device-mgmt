@@ -17,7 +17,9 @@ func TestGetDevices(t *testing.T) {
 
 	r.Save(ctx, createDevice(1, "default"))
 	r.Save(ctx, createDevice(2, "default"))
-	r.Save(ctx, createDevice(3, "default"))
+	device3 := createDevice(3, "default")
+	device3.DeviceState.Online = true
+	r.Save(ctx, device3)
 	r.Save(ctx, createDevice(4, "test"))
 	r.Save(ctx, createDevice(5, "test"))
 	r.Save(ctx, createDevice(6, "secret"))
@@ -36,7 +38,7 @@ func TestGetDevices(t *testing.T) {
 
 	onlineDevices, err := r.GetOnlineDevices(ctx)
 	is.NoErr(err)
-	is.Equal(0, len(onlineDevices))
+	is.Equal(1, len(onlineDevices))
 }
 
 func TestSaveAndGet(t *testing.T) {

@@ -167,10 +167,6 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 			return
 		}
 
-		if message.Code == 0 {
-			return
-		}
-
 		if message.DeviceID == "" {
 			logger.Error("no device information")
 			return
@@ -178,6 +174,17 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 
 		logger = logger.With(slog.String("device_id", message.DeviceID))
 		ctx = logging.NewContextWithLogger(ctx, logger)
+
+		if message.Code == 0 {
+			active_alarms, err := as.GetAlarmsByRefID(ctx, message.DeviceID)
+			if err == nil && len(active_alarms) > 0 {
+				logger.Info("closing all active alarms for device")
+				for _, alarm := range active_alarms {
+					as.CloseAlarm(ctx, int(alarm.ID))
+				}
+			}
+			return
+		}
 
 		if message.Tenant == "" {
 			logger.Error("no tenant information")

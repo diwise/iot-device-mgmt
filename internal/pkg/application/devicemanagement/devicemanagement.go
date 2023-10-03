@@ -3,6 +3,7 @@ package devicemanagement
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"log/slog"
@@ -28,6 +29,8 @@ type DeviceManagement interface {
 
 	AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
 	RemoveAlarm(ctx context.Context, alarmID int) error
+
+	Import(ctx context.Context, reader io.Reader) error
 }
 
 type deviceManagement struct {
@@ -46,6 +49,10 @@ func New(d r.DeviceRepository, m messaging.MsgContext) DeviceManagement {
 	dm.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", AlarmsClosedHandler(m, dm))
 
 	return dm
+}
+
+func (d *deviceManagement) Import(ctx context.Context, reader io.Reader) error {
+	return d.deviceRepository.Seed(ctx, reader)
 }
 
 func (d *deviceManagement) CreateDevice(ctx context.Context, device t.Device) error {

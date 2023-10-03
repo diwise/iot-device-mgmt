@@ -53,6 +53,7 @@ type devManagementClient struct {
 	cacheByInternalID map[string]lookupResult
 	knownDevEUI       map[string]devEUIState
 	queue             chan (func())
+	httpClient        http.Client
 
 	keepRunning *atomic.Bool
 	wg          sync.WaitGroup
@@ -84,6 +85,10 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 		knownDevEUI:       make(map[string]devEUIState, 100),
 		queue:             make(chan func()),
 		keepRunning:       &atomic.Bool{},
+
+		httpClient: http.Client{
+			Transport: otelhttp.NewTransport(http.DefaultTransport),
+		},
 	}
 
 	go dmc.run(ctx)
@@ -201,10 +206,6 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	log := logging.GetFromContext(ctx)
 	log.Info("looking up internal id and types", "devEUI", devEUI)
 
-	httpClient := http.Client{
-		Transport: otelhttp.NewTransport(http.DefaultTransport),
-	}
-
 	url := dmc.url + "/api/v0/devices?devEUI=" + devEUI
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -223,7 +224,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := dmc.httpClient.Do(req)
 	if err != nil {
 		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
 		return nil, err
@@ -338,10 +339,6 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	log := logging.GetFromContext(ctx)
 	log.Info("looking up properties for device", "device_id", deviceID)
 
-	httpClient := http.Client{
-		Transport: otelhttp.NewTransport(http.DefaultTransport),
-	}
-
 	url := dmc.url + "/api/v0/devices/" + deviceID
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
@@ -360,7 +357,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
 	}
 
-	resp, err := httpClient.Do(req)
+	resp, err := dmc.httpClient.Do(req)
 	if err != nil {
 		err = fmt.Errorf("failed to retrieve information for device: %w", err)
 		return nil, err
