@@ -8,7 +8,6 @@ import (
 	. "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
 	"github.com/google/uuid"
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 func TestAddAlarms(t *testing.T) {
@@ -135,8 +134,8 @@ func testSetupAlarmRepository(t *testing.T) (*is.I, context.Context, AlarmReposi
 
 func setup(t *testing.T) (*is.I, context.Context, ConnectorFunc) {
 	is := is.New(t)
+	ctx := context.Background()
+	conn := NewSQLiteConnector(ctx)
 
-	conn := NewSQLiteConnector(zerolog.Logger{})
-
-	return is, context.Background(), conn
+	return is, ctx, conn
 }

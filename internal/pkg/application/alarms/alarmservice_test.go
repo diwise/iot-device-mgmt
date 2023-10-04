@@ -5,11 +5,13 @@ import (
 	"context"
 	"testing"
 
+	"log/slog"
+
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/matryer/is"
 	"github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog"
 )
 
 func TestBatteryLevelChangedHandler(t *testing.T) {
@@ -162,9 +164,11 @@ func TestWithNoConfigFile(t *testing.T) {
 	is.True(nil != svc.GetConfiguration().AlarmConfigurations)
 }
 
-func testSetup(t *testing.T) (*is.I, context.Context, zerolog.Logger) {
+func testSetup(t *testing.T) (*is.I, context.Context, *slog.Logger) {
 	is := is.New(t)
-	return is, context.Background(), zerolog.Logger{}
+	ctx := context.Background()
+	logger := logging.GetFromContext(ctx)
+	return is, ctx, logger
 }
 
 const batteryLevelChangedJson = `{"deviceID":"net:test:iot:a81757","batteryLevel":10,"tenant":"default","observedAt":"2023-04-12T06:51:25.389495559Z"}`

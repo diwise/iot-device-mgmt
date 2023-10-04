@@ -1,12 +1,15 @@
 package database
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"time"
 
+	"log/slog"
+
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
-	"github.com/rs/zerolog"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -21,12 +24,12 @@ type ConnectorConfig struct {
 	SslMode  string
 }
 
-func LoadConfigFromEnv(log zerolog.Logger) ConnectorConfig {
+func LoadConfigFromEnv(ctx context.Context) ConnectorConfig {
 	dbHost := os.Getenv("POSTGRES_HOST")
 	username := os.Getenv("POSTGRES_USER")
 	dbName := os.Getenv("POSTGRES_DBNAME")
 	password := os.Getenv("POSTGRES_PASSWORD")
-	sslMode := env.GetVariableOrDefault(log, "POSTGRES_SSLMODE", "disable")
+	sslMode := env.GetVariableOrDefault(ctx, "POSTGRES_SSLMODE", "disable")
 
 	return ConnectorConfig{
 		Host:     dbHost,
@@ -37,10 +40,10 @@ func LoadConfigFromEnv(log zerolog.Logger) ConnectorConfig {
 	}
 }
 
-type ConnectorFunc func() (*gorm.DB, zerolog.Logger, error)
+type ConnectorFunc func() (*gorm.DB, error)
 
-func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
-	return func() (*gorm.DB, zerolog.Logger, error) {
+func NewSQLiteConnector(ctx context.Context) ConnectorFunc {
+	return func() (*gorm.DB, error) {
 		db, err := gorm.Open(sqlite.Open("file::memory:"), &gorm.Config{
 			Logger:          logger.Default.LogMode(logger.Silent),
 			CreateBatchSize: 1000,
@@ -52,11 +55,11 @@ func NewSQLiteConnector(log zerolog.Logger) ConnectorFunc {
 			sqldb.SetMaxOpenConns(1)
 		}
 
-		return db, log, err
+		return db, err
 	}
 }
 
-func NewPostgreSQLConnector(log zerolog.Logger, cfg ConnectorConfig) ConnectorFunc {
+func NewPostgreSQLConnector(ctx context.Context, cfg ConnectorConfig) ConnectorFunc {
 	dbHost := cfg.Host
 	username := cfg.Username
 	dbName := cfg.DbName
@@ -65,15 +68,20 @@ func NewPostgreSQLConnector(log zerolog.Logger, cfg ConnectorConfig) ConnectorFu
 
 	dbURI := fmt.Sprintf("host=%s user=%s dbname=%s sslmode=%s password=%s", dbHost, username, dbName, sslMode, password)
 
-	return func() (*gorm.DB, zerolog.Logger, error) {
-		sublogger := log.With().Str("host", dbHost).Str("database", dbName).Logger()
+	log := logging.GetFromContext(ctx)
+
+	return func() (*gorm.DB, error) {
+		sublogger := log.With(
+			slog.String("host", dbHost),
+			slog.String("database", dbName),
+		)
 
 		for {
-			sublogger.Info().Msg("connecting to database host")
+			sublogger.Info("connecting to database host")
 
 			db, err := gorm.Open(postgres.Open(dbURI), &gorm.Config{
 				Logger: logger.New(
-					&sublogger,
+					&logadapter{logger: sublogger},
 					logger.Config{
 						SlowThreshold:             time.Second,
 						LogLevel:                  logger.Info,
@@ -83,11 +91,22 @@ func NewPostgreSQLConnector(log zerolog.Logger, cfg ConnectorConfig) ConnectorFu
 				),
 			})
 			if err != nil {
-				sublogger.Fatal().Err(err).Msg("failed to connect to database")
+				sublogger.Error("failed to connect to database", "err", err.Error())
 				time.Sleep(3 * time.Second)
+				os.Exit(1)
 			} else {
-				return db, sublogger, nil
+				return db, nil
 			}
 		}
 	}
+}
+
+// logadapter provides a Printf interface to the gorm logger
+// so that we can forward the log data to slog
+type logadapter struct {
+	logger *slog.Logger
+}
+
+func (adapter *logadapter) Printf(format string, args ...interface{}) {
+	adapter.logger.Info(fmt.Sprintf(format, args...))
 }

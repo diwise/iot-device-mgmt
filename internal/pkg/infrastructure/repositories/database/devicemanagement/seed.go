@@ -27,7 +27,7 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
 	}
 
 	log := logging.GetFromContext(ctx)
-	log.Info().Msgf("loaded %d devices from file", len(records))
+	log.Info("loaded devices from file", "count", len(records))
 
 	for _, record := range records {
 		device := record.Device()
@@ -36,10 +36,10 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
 		if errors.Is(err, ErrDeviceNotFound) {
 			err := d.Save(ctx, &device)
 			if err != nil {
-				log.Error().Err(err).Msgf("could seed device %s", device.DeviceID)
+				log.Error("could not seed device", "device_id", device.DeviceID, "err", err.Error())
 			}
 		} else if err != nil {
-			log.Error().Err(err).Msg("unable to check if device exists")
+			log.Error("unable to check if device exists", "device_id", device.DeviceID, "err", err.Error())
 		}
 	}
 

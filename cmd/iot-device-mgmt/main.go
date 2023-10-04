@@ -21,7 +21,6 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/go-chi/chi/v5"
-	"github.com/rs/zerolog"
 )
 
 const serviceName string = "iot-device-mgmt"
@@ -32,7 +31,7 @@ var alarmConfigFile string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
-	ctx, logger, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
+	ctx, _, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
 	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
@@ -40,11 +39,11 @@ func main() {
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	conn := setupDatabaseConnection(logger)
+	conn := setupDatabaseConnection(ctx)
 	deviceDB := setupDeviceDatabaseOrDie(ctx, conn)
-	alarmDB := setupAlarmDatabaseOrDie(logger, conn)
+	alarmDB := setupAlarmDatabaseOrDie(ctx, conn)
 
-	messenger := setupMessagingOrDie(serviceName, logger)
+	messenger := setupMessagingOrDie(ctx, serviceName)
 
 	mgmtSvc := devicemanagement.New(deviceDB, messenger)
 
@@ -52,39 +51,40 @@ func main() {
 	alarmSvc.Start()
 	defer alarmSvc.Stop()
 
-	watchdog := watchdog.New(deviceDB, messenger, logger)
-	watchdog.Start()
-	defer watchdog.Stop()
+	watchdog := watchdog.New(deviceDB, messenger)
+	watchdog.Start(ctx)
+	defer watchdog.Stop(ctx)
 
 	r, err := setupRouter(ctx, serviceName, mgmtSvc, alarmSvc)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to setup router")
+		fatal(ctx, "failed to setup router", err)
 	}
 
-	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(logger, "SERVICE_PORT", "8080"))
+	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(ctx, "SERVICE_PORT", "8080"))
 
 	err = http.ListenAndServe(apiPort, r)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to start router")
+		fatal(ctx, "failed to start router", err)
 	}
 }
 
-func setupDatabaseConnection(logger zerolog.Logger) db.ConnectorFunc {
+func setupDatabaseConnection(ctx context.Context) db.ConnectorFunc {
 	if os.Getenv("POSTGRES_HOST") != "" {
-		return db.NewPostgreSQLConnector(logger, db.LoadConfigFromEnv(logger))
+		return db.NewPostgreSQLConnector(ctx, db.LoadConfigFromEnv(ctx))
 	}
 
-	logger.Info().Msg("no sql database configured, using builtin sqlite instead")
-	return db.NewSQLiteConnector(logger)
+	logger := logging.GetFromContext(ctx)
+	logger.Info("no sql database configured, using builtin sqlite instead")
+	return db.NewSQLiteConnector(ctx)
 }
 
-func setupAlarmDatabaseOrDie(logger zerolog.Logger, conn db.ConnectorFunc) aDb.AlarmRepository {
+func setupAlarmDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) aDb.AlarmRepository {
 	var db aDb.AlarmRepository
 	var err error
 
 	db, err = aDb.NewAlarmRepository(conn)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to database")
+		fatal(ctx, "failed to connect to database", err)
 	}
 
 	return db
@@ -94,36 +94,36 @@ func setupDeviceDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) dmDb.D
 	var db dmDb.DeviceRepository
 	var err error
 
-	logger := logging.GetFromContext(ctx)
-
 	db, err = dmDb.NewDeviceRepository(conn)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to connect to database")
+		fatal(ctx, "failed to connect to database", err)
 	}
 
 	if _, err := os.Stat(knownDevicesFile); os.IsNotExist(err) {
-		logger.Fatal().Err(err).Msgf("file with known devices (%s) could not be found", knownDevicesFile)
+		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be found", knownDevicesFile), err)
 	}
 
 	f, err := os.Open(knownDevicesFile)
 	if err != nil {
-		logger.Fatal().Err(err).Msgf("file with known devices (%s) could not be opened", knownDevicesFile)
+		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be opened", knownDevicesFile), err)
 	}
 	defer f.Close()
 
 	err = db.Seed(ctx, f)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("could not seed database with devices")
+		fatal(ctx, "could not seed database with devices", err)
 	}
 
 	return db
 }
 
-func setupMessagingOrDie(serviceName string, logger zerolog.Logger) messaging.MsgContext {
-	config := messaging.LoadConfiguration(serviceName, logger)
-	messenger, err := messaging.Initialize(config)
+func setupMessagingOrDie(ctx context.Context, serviceName string) messaging.MsgContext {
+	logger := logging.GetFromContext(ctx)
+
+	config := messaging.LoadConfiguration(ctx, serviceName, logger)
+	messenger, err := messaging.Initialize(ctx, config)
 	if err != nil {
-		logger.Fatal().Err(err).Msg("failed to init messenger")
+		fatal(ctx, "failed to init messenger", err)
 	}
 
 	return messenger
@@ -138,5 +138,11 @@ func setupRouter(ctx context.Context, serviceName string, svc devicemanagement.D
 	}
 	defer policies.Close()
 
-	return api.RegisterHandlers(ctx, r, policies, svc, alarmSvc), nil
+	return api.RegisterHandlers(ctx, r, policies, svc, alarmSvc)
+}
+
+func fatal(ctx context.Context, msg string, err error) {
+	logger := logging.GetFromContext(ctx)
+	logger.Error(msg, "err", err.Error())
+	os.Exit(1)
 }

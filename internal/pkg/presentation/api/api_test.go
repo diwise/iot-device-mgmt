@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -14,7 +15,6 @@ import (
 	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 func TestCreateDeviceHandler(t *testing.T) {
@@ -46,7 +46,7 @@ func TestCreateDeviceHandler(t *testing.T) {
 	req.Header.Add("Content-Type", part.FormDataContentType())
 	res := httptest.NewRecorder()
 
-	createDeviceHandler(zerolog.Logger{}, deviceMgmt).ServeHTTP(res, req)
+	createDeviceHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
 
 	is.Equal(1, len(deviceMgmtRepoMock.SeedCalls()))
 }

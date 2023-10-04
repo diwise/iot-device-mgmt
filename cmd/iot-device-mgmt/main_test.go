@@ -20,7 +20,6 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 )
 
 const noToken string = ""
@@ -123,7 +122,7 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 
-	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(zerolog.Logger{}))
+	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(context.Background()))
 	is.NoErr(err)
 
 	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))

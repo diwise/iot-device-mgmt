@@ -7,8 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/rs/zerolog"
 	"github.com/samber/lo"
 
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
@@ -76,31 +77,31 @@ type functionUpdated struct {
 }
 
 func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "BatteryLevelChangedHandler").Logger()
+	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
+		logger = logger.With(slog.String("handler", "BatteryLevelChangedHandler"))
 
 		message := batteryLevelChanged{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
-		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		logger = logger.With(slog.String("device_id", message.DeviceID))
 		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID == message.DeviceID && cfg.Name == AlarmBatteryLevel {
 				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add batteryLevel alarm")
+					logger.Error("could not add batteryLevel alarm", "err", err.Error())
 				}
 				return
 			} else if cfg.ID == "" && cfg.Name == AlarmBatteryLevel {
 				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add batteryLevel alarm")
+					logger.Error("could not add batteryLevel alarm", "err", err.Error())
 				}
 				return
 			}
@@ -109,31 +110,31 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 }
 
 func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "DeviceNotObservedHandler").Logger()
+	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
+		logger = logger.With(slog.String("handler", "DeviceNotObservedHandler"))
 
 		message := deviceNotObserved{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
-		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		logger = logger.With(slog.String("device_id", message.DeviceID))
 		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
 			if cfg.ID == message.DeviceID && cfg.Name == AlarmDeviceNotObserved {
 				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add deviceNotObserved alarm")
+					logger.Error("could not add deviceNotObserved alarm", "err", err.Error())
 				}
 				return
 			} else if cfg.ID == "" && cfg.Name == AlarmDeviceNotObserved {
 				err = addAlarm(ctx, as, message.DeviceID, parseDescription(cfg, message.DeviceID, nil), message.Tenant, message.ObservedAt, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add deviceNotObserved alarm")
+					logger.Error("could not add deviceNotObserved alarm", "err", err.Error())
 				}
 				return
 			}
@@ -148,36 +149,36 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 			Description: fmt.Sprintf("Ingen kommunikation registrerad från %s", message.DeviceID),
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("could not add alarm")
+			logger.Error("could not add alarm", "err", err.Error())
 			return
 		}
 	}
 }
 
 func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "alarms.DeviceStatusHandler").Logger()
+	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
+		logger = logger.With(slog.String("handler", "alarms.DeviceStatusHandler"))
 
 		message := deviceStatus{}
 
 		err := json.Unmarshal(msg.Body, &message)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
 		if message.DeviceID == "" {
-			logger.Error().Msg("no device information")
+			logger.Error("no device information")
 			return
 		}
 
-		logger = logger.With().Str("device_id", message.DeviceID).Logger()
+		logger = logger.With(slog.String("device_id", message.DeviceID))
 		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		if message.Code == 0 {
 			active_alarms, err := as.GetAlarmsByRefID(ctx, message.DeviceID)
 			if err == nil && len(active_alarms) > 0 {
-				logger.Info().Msg("closing all active alarms for device")
+				logger.Info("closing all active alarms for device")
 				for _, alarm := range active_alarms {
 					as.CloseAlarm(ctx, int(alarm.ID))
 				}
@@ -186,13 +187,13 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 		}
 
 		if message.Tenant == "" {
-			logger.Error().Msg("no tenant information")
+			logger.Error("no tenant information")
 			return
 		}
 
 		ts, err := time.Parse(time.RFC3339Nano, message.Timestamp)
 		if err != nil {
-			logger.Error().Err(err).Msg("no valid timestamp")
+			logger.Error("no valid timestamp", "err", err.Error())
 			return
 		}
 
@@ -214,13 +215,13 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 			if cfg.ID == message.DeviceID && cfg.Name == alarmType() {
 				err = addAlarm(ctx, as, message.DeviceID, description(cfg.Description), message.Tenant, ts, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add alarm")
+					logger.Error("could not add alarm", "err", err.Error())
 				}
 				return
 			} else if cfg.ID == "" && cfg.Name == alarmType() {
 				err = addAlarm(ctx, as, message.DeviceID, description(cfg.Description), message.Tenant, ts, cfg)
 				if err != nil {
-					logger.Error().Err(err).Msg("could not add alarm")
+					logger.Error("could not add alarm", "err", err.Error())
 				}
 				return
 			}
@@ -237,24 +238,24 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 			})
 		})
 		if err != nil {
-			logger.Error().Err(err).Msg("could not add alarm")
+			logger.Error("could not add alarm", "err", err.Error())
 			return
 		}
 	}
 }
 
 func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger zerolog.Logger) {
-		logger = logger.With().Str("handler", "FunctionUpdatedHandler").Logger()
+	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
+		logger = logger.With(slog.String("handler", "FunctionUpdatedHandler"))
 
 		f := functionUpdated{}
 		err := json.Unmarshal(msg.Body, &f)
 		if err != nil {
-			logger.Error().Err(err).Msg("failed to unmarshal message")
+			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
-		logger = logger.With().Str("function_id", f.ID).Logger()
+		logger = logger.With(slog.String("function_id", f.ID))
 		ctx = logging.NewContextWithLogger(ctx, logger)
 
 		for _, cfg := range as.GetConfiguration().AlarmConfigurations {
@@ -278,7 +279,7 @@ func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) mes
 			}
 
 			if err != nil {
-				logger.Error().Err(err).Msg("could not handle function updated")
+				logger.Error("could not handle function updated", "err", err.Error())
 			}
 		}
 	}

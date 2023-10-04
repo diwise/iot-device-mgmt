@@ -10,9 +10,9 @@ import (
 	dm "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 
 	"github.com/matryer/is"
-	"github.com/rs/zerolog"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -53,10 +53,12 @@ func TestCreateDevice(t *testing.T) {
 }
 
 func TestLock(t *testing.T) {
-	log := zerolog.New(zerolog.NewConsoleWriter())
+
+	ctx := context.Background()
+	log := logging.GetFromContext(ctx)
 
 	m := &messaging.MsgContextMock{}
-	conn := database.NewSQLiteConnector(log)
+	conn := database.NewSQLiteConnector(ctx)
 	//	conn := database.NewPostgreSQLConnector(log, database.ConnectorConfig{/
 	//		Host:     "localhost",
 	//		Username: "diwise",
