@@ -45,7 +45,7 @@ type DeviceRepository interface {
 	AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
 	RemoveAlarmByID(ctx context.Context, alarmID int) (string, error)
 
-	Seed(context.Context, io.Reader) error
+	Seed(context.Context, io.Reader, ...string) error
 }
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")

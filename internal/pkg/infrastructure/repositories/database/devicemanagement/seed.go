@@ -12,7 +12,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
+func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants ...string) error {
 	r := csv.NewReader(reader)
 	r.Comma = ';'
 
@@ -29,17 +29,52 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader) error {
 	log := logging.GetFromContext(ctx)
 	log.Info("loaded devices from file", "count", len(records))
 
+	isAllowed := func(arr []string, s string) bool {
+		if len(arr) == 0 {
+			return true
+		}
+		for _, v := range arr {
+			if v == s {
+				return true
+			}
+		}
+		return false
+	}
+
 	for _, record := range records {
 		device := record.Device()
 
-		_, err := d.GetDeviceByDeviceID(ctx, device.DeviceID)
+		if !isAllowed(tenants, device.Tenant.Name) {
+			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant.Name)
+			continue
+		}
+
+		e, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, tenants...)
+		if err != nil && !errors.Is(err, ErrDeviceNotFound) {
+			log.Error("could not fetch device", "device_id", device.DeviceID, "err", err.Error())
+			continue
+		}
+
 		if errors.Is(err, ErrDeviceNotFound) {
 			err := d.Save(ctx, &device)
 			if err != nil {
-				log.Error("could not seed device", "device_id", device.DeviceID, "err", err.Error())
+				log.Error("could not create device", "device_id", device.DeviceID, "err", err.Error())
 			}
-		} else if err != nil {
-			log.Error("unable to check if device exists", "device_id", device.DeviceID, "err", err.Error())
+			continue
+		}
+
+		e.Active = device.Active
+		e.Description = device.Description
+		e.Environment = device.Environment
+		e.Name = device.Name
+		e.Source = device.Source
+		e.Location.Longitude = device.Location.Longitude
+		e.Location.Latitude = device.Location.Latitude
+		e.Location.Altitude = device.Location.Altitude
+
+		err = d.Save(ctx, &e)
+		if err != nil {
+			log.Error("could not update device", "device_id", device.DeviceID, "err", err.Error())
 		}
 	}
 

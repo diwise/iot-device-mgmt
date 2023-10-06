@@ -37,7 +37,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetDevicesFunc: func(ctx context.Context, tenants ...string) ([]r.Device, error) {
 //				panic("mock out the GetDevices method")
 //			},
-//			ImportFunc: func(ctx context.Context, reader io.Reader) error {
+//			ImportFunc: func(ctx context.Context, reader io.Reader, tenants ...string) error {
 //				panic("mock out the Import method")
 //			},
 //			RemoveAlarmFunc: func(ctx context.Context, alarmID int) error {
@@ -75,7 +75,7 @@ type DeviceManagementMock struct {
 	GetDevicesFunc func(ctx context.Context, tenants ...string) ([]r.Device, error)
 
 	// ImportFunc mocks the Import method.
-	ImportFunc func(ctx context.Context, reader io.Reader) error
+	ImportFunc func(ctx context.Context, reader io.Reader, tenants ...string) error
 
 	// RemoveAlarmFunc mocks the RemoveAlarm method.
 	RemoveAlarmFunc func(ctx context.Context, alarmID int) error
@@ -142,6 +142,8 @@ type DeviceManagementMock struct {
 			Ctx context.Context
 			// Reader is the reader argument value.
 			Reader io.Reader
+			// Tenants is the tenants argument value.
+			Tenants []string
 		}
 		// RemoveAlarm holds details about calls to the RemoveAlarm method.
 		RemoveAlarm []struct {
@@ -391,21 +393,23 @@ func (mock *DeviceManagementMock) GetDevicesCalls() []struct {
 }
 
 // Import calls ImportFunc.
-func (mock *DeviceManagementMock) Import(ctx context.Context, reader io.Reader) error {
+func (mock *DeviceManagementMock) Import(ctx context.Context, reader io.Reader, tenants ...string) error {
 	if mock.ImportFunc == nil {
 		panic("DeviceManagementMock.ImportFunc: method is nil but DeviceManagement.Import was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		Reader io.Reader
+		Ctx     context.Context
+		Reader  io.Reader
+		Tenants []string
 	}{
-		Ctx:    ctx,
-		Reader: reader,
+		Ctx:     ctx,
+		Reader:  reader,
+		Tenants: tenants,
 	}
 	mock.lockImport.Lock()
 	mock.calls.Import = append(mock.calls.Import, callInfo)
 	mock.lockImport.Unlock()
-	return mock.ImportFunc(ctx, reader)
+	return mock.ImportFunc(ctx, reader, tenants...)
 }
 
 // ImportCalls gets all the calls that were made to Import.
@@ -413,12 +417,14 @@ func (mock *DeviceManagementMock) Import(ctx context.Context, reader io.Reader) 
 //
 //	len(mockedDeviceManagement.ImportCalls())
 func (mock *DeviceManagementMock) ImportCalls() []struct {
-	Ctx    context.Context
-	Reader io.Reader
+	Ctx     context.Context
+	Reader  io.Reader
+	Tenants []string
 } {
 	var calls []struct {
-		Ctx    context.Context
-		Reader io.Reader
+		Ctx     context.Context
+		Reader  io.Reader
+		Tenants []string
 	}
 	mock.lockImport.RLock()
 	calls = mock.calls.Import
