@@ -29,7 +29,7 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants .
 	log := logging.GetFromContext(ctx)
 	log.Info("loaded devices from file", "count", len(records))
 
-	contains := func(arr []string, s string) bool {
+	isAllowed := func(arr []string, s string) bool {
 		if len(arr) == 0 {
 			return true
 		}
@@ -44,12 +44,12 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants .
 	for _, record := range records {
 		device := record.Device()
 
-		if !contains(tenants, device.Tenant.Name) {
+		if !isAllowed(tenants, device.Tenant.Name) {
 			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant.Name)
 			continue
 		}
 
-		existing, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, tenants...)
+		e, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, tenants...)
 		if err != nil && !errors.Is(err, ErrDeviceNotFound) {
 			log.Error("could not fetch device", "device_id", device.DeviceID, "err", err.Error())
 			continue
@@ -63,13 +63,16 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants .
 			continue
 		}
 
-		existing.Active = device.Active
-		existing.Description = device.Description
-		existing.Environment = device.Environment
-		existing.Name = device.Name
-		existing.Source = device.Source
+		e.Active = device.Active
+		e.Description = device.Description
+		e.Environment = device.Environment
+		e.Name = device.Name
+		e.Source = device.Source
+		e.Location.Longitude = device.Location.Longitude
+		e.Location.Latitude = device.Location.Latitude
+		e.Location.Altitude = device.Location.Altitude
 
-		err = d.Save(ctx, &existing)
+		err = d.Save(ctx, &e)
 		if err != nil {
 			log.Error("could not update device", "device_id", device.DeviceID, "err", err.Error())
 		}

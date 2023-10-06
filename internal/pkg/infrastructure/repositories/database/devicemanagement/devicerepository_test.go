@@ -138,6 +138,7 @@ func TestSeedWithTenants(t *testing.T) {
 
 	intern5678, _ := r.GetDeviceByDeviceID(ctx, "intern-5678")
 	is.True(intern5678.Active)
+	is.True(intern5678.Location.Longitude == 0.0)
 
 	csv = bytes.NewBuffer([]byte(internCsv))
 	err = r.Seed(ctx, csv, []string{"_test"}...)
@@ -145,6 +146,7 @@ func TestSeedWithTenants(t *testing.T) {
 
 	intern5678, _ = r.GetDeviceByDeviceID(ctx, "intern-5678")
 	is.True(!intern5678.Active)
+	is.True(intern5678.Location.Longitude == 17.0)
 }
 
 func TestAlarms(t *testing.T) {
@@ -231,5 +233,5 @@ a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsy
 `
 
 const internCsv string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-5678;intern-5678;0.0;0.0;soil;urn:oma:lwm2m:ext:3303;enviot;name-5678;desc-5678;false;_test;60; 
+5678;intern-5678;62.0;17.0;soil;urn:oma:lwm2m:ext:3302;enviot;name-5678;desc-5678;false;_test;60; 
 `
