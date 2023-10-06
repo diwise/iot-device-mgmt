@@ -80,7 +80,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
-	github.com/diwise/service-chassis v0.0.0-20231004081412-c07949c1b076
+	github.com/diwise/service-chassis v0.0.0-20231006081622-7159b774f71b
 	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
