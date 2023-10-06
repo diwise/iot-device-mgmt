@@ -25,7 +25,7 @@ func TestCreateDeviceHandler(t *testing.T) {
 	body := new(bytes.Buffer)
 
 	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SeedFunc: func(ctx context.Context, reader io.Reader) error {
+		SeedFunc: func(ctx context.Context, reader io.Reader, t ...string) error {
 			return nil
 		},
 	}

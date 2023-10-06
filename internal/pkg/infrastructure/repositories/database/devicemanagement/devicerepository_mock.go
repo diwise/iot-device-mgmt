@@ -41,7 +41,7 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			SaveFunc: func(ctx context.Context, device *Device) error {
 //				panic("mock out the Save method")
 //			},
-//			SeedFunc: func(contextMoqParam context.Context, reader io.Reader) error {
+//			SeedFunc: func(contextMoqParam context.Context, reader io.Reader, strings ...string) error {
 //				panic("mock out the Seed method")
 //			},
 //			UpdateDeviceStateFunc: func(ctx context.Context, deviceID string, deviceState DeviceState) error {
@@ -79,7 +79,7 @@ type DeviceRepositoryMock struct {
 	SaveFunc func(ctx context.Context, device *Device) error
 
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(contextMoqParam context.Context, reader io.Reader) error
+	SeedFunc func(contextMoqParam context.Context, reader io.Reader, strings ...string) error
 
 	// UpdateDeviceStateFunc mocks the UpdateDeviceState method.
 	UpdateDeviceStateFunc func(ctx context.Context, deviceID string, deviceState DeviceState) error
@@ -154,6 +154,8 @@ type DeviceRepositoryMock struct {
 			ContextMoqParam context.Context
 			// Reader is the reader argument value.
 			Reader io.Reader
+			// Strings is the strings argument value.
+			Strings []string
 		}
 		// UpdateDeviceState holds details about calls to the UpdateDeviceState method.
 		UpdateDeviceState []struct {
@@ -459,21 +461,23 @@ func (mock *DeviceRepositoryMock) SaveCalls() []struct {
 }
 
 // Seed calls SeedFunc.
-func (mock *DeviceRepositoryMock) Seed(contextMoqParam context.Context, reader io.Reader) error {
+func (mock *DeviceRepositoryMock) Seed(contextMoqParam context.Context, reader io.Reader, strings ...string) error {
 	if mock.SeedFunc == nil {
 		panic("DeviceRepositoryMock.SeedFunc: method is nil but DeviceRepository.Seed was just called")
 	}
 	callInfo := struct {
 		ContextMoqParam context.Context
 		Reader          io.Reader
+		Strings         []string
 	}{
 		ContextMoqParam: contextMoqParam,
 		Reader:          reader,
+		Strings:         strings,
 	}
 	mock.lockSeed.Lock()
 	mock.calls.Seed = append(mock.calls.Seed, callInfo)
 	mock.lockSeed.Unlock()
-	return mock.SeedFunc(contextMoqParam, reader)
+	return mock.SeedFunc(contextMoqParam, reader, strings...)
 }
 
 // SeedCalls gets all the calls that were made to Seed.
@@ -483,10 +487,12 @@ func (mock *DeviceRepositoryMock) Seed(contextMoqParam context.Context, reader i
 func (mock *DeviceRepositoryMock) SeedCalls() []struct {
 	ContextMoqParam context.Context
 	Reader          io.Reader
+	Strings         []string
 } {
 	var calls []struct {
 		ContextMoqParam context.Context
 		Reader          io.Reader
+		Strings         []string
 	}
 	mock.lockSeed.RLock()
 	calls = mock.calls.Seed

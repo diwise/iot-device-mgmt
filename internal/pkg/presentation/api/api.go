@@ -70,6 +70,8 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
 		if isMultipartFormData(r) {
 			file, _, err := r.FormFile("fileupload")
 			if err != nil {
@@ -78,7 +80,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			err = svc.Import(ctx, file)
+			err = svc.Import(ctx, file, allowedTenants...)
 			if err != nil {
 				requestLogger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
