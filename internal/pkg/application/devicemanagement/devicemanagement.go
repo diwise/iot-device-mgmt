@@ -30,7 +30,7 @@ type DeviceManagement interface {
 	AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
 	RemoveAlarm(ctx context.Context, alarmID int) error
 
-	Import(ctx context.Context, reader io.Reader) error
+	Import(ctx context.Context, reader io.Reader, tenants ...string) error
 }
 
 type deviceManagement struct {
@@ -51,8 +51,8 @@ func New(d r.DeviceRepository, m messaging.MsgContext) DeviceManagement {
 	return dm
 }
 
-func (d *deviceManagement) Import(ctx context.Context, reader io.Reader) error {
-	return d.deviceRepository.Seed(ctx, reader)
+func (d *deviceManagement) Import(ctx context.Context, reader io.Reader, tenants ...string) error {
+	return d.deviceRepository.Seed(ctx, reader, tenants...)
 }
 
 func (d *deviceManagement) CreateDevice(ctx context.Context, device t.Device) error {

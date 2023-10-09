@@ -128,6 +128,27 @@ func TestSeed(t *testing.T) {
 	is.Equal("källa", device.Source)
 }
 
+func TestSeedWithTenants(t *testing.T) {
+	is, ctx, r := testSetupDeviceRepository(t)
+
+	csv := bytes.NewBuffer([]byte(csvMock))
+
+	err := r.Seed(ctx, csv, []string{"_test"}...)
+	is.NoErr(err)
+
+	intern5678, _ := r.GetDeviceByDeviceID(ctx, "intern-5678")
+	is.True(intern5678.Active)
+	is.True(intern5678.Location.Longitude == 0.0)
+
+	csv = bytes.NewBuffer([]byte(internCsv))
+	err = r.Seed(ctx, csv, []string{"_test"}...)
+	is.NoErr(err)
+
+	intern5678, _ = r.GetDeviceByDeviceID(ctx, "intern-5678")
+	is.True(!intern5678.Active)
+	is.True(intern5678.Location.Longitude == 17.0)
+}
+
 func TestAlarms(t *testing.T) {
 	is, ctx, r := testSetupDeviceRepository(t)
 
@@ -209,4 +230,8 @@ a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:e
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;_default;60;source
 1234;intern-1234;0.0;0.0;air;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3304;enviot;name-1234;desc-1234;true;_test;60;källa
 5678;intern-5678;0.0;0.0;soil;urn:oma:lwm2m:ext:3303;enviot;name-5678;desc-5678;true;_test;60; 
+`
+
+const internCsv string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
+5678;intern-5678;62.0;17.0;soil;urn:oma:lwm2m:ext:3302;enviot;name-5678;desc-5678;false;_test;60; 
 `
