@@ -5,8 +5,8 @@ package test
 
 import (
 	"context"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
-
 	"github.com/diwise/iot-device-mgmt/pkg/client"
 )
 
@@ -23,10 +23,13 @@ var _ client.DeviceManagementClient = &DeviceManagementClientMock{}
 //			CloseFunc: func(ctx context.Context)  {
 //				panic("mock out the Close method")
 //			},
-//			FindDeviceFromDevEUIFunc: func(ctx context.Context, devEUI string) (client.Device, error) {
+//			CreateUnknownDeviceFunc: func(ctx context.Context, device types.Device) error {
+//				panic("mock out the CreateUnknownDevice method")
+//			},
+//			FindDeviceFromDevEUIFunc: func(ctx context.Context, devEUI string) (Device, error) {
 //				panic("mock out the FindDeviceFromDevEUI method")
 //			},
-//			FindDeviceFromInternalIDFunc: func(ctx context.Context, deviceID string) (client.Device, error) {
+//			FindDeviceFromInternalIDFunc: func(ctx context.Context, deviceID string) (Device, error) {
 //				panic("mock out the FindDeviceFromInternalID method")
 //			},
 //		}
@@ -38,6 +41,9 @@ var _ client.DeviceManagementClient = &DeviceManagementClientMock{}
 type DeviceManagementClientMock struct {
 	// CloseFunc mocks the Close method.
 	CloseFunc func(ctx context.Context)
+
+	// CreateUnknownDeviceFunc mocks the CreateUnknownDevice method.
+	CreateUnknownDeviceFunc func(ctx context.Context, device types.Device) error
 
 	// FindDeviceFromDevEUIFunc mocks the FindDeviceFromDevEUI method.
 	FindDeviceFromDevEUIFunc func(ctx context.Context, devEUI string) (client.Device, error)
@@ -51,6 +57,13 @@ type DeviceManagementClientMock struct {
 		Close []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+		}
+		// CreateUnknownDevice holds details about calls to the CreateUnknownDevice method.
+		CreateUnknownDevice []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Device is the device argument value.
+			Device types.Device
 		}
 		// FindDeviceFromDevEUI holds details about calls to the FindDeviceFromDevEUI method.
 		FindDeviceFromDevEUI []struct {
@@ -68,6 +81,7 @@ type DeviceManagementClientMock struct {
 		}
 	}
 	lockClose                    sync.RWMutex
+	lockCreateUnknownDevice      sync.RWMutex
 	lockFindDeviceFromDevEUI     sync.RWMutex
 	lockFindDeviceFromInternalID sync.RWMutex
 }
@@ -101,6 +115,42 @@ func (mock *DeviceManagementClientMock) CloseCalls() []struct {
 	mock.lockClose.RLock()
 	calls = mock.calls.Close
 	mock.lockClose.RUnlock()
+	return calls
+}
+
+// CreateUnknownDevice calls CreateUnknownDeviceFunc.
+func (mock *DeviceManagementClientMock) CreateUnknownDevice(ctx context.Context, device types.Device) error {
+	if mock.CreateUnknownDeviceFunc == nil {
+		panic("DeviceManagementClientMock.CreateUnknownDeviceFunc: method is nil but DeviceManagementClient.CreateUnknownDevice was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Device types.Device
+	}{
+		Ctx:    ctx,
+		Device: device,
+	}
+	mock.lockCreateUnknownDevice.Lock()
+	mock.calls.CreateUnknownDevice = append(mock.calls.CreateUnknownDevice, callInfo)
+	mock.lockCreateUnknownDevice.Unlock()
+	return mock.CreateUnknownDeviceFunc(ctx, device)
+}
+
+// CreateUnknownDeviceCalls gets all the calls that were made to CreateUnknownDevice.
+// Check the length with:
+//
+//	len(mockedDeviceManagementClient.CreateUnknownDeviceCalls())
+func (mock *DeviceManagementClientMock) CreateUnknownDeviceCalls() []struct {
+	Ctx    context.Context
+	Device types.Device
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Device types.Device
+	}
+	mock.lockCreateUnknownDevice.RLock()
+	calls = mock.calls.CreateUnknownDevice
+	mock.lockCreateUnknownDevice.RUnlock()
 	return calls
 }
 
