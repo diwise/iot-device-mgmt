@@ -26,7 +26,7 @@ type DeviceManagementClient interface {
 	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 	Close(ctx context.Context)
-	CreateUnknownDevice(ctx context.Context, device types.Device) error
+	CreateDevice(ctx context.Context, device types.Device) error
 }
 
 type deviceState int
@@ -100,7 +100,10 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 	return dmc, nil
 }
 
-func (dmc *devManagementClient) CreateUnknownDevice(ctx context.Context, device types.Device) error {
+func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
+	var err error
+	ctx, span := tracer.Start(ctx, "create-device")
+	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
 	url := dmc.url + "/api/v0/devices/"
 

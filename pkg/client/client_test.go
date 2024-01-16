@@ -27,7 +27,6 @@ func TestCreateUnknownDevice(t *testing.T) {
 				`"deviceProfile":{"name":"unknown"`),
 		),
 		test.Returns(
-			response.ContentType("application/json"),
 			response.Code(201),
 		),
 	)
@@ -59,7 +58,7 @@ func TestCreateUnknownDevice(t *testing.T) {
 		},
 	}
 
-	err = client.CreateUnknownDevice(ctx, device)
+	err = client.CreateDevice(ctx, device)
 	is.NoErr(err)
 
 	client.Close(ctx)

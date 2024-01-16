@@ -118,8 +118,8 @@ func (mock *DeviceManagementClientMock) CloseCalls() []struct {
 	return calls
 }
 
-// CreateUnknownDevice calls CreateUnknownDeviceFunc.
-func (mock *DeviceManagementClientMock) CreateUnknownDevice(ctx context.Context, device types.Device) error {
+// CreateDevice calls CreateUnknownDeviceFunc.
+func (mock *DeviceManagementClientMock) CreateDevice(ctx context.Context, device types.Device) error {
 	if mock.CreateUnknownDeviceFunc == nil {
 		panic("DeviceManagementClientMock.CreateUnknownDeviceFunc: method is nil but DeviceManagementClient.CreateUnknownDevice was just called")
 	}
