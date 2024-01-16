@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -19,10 +20,13 @@ import (
 	"golang.org/x/oauth2/clientcredentials"
 )
 
+//go:generate moq -rm -out ../test/client_mock.go . DeviceManagementClient
+
 type DeviceManagementClient interface {
 	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 	Close(ctx context.Context)
+	CreateDevice(ctx context.Context, device types.Device) error
 }
 
 type deviceState int
@@ -94,6 +98,55 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 	go dmc.run(ctx)
 
 	return dmc, nil
+}
+
+func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
+	var err error
+	ctx, span := tracer.Start(ctx, "create-device")
+	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+	url := dmc.url + "/api/v0/devices/"
+
+	requestBody, err := json.Marshal(device)
+	if err != nil {
+		err = fmt.Errorf("failed to marshal device: %w", err)
+		return err
+	}
+	request := bytes.NewReader(requestBody)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, request)
+	if err != nil {
+		err = fmt.Errorf("failed to create http request: %w", err)
+		return err
+	}
+	req.Header.Add("Content-Type", "application/json")
+
+	if dmc.clientCredentials != nil {
+		token, err := dmc.clientCredentials.Token(ctx)
+		if err != nil {
+			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
+			return err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
+	}
+
+	resp, err := dmc.httpClient.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to create device: %w", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		err = fmt.Errorf("request failed, not authorized")
+		return err
+	}
+
+	if resp.StatusCode != http.StatusCreated {
+		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		return err
+	}
+	return nil
 }
 
 func (dmc *devManagementClient) run(ctx context.Context) {

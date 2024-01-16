@@ -54,8 +54,8 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 First row of csv-files contains headers.
 ### devices.csv
 ```
-devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;elsys;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0
+devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;elsys;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0;origin
 ```
  - `devEUI` - id of physical sensor
  - `internalID` - internal id that will be used within the diwise plattform
@@ -69,6 +69,8 @@ a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:e
  - `active` - if set to false measurements will not be delivered
  - `tenant` - name of tenant 
  - `interval` - overrides interval set in sensorTypes
+ - `source` - name of the source
+
 ### notifications.yaml
 Configuration if a [cloud event](https://cloudevents.io/) should be sent to the configured endpoint.
 ```yaml
