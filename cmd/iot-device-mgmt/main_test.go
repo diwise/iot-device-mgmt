@@ -128,7 +128,12 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))
 	is.NoErr(err)
 
-	app := devicemanagement.New(db, &messaging.MsgContextMock{})
+	msgCtx := messaging.MsgContextMock{}
+	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
+		return nil
+	}
+
+	app := devicemanagement.New(db, &msgCtx)
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)

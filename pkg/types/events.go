@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type DeviceCreated struct {
 	DeviceID  string    `json:"deviceID"`
@@ -14,6 +17,10 @@ func (d *DeviceCreated) ContentType() string {
 func (d *DeviceCreated) TopicName() string {
 	return "device.created"
 }
+func (d DeviceCreated) Body() []byte {
+	b,_:=json.Marshal(d)
+	return b
+}
 
 type DeviceUpdated struct {
 	DeviceID  string    `json:"deviceID"`
@@ -21,12 +28,18 @@ type DeviceUpdated struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-func (d *DeviceUpdated) ContentType() string {
+func (d DeviceUpdated) ContentType() string {
 	return "application/json"
 }
-func (d *DeviceUpdated) TopicName() string {
+func (d DeviceUpdated) TopicName() string {
 	return "device.updated"
 }
+
+func (d DeviceUpdated) Body() []byte {
+	b,_:=json.Marshal(d)
+	return b
+}
+
 
 type DeviceStatusUpdated struct {
 	DeviceID     string       `json:"deviceID"`
@@ -41,7 +54,10 @@ func (d *DeviceStatusUpdated) ContentType() string {
 func (d *DeviceStatusUpdated) TopicName() string {
 	return "device.statusUpdated"
 }
-
+func (d DeviceStatusUpdated) Body() []byte {
+	b,_:=json.Marshal(d)
+	return b
+}
 type DeviceStateUpdated struct {
 	DeviceID  string    `json:"deviceID"`
 	State     int       `json:"state"`
@@ -54,4 +70,8 @@ func (d *DeviceStateUpdated) ContentType() string {
 }
 func (d *DeviceStateUpdated) TopicName() string {
 	return "device.stateUpdated"
+}
+func (d DeviceStateUpdated) Body() []byte {
+	b,_:=json.Marshal(d)
+	return b
 }

@@ -9,7 +9,6 @@ import (
 
 	"log/slog"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/samber/lo"
 
 	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
@@ -37,6 +36,19 @@ type deviceStatus struct {
 	Messages     []string `json:"statusMessages,omitempty"`
 	Tenant       string   `json:"tenant"`
 	Timestamp    string   `json:"timestamp"`
+}
+
+func (f deviceStatus) Body() []byte {
+	b, _ := json.Marshal(f)
+	return b
+}
+
+func (f deviceStatus) ContentType() string {
+	return ""
+}
+
+func (f deviceStatus) TopicName() string {
+	return ""
 }
 
 type functionUpdated struct {
@@ -76,13 +88,26 @@ type functionUpdated struct {
 	} `json:"waterquality,omitempty"`
 }
 
+func (f functionUpdated) Body() []byte {
+	b, _ := json.Marshal(f)
+	return b
+}
+
+func (f functionUpdated) ContentType() string {
+	return ""
+}
+
+func (f functionUpdated) TopicName() string {
+	return ""
+}
+
 func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
-		logger = logger.With(slog.String("handler", "BatteryLevelChangedHandler"))
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		logger := l.With(slog.String("handler", "BatteryLevelChangedHandler"))
 
 		message := batteryLevelChanged{}
 
-		err := json.Unmarshal(msg.Body, &message)
+		err := json.Unmarshal(itm.Body(), &message)
 		if err != nil {
 			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
@@ -110,12 +135,12 @@ func BatteryLevelChangedHandler(messenger messaging.MsgContext, as AlarmService)
 }
 
 func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
-		logger = logger.With(slog.String("handler", "DeviceNotObservedHandler"))
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		logger := l.With(slog.String("handler", "DeviceNotObservedHandler"))
 
 		message := deviceNotObserved{}
 
-		err := json.Unmarshal(msg.Body, &message)
+		err := json.Unmarshal(itm.Body(), &message)
 		if err != nil {
 			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
@@ -156,12 +181,12 @@ func DeviceNotObservedHandler(messenger messaging.MsgContext, as AlarmService) m
 }
 
 func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
-		logger = logger.With(slog.String("handler", "alarms.DeviceStatusHandler"))
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		logger := l.With(slog.String("handler", "alarms.DeviceStatusHandler"))
 
 		message := deviceStatus{}
 
-		err := json.Unmarshal(msg.Body, &message)
+		err := json.Unmarshal(itm.Body(), &message)
 		if err != nil {
 			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
@@ -245,11 +270,11 @@ func DeviceStatusHandler(messenger messaging.MsgContext, as AlarmService) messag
 }
 
 func FunctionUpdatedHandler(messenger messaging.MsgContext, as AlarmService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg amqp.Delivery, logger *slog.Logger) {
-		logger = logger.With(slog.String("handler", "FunctionUpdatedHandler"))
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		logger := l.With(slog.String("handler", "FunctionUpdatedHandler"))
 
 		f := functionUpdated{}
-		err := json.Unmarshal(msg.Body, &f)
+		err := json.Unmarshal(itm.Body(), &f)
 		if err != nil {
 			logger.Error("failed to unmarshal message", "err", err.Error())
 			return
