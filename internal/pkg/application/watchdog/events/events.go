@@ -1,6 +1,9 @@
 package events
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type BatteryLevelChanged struct {
 	DeviceID     string    `json:"deviceID"`
@@ -9,13 +12,16 @@ type BatteryLevelChanged struct {
 	ObservedAt   time.Time `json:"observedAt"`
 }
 
-func (b *BatteryLevelChanged) ContentType() string {
+func (b BatteryLevelChanged) ContentType() string {
 	return "application/json"
 }
-func (b *BatteryLevelChanged) TopicName() string {
+func (b BatteryLevelChanged) TopicName() string {
 	return "watchdog.batteryLevelChanged"
 }
-
+func (l BatteryLevelChanged) Body() []byte {
+	b,_:=json.Marshal(l)
+	return b
+}
 type DeviceNotObserved struct {
 	DeviceID   string    `json:"deviceID"`
 	Tenant     string    `json:"tenant"`
@@ -27,4 +33,8 @@ func (l *DeviceNotObserved) ContentType() string {
 }
 func (l *DeviceNotObserved) TopicName() string {
 	return "watchdog.deviceNotObserved"
+}
+func (l *DeviceNotObserved) Body() []byte {
+	b,_:=json.Marshal(l)
+	return b
 }

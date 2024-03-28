@@ -7,20 +7,19 @@ import (
 
 	"log/slog"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog/events"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/goccy/go-json"
 	"github.com/matryer/is"
-	"github.com/rabbitmq/amqp091-go"
 )
 
 func TestBatteryLevelChangedHandler(t *testing.T) {
 	is, ctx, log := testSetup(t)
 
-	d := amqp091.Delivery{
-		RoutingKey: "watchdog.batteryLevelChanged",
-		Body:       []byte(batteryLevelChangedJson),
-	}
+	var blc events.BatteryLevelChanged
+	json.Unmarshal([]byte(batteryLevelChangedJson), &blc)
 
 	alarmList := []alarms.Alarm{}
 
@@ -36,7 +35,7 @@ func TestBatteryLevelChangedHandler(t *testing.T) {
 		},
 	}
 
-	BatteryLevelChangedHandler(m, a)(ctx, d, log)
+	BatteryLevelChangedHandler(m, a)(ctx, blc, log)
 
 	is.Equal(1, len(alarmList))
 }
@@ -44,10 +43,8 @@ func TestBatteryLevelChangedHandler(t *testing.T) {
 func TestFunctionUpdatedHandler_CounterOverflow(t *testing.T) {
 	is, ctx, log := testSetup(t)
 
-	d := amqp091.Delivery{
-		RoutingKey: "feature.updated",
-		Body:       []byte(counterOverflow1Json),
-	}
+	var f functionUpdated
+	json.Unmarshal([]byte(counterOverflow1Json), &f)
 
 	alarmList := []alarms.Alarm{}
 
@@ -62,7 +59,7 @@ func TestFunctionUpdatedHandler_CounterOverflow(t *testing.T) {
 		},
 	}
 
-	FunctionUpdatedHandler(m, a)(ctx, d, log)
+	FunctionUpdatedHandler(m, a)(ctx, f, log)
 
 	is.Equal(1, len(alarmList))
 }
@@ -70,10 +67,8 @@ func TestFunctionUpdatedHandler_CounterOverflow(t *testing.T) {
 func TestFunctionUpdatedHandler_CounterOverflow_Between(t *testing.T) {
 	is, ctx, log := testSetup(t)
 
-	d := amqp091.Delivery{
-		RoutingKey: "feature.updated",
-		Body:       []byte(counterOverflow2Json),
-	}
+	var f functionUpdated
+	json.Unmarshal([]byte(counterOverflow2Json), &f)
 
 	alarmList := []alarms.Alarm{}
 
@@ -88,7 +83,7 @@ func TestFunctionUpdatedHandler_CounterOverflow_Between(t *testing.T) {
 		},
 	}
 
-	FunctionUpdatedHandler(m, a)(ctx, d, log)
+	FunctionUpdatedHandler(m, a)(ctx, f, log)
 
 	is.Equal(1, len(alarmList))
 }
@@ -96,10 +91,8 @@ func TestFunctionUpdatedHandler_CounterOverflow_Between(t *testing.T) {
 func TestFunctionUpdatedHandler_LevelSand(t *testing.T) {
 	is, ctx, log := testSetup(t)
 
-	d := amqp091.Delivery{
-		RoutingKey: "feature.updated",
-		Body:       []byte(levelSandJson),
-	}
+	var f functionUpdated
+	json.Unmarshal([]byte(levelSandJson), &f)
 
 	alarmList := []alarms.Alarm{}
 
@@ -114,7 +107,7 @@ func TestFunctionUpdatedHandler_LevelSand(t *testing.T) {
 		},
 	}
 
-	FunctionUpdatedHandler(m, a)(ctx, d, log)
+	FunctionUpdatedHandler(m, a)(ctx, f, log)
 
 	is.Equal(1, len(alarmList))
 }
@@ -122,10 +115,8 @@ func TestFunctionUpdatedHandler_LevelSand(t *testing.T) {
 func TestDeviceStatusHandler(t *testing.T) {
 	is, ctx, log := testSetup(t)
 
-	d := amqp091.Delivery{
-		RoutingKey: "device-status",
-		Body:       []byte(uplinkFcntRetransmissionJson),
-	}
+	var f deviceStatus
+	json.Unmarshal([]byte(uplinkFcntRetransmissionJson), &f)
 
 	alarmList := []alarms.Alarm{}
 
@@ -140,7 +131,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 		},
 	}
 
-	DeviceStatusHandler(m, a)(ctx, d, log)
+	DeviceStatusHandler(m, a)(ctx, f, log)
 
 	is.Equal(1, len(alarmList))
 }
@@ -160,7 +151,12 @@ func TestWithNoConfigFile(t *testing.T) {
 	config := LoadConfiguration("")
 	is.Equal(nil, config)
 
-	svc := New(&alarms.AlarmRepositoryMock{}, &messaging.MsgContextMock{}, config)
+	msgCtx := messaging.MsgContextMock{}
+	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
+		return nil
+	}
+
+	svc := New(&alarms.AlarmRepositoryMock{}, &msgCtx, config)
 	is.True(nil != svc.GetConfiguration().AlarmConfigurations)
 }
 

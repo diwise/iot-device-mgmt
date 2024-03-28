@@ -44,6 +44,7 @@ func main() {
 	alarmDB := setupAlarmDatabaseOrDie(ctx, conn)
 
 	messenger := setupMessagingOrDie(ctx, serviceName)
+	messenger.Start()
 
 	mgmtSvc := devicemanagement.New(deviceDB, messenger)
 
