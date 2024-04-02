@@ -30,7 +30,12 @@ func TestCreateDeviceHandler(t *testing.T) {
 		},
 	}
 
-	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &messaging.MsgContextMock{})
+	msgCtx := messaging.MsgContextMock{}
+	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
+		return nil
+	}
+
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx)
 
 	part := multipart.NewWriter(body)
 
