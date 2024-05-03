@@ -70,7 +70,39 @@ func (d svc) CreateDevice(ctx context.Context, device models.Device) error {
 }
 
 func (d svc) UpdateDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
-	return nil
+	device, err := d.storage.GetDeviceByDeviceID(ctx, deviceID, tenants)
+	if err != nil{
+		return err
+	}
+
+	m := make(map[string]any)
+	b, err := json.Marshal(device)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(b, &m)
+	if err != nil {
+		return err
+	}
+
+	for key := range m {
+		if v, ok := fields[key]; ok {
+			m[key] = v
+		}
+	}
+
+	b, err = json.Marshal(m)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(b, &device)
+	if err != nil {
+		return err
+	}
+
+	return d.storage.Save(ctx, device)
 }
 
 func (d svc) GetDevices(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error) {
