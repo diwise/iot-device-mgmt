@@ -142,7 +142,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
-		ctx, span := tracer.Start(r.Context(), "query-all-devices")
+		ctx, span := tracer.Start(r.Context(), "query-devices")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
@@ -430,7 +430,7 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		var err error
 		defer r.Body.Close()
 
-		ctx, span := tracer.Start(r.Context(), "get-alarm")
+		ctx, span := tracer.Start(r.Context(), "close-alarm")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
@@ -452,81 +452,6 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		w.WriteHeader(http.StatusOK)
 	}
 }
-/*
-	func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			var err error
-			defer r.Body.Close()
-
-			allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
-			ctx, span := tracer.Start(r.Context(), "get-alarms")
-			defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-			_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-			var alarms []aDb.Alarm
-
-			refID := r.URL.Query().Get("refID")
-
-			if len(refID) > 0 {
-				alarms, err = svc.GetAlarmsByRefID(ctx, refID, allowedTenants...)
-			} else {
-				alarms, err = svc.GetAlarms(ctx, allowedTenants...)
-			}
-			if err != nil {
-				requestLogger.Error("unable to fetch alarms", "err", err.Error())
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			b, err := json.Marshal(alarms)
-			if err != nil {
-				requestLogger.Error("unable to marshal alarms", "err", err.Error())
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			w.Write(b)
-		}
-	}
-
-	func patchAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
-		return func(w http.ResponseWriter, r *http.Request) {
-			var err error
-			defer r.Body.Close()
-
-			//allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
-			ctx, span := tracer.Start(r.Context(), "delete-alarms")
-			defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-			_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-			id := chi.URLParam(r, "alarmID")
-			if id != "" {
-				requestLogger = requestLogger.With(slog.String("alarm_id", id))
-			}
-
-			alarmID, err := strconv.Atoi(id)
-			if err != nil {
-				requestLogger.Error("id is invalid", "err", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			err = svc.CloseAlarm(ctx, alarmID)
-			if err != nil {
-				requestLogger.Error("unable to close alarm", "err", err.Error())
-				w.WriteHeader(http.StatusBadRequest)
-				return
-			}
-
-			w.Header().Add("Content-Type", "application/json")
-			w.WriteHeader(http.StatusNoContent)
-		}
-	}
-*/
 
 func isMultipartFormData(r *http.Request) bool {
 	contentType := r.Header.Get("Content-Type")
