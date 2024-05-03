@@ -2,14 +2,17 @@ package devicemanagement
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
 
 	"log/slog"
 
-	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
-	t "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
+	deviceStorage "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -17,109 +20,118 @@ import (
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	GetDevices(ctx context.Context, tenants ...string) ([]r.Device, error)
-	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (r.Device, error)
-	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (r.Device, error)
+	GetDevices(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error)
+	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
+	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 
-	UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus r.DeviceStatus) error
-	UpdateDeviceState(ctx context.Context, deviceID string, deviceState r.DeviceState) error
+	UpdateDeviceStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error
+	UpdateDeviceState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
-	CreateDevice(ctx context.Context, device t.Device) error
-	UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error
+	CreateDevice(ctx context.Context, device models.Device) error
+	UpdateDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 
-	AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error
-	RemoveAlarm(ctx context.Context, alarmID int) error
+	AddAlarm(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error
+	RemoveAlarm(ctx context.Context, alarmID string, tenants []string) error
 
-	Import(ctx context.Context, reader io.Reader, tenants ...string) error
+	Import(ctx context.Context, reader io.Reader, tenants []string) error
 }
 
-type deviceManagement struct {
-	deviceRepository r.DeviceRepository
-	messenger        messaging.MsgContext
+type svc struct {
+	storage   deviceStorage.DeviceRepository
+	messenger messaging.MsgContext
 }
 
-func New(d r.DeviceRepository, m messaging.MsgContext) DeviceManagement {
-	dm := &deviceManagement{
-		deviceRepository: d,
-		messenger:        m,
+func New(d deviceStorage.DeviceRepository, m messaging.MsgContext) DeviceManagement {
+	dm := svc{
+		storage:   d,
+		messenger: m,
 	}
 
-	dm.messenger.RegisterTopicMessageHandler("device-status", DeviceStatusHandler(m, dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", AlarmsCreatedHandler(m, dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", AlarmsClosedHandler(m, dm))
+	dm.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, dm))
 
 	return dm
 }
 
-func (d *deviceManagement) Import(ctx context.Context, reader io.Reader, tenants ...string) error {
-	return d.deviceRepository.Seed(ctx, reader, tenants...)
+func (d svc) Import(ctx context.Context, reader io.Reader, tenants []string) error {
+	return d.storage.Seed(ctx, reader, tenants)
 }
 
-func (d *deviceManagement) CreateDevice(ctx context.Context, device t.Device) error {
-	dataModel, err := MapTo[r.Device](device)
+func (d svc) CreateDevice(ctx context.Context, device models.Device) error {
+	err := d.storage.Save(ctx, device)
 	if err != nil {
 		return err
 	}
 
-	err = d.deviceRepository.Save(ctx, &dataModel)
-	if err != nil {
-		return err
-	}
-
-	return d.messenger.PublishOnTopic(ctx, &t.DeviceCreated{
-		DeviceID:  dataModel.DeviceID,
-		Tenant:    dataModel.Tenant.Name,
-		Timestamp: dataModel.CreatedAt,
+	return d.messenger.PublishOnTopic(ctx, &models.DeviceCreated{
+		DeviceID:  device.DeviceID,
+		Tenant:    device.Tenant,
+		Timestamp: time.Now().UTC(),
 	})
 }
 
-func (d *deviceManagement) UpdateDevice(ctx context.Context, deviceID string, fields map[string]any) error {
+func (d svc) UpdateDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	return nil
 }
 
-func (d *deviceManagement) GetDevices(ctx context.Context, tenants ...string) ([]r.Device, error) {
-	return d.deviceRepository.GetDevices(ctx, tenants...)
+func (d svc) GetDevices(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error) {
+	return d.storage.GetDevices(ctx, offset, limit, tenants)
 }
 
-func (d *deviceManagement) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants ...string) (r.Device, error) {
-	return d.deviceRepository.GetDeviceBySensorID(ctx, sensorID, tenants...)
+var ErrDeviceNotFound = fmt.Errorf("device not found")
+
+func (d svc) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+	device, err := d.storage.GetDeviceBySensorID(ctx, sensorID, tenants)
+	if err != nil {
+		if errors.Is(err, deviceStorage.ErrDeviceNotFound) {
+			return models.Device{}, ErrDeviceNotFound
+		}
+		return models.Device{}, err
+	}
+	return device, nil
 }
 
-func (d *deviceManagement) GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants ...string) (r.Device, error) {
-	return d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID, tenants...)
+func (d svc) GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+	device, err := d.storage.GetDeviceByDeviceID(ctx, deviceID, tenants)
+	if err != nil {
+		if errors.Is(err, deviceStorage.ErrDeviceNotFound) {
+			return models.Device{}, ErrDeviceNotFound
+		}
+		return models.Device{}, err
+	}
+	return device, nil
 }
 
-func (d *deviceManagement) UpdateDeviceStatus(ctx context.Context, deviceID string, deviceStatus r.DeviceStatus) error {
+func (d svc) UpdateDeviceStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error {
 	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceStatus"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
-	if deviceStatus.LastObserved.IsZero() {
+	if deviceStatus.ObservedAt.IsZero() {
 		logger.Debug("lastObserved is zero, set to Now")
-		deviceStatus.LastObserved = time.Now().UTC()
+		deviceStatus.ObservedAt = time.Now()
 	}
 
-	err := d.deviceRepository.UpdateDeviceStatus(ctx, deviceID, deviceStatus)
+	err := d.storage.UpdateDeviceStatus(ctx, deviceID, tenant, deviceStatus)
 	if err != nil {
 		return err
 	}
 
-	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	device, err := d.storage.GetDeviceByDeviceID(ctx, deviceID, []string{tenant})
 	if err != nil {
 		return err
 	}
 
-	return d.messenger.PublishOnTopic(ctx, &t.DeviceStatusUpdated{
+	return d.messenger.PublishOnTopic(ctx, &models.DeviceStatusUpdated{
 		DeviceID:  device.DeviceID,
-		Tenant:    device.Tenant.Name,
-		Timestamp: deviceStatus.LastObserved,
+		Tenant:    device.Tenant,
+		Timestamp: deviceStatus.ObservedAt.UTC(),
 	})
 }
 
-func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID string, deviceState r.DeviceState) error {
+func (d svc) UpdateDeviceState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error {
 	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceState"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
-	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	device, err := d.storage.GetDeviceByDeviceID(ctx, deviceID, []string{tenant})
 	if err != nil {
 		return err
 	}
@@ -128,61 +140,88 @@ func (d *deviceManagement) UpdateDeviceState(ctx context.Context, deviceID strin
 		logger.Debug("observedAt is zero, set to Now")
 		deviceState.ObservedAt = time.Now().UTC()
 	}
+	/*
+		logger.Debug(fmt.Sprintf("online: %t, state: %d", deviceState.Online, deviceState.State))
 
-	logger.Debug(fmt.Sprintf("online: %t, state: %d", deviceState.Online, deviceState.State))
+		if has, highestSeverity, _ := device.HasActiveAlarms(); has {
+			switch highestSeverity {
+			case 1:
+				deviceState.State = r.DeviceStateOK
+			case 2:
+				deviceState.State = r.DeviceStateWarning
+			case 3:
+				deviceState.State = r.DeviceStateError
+			default:
+				deviceState.State = r.DeviceStateUnknown
+			}
 
-	if has, highestSeverity, _ := device.HasActiveAlarms(); has {
-		switch highestSeverity {
-		case 1:
-			deviceState.State = r.DeviceStateOK
-		case 2:
-			deviceState.State = r.DeviceStateWarning
-		case 3:
-			deviceState.State = r.DeviceStateError
-		default:
-			deviceState.State = r.DeviceStateUnknown
+			logger.Debug(fmt.Sprintf("has alarms with severity %d, state set to %d", highestSeverity, deviceState.State))
 		}
-
-		logger.Debug(fmt.Sprintf("has alarms with severity %d, state set to %d", highestSeverity, deviceState.State))
-	}
-
-	err = d.deviceRepository.UpdateDeviceState(ctx, deviceID, deviceState)
+	*/
+	err = d.storage.UpdateDeviceState(ctx, deviceID, tenant, deviceState)
 	if err != nil {
 		return err
 	}
 
-	return d.messenger.PublishOnTopic(ctx, &t.DeviceStateUpdated{
+	return d.messenger.PublishOnTopic(ctx, &models.DeviceStateUpdated{
 		DeviceID:  device.DeviceID,
-		Tenant:    device.Tenant.Name,
+		Tenant:    device.Tenant,
 		State:     deviceState.State,
 		Timestamp: deviceState.ObservedAt,
 	})
 }
 
-func (d *deviceManagement) AddAlarm(ctx context.Context, deviceID string, alarmID int, severity int, observedAt time.Time) error {
-	return d.deviceRepository.AddAlarm(ctx, deviceID, alarmID, severity, observedAt)
+func (d svc) AddAlarm(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error {
+	return d.storage.AddAlarm(ctx, deviceID, alarmID, severity, observedAt)
 }
 
-func (d *deviceManagement) RemoveAlarm(ctx context.Context, alarmID int) error {
+func (d svc) RemoveAlarm(ctx context.Context, alarmID string, tenants []string) error {
 	logger := logging.GetFromContext(ctx).With(slog.String("func", "RemoveAlarm"))
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
-	deviceID, err := d.deviceRepository.RemoveAlarmByID(ctx, alarmID)
+	deviceID, err := d.storage.RemoveAlarmByID(ctx, alarmID)
 	if err != nil {
 		return err
 	}
 
-	device, err := d.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+	device, err := d.storage.GetDeviceByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
 		return err
 	}
-
-	if device.HasAlarm(alarmID) {
-		logger.Warn("alarm not removed!")
-	}
-
+	/*
+		if device.HasAlarm(alarmID) {
+			logger.Warn("alarm not removed!")
+		}
+	*/
 	deviceState := device.DeviceState
-	deviceState.State = r.DeviceStateOK
+	deviceState.State = models.DeviceStateOK
 
-	return d.UpdateDeviceState(ctx, deviceID, deviceState)
+	return d.UpdateDeviceState(ctx, deviceID, device.Tenant, deviceState)
+}
+
+func MapOne[T any](v any) (T, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return *new(T), err
+	}
+	to := new(T)
+	err = json.Unmarshal(b, to)
+	if err != nil {
+		return *new(T), err
+	}
+	return *to, nil
+}
+
+func MapAll[T any](arr []any) ([]T, error) {
+	result := *new([]T)
+
+	for _, v := range arr {
+		to, err := MapOne[T](v)
+		if err != nil {
+			return *new([]T), err
+		}
+		result = append(result, to)
+	}
+
+	return result, nil
 }

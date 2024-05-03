@@ -3,16 +3,17 @@ package devicemanagement
 import (
 	"context"
 	"encoding/csv"
-	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 
+	. "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants ...string) error {
+func (d Repository) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
 	r := csv.NewReader(reader)
 	r.Comma = ';'
 
@@ -42,37 +43,38 @@ func (d *deviceRepository) Seed(ctx context.Context, reader io.Reader, tenants .
 	}
 
 	for _, record := range records {
-		device := record.Device()
+		device, _ := record.mapToDevice()
 
-		if !isAllowed(tenants, device.Tenant.Name) {
-			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant.Name)
+		if !isAllowed(tenants, device.Tenant) {
+			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant)
 			continue
 		}
 
-		e, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, tenants...)
-		if err != nil && !errors.Is(err, ErrDeviceNotFound) {
-			log.Error("could not fetch device", "device_id", device.DeviceID, "err", err.Error())
-			continue
-		}
-
-		if errors.Is(err, ErrDeviceNotFound) {
-			err := d.Save(ctx, &device)
+		e, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
+		if err != nil {
+			err := d.Save(ctx, device)
 			if err != nil {
-				log.Error("could not create device", "device_id", device.DeviceID, "err", err.Error())
+				log.Error("could not create new device", "device_id", device.DeviceID, "err", err.Error())
 			}
 			continue
 		}
 
 		e.Active = device.Active
 		e.Description = device.Description
+		e.DeviceProfile = device.DeviceProfile
 		e.Environment = device.Environment
+		e.Location = device.Location
+		e.Lwm2mTypes = device.Lwm2mTypes
 		e.Name = device.Name
 		e.Source = device.Source
-		e.Location.Longitude = device.Location.Longitude
-		e.Location.Latitude = device.Location.Latitude
-		e.Location.Altitude = device.Location.Altitude
+		e.Tags = device.Tags
+		if e.SensorID != device.SensorID {
+			log.Warn("sensorID changed", "device_id", device.DeviceID, "old_sensor_id", e.SensorID, "new_sensor_id", device.SensorID)
+			e.SensorID = device.SensorID
 
-		err = d.Save(ctx, &e)
+		}
+
+		err = d.Save(ctx, e)
 		if err != nil {
 			log.Error("could not update device", "device_id", device.DeviceID, "err", err.Error())
 		}
@@ -97,7 +99,7 @@ type deviceRecord struct {
 	source      string
 }
 
-func (dr deviceRecord) Device() Device {
+func (dr deviceRecord) mapToDevice() (Device, DeviceProfile) {
 	strArrToLwm2m := func(str []string) []Lwm2mType {
 		lw := []Lwm2mType{}
 		for _, s := range str {
@@ -106,19 +108,16 @@ func (dr deviceRecord) Device() Device {
 		return lw
 	}
 
-	return Device{
-		Active:   dr.active,
-		SensorID: dr.devEUI,
-		DeviceID: dr.internalID,
-		Tenant: Tenant{
-			Name: dr.tenant,
-		},
+	device := Device{
+		Active:      dr.active,
+		SensorID:    dr.devEUI,
+		DeviceID:    dr.internalID,
+		Tenant:      dr.tenant,
 		Name:        dr.name,
 		Description: dr.description,
 		Location: Location{
 			Latitude:  dr.lat,
 			Longitude: dr.lon,
-			Altitude:  0.0,
 		},
 		Environment: dr.where,
 		Source:      dr.source,
@@ -136,6 +135,8 @@ func (dr deviceRecord) Device() Device {
 			State:  DeviceStateUnknown,
 		},
 	}
+
+	return device, device.DeviceProfile
 }
 
 func newDeviceRecord(r []string) (deviceRecord, error) {
@@ -194,20 +195,11 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 }
 
 func validateDeviceRecord(r deviceRecord) error {
-	contains := func(s string, arr []string) bool {
-		for _, a := range arr {
-			if strings.EqualFold(s, a) {
-				return true
-			}
-		}
-		return false
-	}
-
-	if !contains(r.where, []string{"", "water", "air", "indoors", "lifebuoy", "soil"}) {
+	if !slices.Contains([]string{"", "water", "air", "indoors", "lifebuoy", "soil"}, r.where) {
 		return fmt.Errorf("row with %s contains invalid where parameter %s", r.devEUI, r.where)
 	}
 
-	if !contains(r.sensorType, []string{"qalcosonic", "sensative", "presence", "elsys", "elsys_codec", "enviot", "senlabt", "tem_lab_14ns", "strips_lora_ms_h", "cube02", "milesight", "milesight_am100", "niab-fls", "virtual", "axsensor", "vegapuls_air_41"}) {
+	if !slices.Contains([]string{"qalcosonic", "sensative", "presence", "elsys", "elsys_codec", "enviot", "senlabt", "tem_lab_14ns", "strips_lora_ms_h", "cube02", "milesight", "milesight_am100", "niab-fls", "virtual", "axsensor", "vegapuls_air_41"}, r.sensorType) {
 		return fmt.Errorf("row with %s contains invalid sensorType parameter %s", r.devEUI, r.sensorType)
 	}
 

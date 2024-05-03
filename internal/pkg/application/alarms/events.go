@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"time"
 
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
+const AlarmDeviceNotObserved string = "DeviceNotObserved"
+
 type AlarmCreated struct {
-	Alarm     db.Alarm  `json:"alarm"`
+	Alarm     types.Alarm  `json:"alarm"`
 	Tenant    string    `json:"tenant"`
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -20,12 +22,12 @@ func (l *AlarmCreated) TopicName() string {
 	return "alarms.alarmCreated"
 }
 func (l *AlarmCreated) Body() []byte {
-	b,_:=json.Marshal(l)
+	b, _ := json.Marshal(l)
 	return b
 }
 
 type AlarmClosed struct {
-	ID        int       `json:"id"`
+	ID        string    `json:"id"`
 	Tenant    string    `json:"tenant"`
 	Timestamp time.Time `json:"timestamp"`
 }
@@ -37,6 +39,7 @@ func (l *AlarmClosed) TopicName() string {
 	return "alarms.alarmClosed"
 }
 func (l *AlarmClosed) Body() []byte {
-	b,_:=json.Marshal(l)
+	b, _ := json.Marshal(l)
 	return b
 }
+

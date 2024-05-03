@@ -502,7 +502,7 @@ func (d *deviceWrapper) IsActive() bool {
 }
 
 func (d *deviceWrapper) Tenant() string {
-	return d.impl.Tenant.Name
+	return d.impl.Tenant
 }
 
 func (d *deviceWrapper) Source() string {

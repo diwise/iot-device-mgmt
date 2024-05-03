@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
 )
@@ -25,7 +25,7 @@ func TestCreateDeviceHandler(t *testing.T) {
 	body := new(bytes.Buffer)
 
 	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SeedFunc: func(ctx context.Context, reader io.Reader, t ...string) error {
+		SeedFunc: func(ctx context.Context, csvReader io.Reader, tenants []string) error {
 			return nil
 		},
 	}

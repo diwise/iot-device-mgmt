@@ -11,8 +11,10 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+
+	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
+
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -53,13 +55,15 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
-	d := []struct {
-		DevEui string `json:"sensorID"`
+	d := struct {
+		Data struct {
+			DevEui string `json:"sensorID"`
+		} `json:"data"`
 	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d[0].DevEui)
+	is.Equal("a81758fffe06bfa3", d.Data.DevEui)
 	//is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}]`)
 }
 
@@ -72,12 +76,14 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	d := struct {
-		DevEui string `json:"sensorID"`
+		Data struct {
+			DevEui string `json:"sensorID"`
+		} `json:"data"`
 	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d.DevEui)
+	is.Equal("a81758fffe06bfa3", d.Data.DevEui)
 	//is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}`)
 }
 
@@ -89,12 +95,14 @@ func TestThatGetKnownDeviceMarshalToType(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
-	d := types.Device{}
+	d := struct {
+		Data types.Device
+	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d.SensorID)
-	is.Equal("default", d.Tenant.Name)
+	is.Equal("a81758fffe06bfa3", d.Data.SensorID)
+	is.Equal("default", d.Data.Tenant)
 }
 
 func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {
@@ -121,11 +129,30 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
+	ctx := context.Background()
 
-	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(context.Background()))
-	is.NoErr(err)
+	config := jsonstore.NewConfig(
+		"localhost",
+		"postgres",
+		"password",
+		"5432",
+		"postgres",
+		"disable",
+	)
 
-	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))
+	p, err := jsonstore.NewPool(ctx, config)
+	if err != nil {
+		t.Log("could not connect to postgres, will skip test")
+		t.SkipNow()
+	}
+
+	repo, err := deviceStore.NewRepository(ctx, p)
+	if err != nil {
+		t.Log("could not initialize repository, will skip test")
+		t.SkipNow()
+	}
+
+	err = repo.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	msgCtx := messaging.MsgContextMock{}
@@ -133,7 +160,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 		return nil
 	}
 
-	app := devicemanagement.New(db, &msgCtx)
+	app := devicemanagement.New(repo, &msgCtx)
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)

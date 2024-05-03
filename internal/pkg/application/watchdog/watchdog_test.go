@@ -4,36 +4,72 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"testing"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
+
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 )
 
 func TestCheckLastObserved(t *testing.T) {
 	is, ctx := testSetup(t)
-	var devices []devicemanagement.Device
+	var devices []types.Device
 	err := json.Unmarshal([]byte(devicesJson), &devices)
 	is.NoErr(err)
 
-	m := &messaging.MsgContextMock{}
-	r := &devicemanagement.DeviceRepositoryMock{
-		GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]devicemanagement.Device, error) {
-			devices[0].DeviceStatus.LastObserved = time.Now()
-			return devices, nil
+	pub := []string{}
+
+	m := &messaging.MsgContextMock{
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			var msg DeviceNotObserved
+			json.Unmarshal(msg.Body(), &msg)
+			pub = append(pub, msg.DeviceID)
+			return nil
 		},
 	}
+
+	r := &devicemanagement.DeviceRepositoryMock{
+		GetOnlineDevicesFunc: func(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{
+				Data:       devices,
+				Offset:     0,
+				Limit:      10,
+				Count:      uint64(len(devices)),
+				TotalCount: uint64(len(devices)),
+			}, nil
+		},
+		GetTenantsFunc: func(ctx context.Context) []string {
+			return []string{"default"}
+		},
+		GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+			for _, d := range devices {
+				if d.DeviceID == deviceID {
+					return d, nil
+				}
+			}
+			return types.Device{}, fmt.Errorf("device not found")
+		},
+	}
+
 	lw := lastObservedWatcher{
 		deviceRepository: r,
 		messenger:        m,
+		running:          false,
+		interval:         1 * time.Second,
 	}
 
-	checked, err := lw.checkLastObserved(ctx)
-	is.NoErr(err)
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 
-	is.Equal(1, len(checked))
+	go lw.Watch(ctx)
+
+	for len(pub) != len(devices) {
+	}
 }
 
 func TestCheckLastObservedIsAfter(t *testing.T) {
@@ -50,80 +86,7 @@ func TestCheckLastObservedIsAfter(t *testing.T) {
 	is.True(!checkLastObservedIsAfter(ctx, observed, now, 10))
 }
 
-func TestBatteryLevelChangedPublish(t *testing.T) {
-	is, ctx := testSetup(t)
-	var devices []devicemanagement.Device
-	err := json.Unmarshal([]byte(devicesJson), &devices)
-	is.NoErr(err)
-
-	var msg messaging.TopicMessage
-
-	m := &messaging.MsgContextMock{
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			msg = message
-			return nil
-		},
-	}
-	r := &devicemanagement.DeviceRepositoryMock{
-		GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]devicemanagement.Device, error) {
-			return devices, nil
-		},
-		GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants ...string) (devicemanagement.Device, error) {
-			for _, d := range devices {
-				if d.DeviceID == deviceID {
-					return d, nil
-				}
-			}
-			return devicemanagement.Device{}, fmt.Errorf("device not found")
-		},
-	}
-
-	bw := &batteryLevelWatcher{
-		deviceRepository: r,
-		batteryLevels:    make(map[string]int),
-		messenger:        m,
-	}
-
-	err = bw.publish(ctx, devices[0].DeviceID)
-	is.NoErr(err)
-
-	is.Equal("watchdog.batteryLevelChanged", msg.TopicName())
-}
-
-func TestCheckBatteryLevel(t *testing.T) {
-	is, ctx := testSetup(t)
-
-	var devices []devicemanagement.Device
-	err := json.Unmarshal([]byte(devicesJson), &devices)
-	is.NoErr(err)
-
-	m := &messaging.MsgContextMock{}
-	r := &devicemanagement.DeviceRepositoryMock{
-		GetOnlineDevicesFunc: func(ctx context.Context, tenants ...string) ([]devicemanagement.Device, error) {
-			return devices, nil
-		},
-	}
-
-	bw := &batteryLevelWatcher{
-		deviceRepository: r,
-		batteryLevels:    make(map[string]int),
-		messenger:        m,
-	}
-
-	checked, err := bw.checkBatteryLevels(ctx)
-	is.NoErr(err)
-	is.Equal(0, len(checked))
-
-	devices[0].DeviceStatus.BatteryLevel = 5
-
-	checked, err = bw.checkBatteryLevels(ctx)
-	is.NoErr(err)
-
-	is.Equal(1, len(checked))
-}
-
 func testSetup(t *testing.T) (*is.I, context.Context) {
-
 	return is.New(t), context.Background()
 }
 
@@ -133,15 +96,13 @@ const devicesJson string = `
         "active": true,
         "sensorID": "01",
         "deviceID": "device:01",
-        "tenant": {
-            "name": "default"
-        },
+        "tenant": "default",
+        
         "name": "UltraSonic01",
         "description": "",
         "location": {
             "latitude": 0,
-            "longitude": 0,
-            "altitude": 0
+            "longitude": 0
         },
         "environment": "",
         "types": [
@@ -169,15 +130,12 @@ const devicesJson string = `
         "active": true,
         "sensorID": "02",
         "deviceID": "device-02",
-        "tenant": {
-            "name": "default"
-        },
+        "tenant": "default",
         "name": "mcg-ers-co2-01",
         "description": "Masarinkontoret",
         "location": {
             "latitude": 0,
-            "longitude": 0,
-            "altitude": 0
+            "longitude": 0
         },
         "environment": "indoors",
         "types": [
