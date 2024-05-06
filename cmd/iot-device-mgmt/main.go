@@ -28,15 +28,13 @@ const serviceName string = "iot-device-mgmt"
 
 var knownDevicesFile string
 var opaFilePath string
-var alarmConfigFile string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
 	ctx, _, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
-	flag.StringVar(&alarmConfigFile, "alarms", "/opt/diwise/config/alarms.csv", "A file containing alarms")
+	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/data/devices.csv", "A file containing known devices")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 

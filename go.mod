@@ -3,7 +3,7 @@ module github.com/diwise/iot-device-mgmt
 go 1.22
 
 require (
-	github.com/diwise/messaging-golang v0.0.0-20240328100115-197aa8e3a58d
+	github.com/diwise/messaging-golang v0.0.0-20240506092815-fc973e9e4a4f
 	github.com/go-chi/chi/v5 v5.0.12
 	github.com/matryer/is v1.4.1
 	github.com/riandyrn/otelchi v0.8.0
@@ -20,7 +20,7 @@ require (
 	github.com/jackc/pgx/v5 v5.5.5
 	github.com/open-policy-agent/opa v0.64.1
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.51.0
-	golang.org/x/oauth2 v0.19.0
+	golang.org/x/oauth2 v0.20.0
 	gopkg.in/yaml.v2 v2.4.0
 )
 
@@ -82,8 +82,8 @@ require (
 	go.opentelemetry.io/otel/trace v1.26.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.2.0 // indirect
 	golang.org/x/net v0.24.0 // indirect
-	golang.org/x/sys v0.19.0 // indirect
-	golang.org/x/text v0.14.0 // indirect
+	golang.org/x/sys v0.20.0 // indirect
+	golang.org/x/text v0.15.0 // indirect
 	google.golang.org/grpc v1.63.2 // indirect
 	google.golang.org/protobuf v1.34.0 // indirect
 )

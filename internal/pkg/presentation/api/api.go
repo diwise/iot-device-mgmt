@@ -79,11 +79,11 @@ type links struct {
 	Last  *string `json:"last,omitempty"`
 }
 
-func createLinks(baseUrl string, m meta) *links {
-	u, err := url.Parse(baseUrl)
-	if err != nil {
+func createLinks(u *url.URL, m *meta) *links {
+	if m == nil || m.TotalRecords == 0 {
 		return nil
 	}
+
 	query := u.Query()
 	newUrl := func(offset uint64) *string {
 		query.Set("offset", strconv.Itoa(int(offset)))
@@ -190,7 +190,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			response := CollectionResponse{
 				Meta:  meta,
 				Data:  collection.Data,
-				Links: createLinks(r.URL.Path, *meta),
+				Links: createLinks(r.URL, meta),
 			}
 
 			w.Header().Add("Content-Type", "application/json")
@@ -388,7 +388,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		response := CollectionResponse{
 			Meta:  meta,
 			Data:  collection.Data,
-			Links: createLinks(r.URL.Path, *meta),
+			Links: createLinks(r.URL, meta),
 		}
 
 		w.Header().Add("Content-Type", "application/json")
