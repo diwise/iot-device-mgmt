@@ -1,0 +1,26 @@
+device-management:
+  deviceprofiles:
+    - name: qalcosonic
+      decoder: qalcosonic
+      interval: 3600
+      types:
+        - urn: urn:oma:lwm2m:ext:3
+          name: Device
+        - urn: urn:oma:lwm2m:ext:3424
+          name: WaterMeter
+        - urn: urn:oma:lwm2m:ext:3303
+          name: Temperature
+    - name: axsensor
+      decoder: axsensor
+      interval: 3600
+      types:
+        - urn: urn:oma:lwm2m:ext:3
+          name: Device
+        - urn: urn:oma:lwm2m:ext:3330
+          name: Distance
+        - urn: urn:oma:lwm2m:ext:3304
+          name: Humidity
+        - urn: urn:oma:lwm2m:ext:3327
+          name: Pressure
+        - urn: urn:oma:lwm2m:ext:3303
+          name: Temperature
