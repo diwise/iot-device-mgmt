@@ -39,7 +39,7 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement
 			return
 		}
 
-		observedAt, err := time.Parse(time.RFC3339Nano, deviceStatus.Timestamp)
+		observedAt, err := time.Parse(time.RFC3339, deviceStatus.Timestamp)
 		if err != nil {
 			log.Error("no valid timestamp", "err", err.Error())
 			return
@@ -52,18 +52,25 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement
 		}
 
 		status := device.DeviceStatus
-		if observedAt.After(status.ObservedAt) {
+		if observedAt.After(status.ObservedAt) || status.ObservedAt.IsZero() {
 			status.ObservedAt = observedAt
 			err := svc.UpdateStatus(ctx, device.DeviceID, device.Tenant, status)
-			log.Error("could not update status", "err", err.Error())
-			return
+			if err != nil {
+				log.Error("could not update status", "err", err.Error())
+				return
+			}
 		}
 
 		state := device.DeviceState
-		if observedAt.After(state.ObservedAt) {
+		if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
 			state.ObservedAt = observedAt
 			state.Online = true
 			state.State = models.DeviceStateOK
+			err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
+			if err != nil {
+				log.Error("could not update state", "err", err.Error())
+				return
+			}
 		}
 	}
 }
