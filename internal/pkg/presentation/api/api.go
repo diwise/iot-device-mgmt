@@ -279,7 +279,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			var d types.Device
 			err = json.Unmarshal(body, &d)
 			if err != nil {
-				requestLogger.Error("unable to unmarshal body", "err", err.Error())
+				requestLogger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
