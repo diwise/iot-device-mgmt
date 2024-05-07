@@ -192,8 +192,8 @@ func (mock *AlarmServiceMock) CloseCalls() []struct {
 	return calls
 }
 
-// GetAlarmByID calls GetAlarmByIDFunc.
-func (mock *AlarmServiceMock) GetAlarmByID(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error) {
+// GetByID calls GetAlarmByIDFunc.
+func (mock *AlarmServiceMock) GetByID(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error) {
 	if mock.GetAlarmByIDFunc == nil {
 		panic("AlarmServiceMock.GetAlarmByIDFunc: method is nil but AlarmService.GetAlarmByID was just called")
 	}
@@ -232,8 +232,8 @@ func (mock *AlarmServiceMock) GetAlarmByIDCalls() []struct {
 	return calls
 }
 
-// GetAlarms calls GetAlarmsFunc.
-func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
+// Get calls GetAlarmsFunc.
+func (mock *AlarmServiceMock) Get(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 	if mock.GetAlarmsFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsFunc: method is nil but AlarmService.GetAlarms was just called")
 	}
@@ -276,8 +276,8 @@ func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
 	return calls
 }
 
-// GetAlarmsByRefID calls GetAlarmsByRefIDFunc.
-func (mock *AlarmServiceMock) GetAlarmsByRefID(ctx context.Context, refID string, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
+// GetByRefID calls GetAlarmsByRefIDFunc.
+func (mock *AlarmServiceMock) GetByRefID(ctx context.Context, refID string, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 	if mock.GetAlarmsByRefIDFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsByRefIDFunc: method is nil but AlarmService.GetAlarmsByRefID was just called")
 	}

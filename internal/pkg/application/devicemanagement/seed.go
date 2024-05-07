@@ -5,18 +5,21 @@ import (
 	"encoding/csv"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
 	"strconv"
 	"strings"
 
-	. "github.com/diwise/iot-device-mgmt/pkg/types"
+	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d Repository) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+	log := logging.GetFromContext(ctx)
+
 	r := csv.NewReader(reader)
 	r.Comma = ';'
-
+	
 	rows, err := r.ReadAll()
 	if err != nil {
 		return err
@@ -27,8 +30,7 @@ func (d Repository) Seed(ctx context.Context, reader io.Reader, tenants []string
 		return err
 	}
 
-	log := logging.GetFromContext(ctx)
-	log.Info("loaded devices from file", "count", len(records))
+	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)))
 
 	isAllowed := func(arr []string, s string) bool {
 		if len(arr) == 0 {
@@ -50,9 +52,10 @@ func (d Repository) Seed(ctx context.Context, reader io.Reader, tenants []string
 			continue
 		}
 
-		e, err := d.GetDeviceByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
+		e, err := d.GetByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
 		if err != nil {
-			err := d.Save(ctx, device)
+			log.Debug("create new device", "device_id", device.DeviceID)
+			err := d.Create(ctx, device)
 			if err != nil {
 				log.Error("could not create new device", "device_id", device.DeviceID, "err", err.Error())
 			}
@@ -68,13 +71,15 @@ func (d Repository) Seed(ctx context.Context, reader io.Reader, tenants []string
 		e.Name = device.Name
 		e.Source = device.Source
 		e.Tags = device.Tags
+
 		if e.SensorID != device.SensorID {
 			log.Warn("sensorID changed", "device_id", device.DeviceID, "old_sensor_id", e.SensorID, "new_sensor_id", device.SensorID)
 			e.SensorID = device.SensorID
-
 		}
 
-		err = d.Save(ctx, e)
+		log.Debug("update existing device", "device_id", device.DeviceID)
+
+		err = d.Update(ctx, e)
 		if err != nil {
 			log.Error("could not update device", "device_id", device.DeviceID, "err", err.Error())
 		}
@@ -99,40 +104,40 @@ type deviceRecord struct {
 	source      string
 }
 
-func (dr deviceRecord) mapToDevice() (Device, DeviceProfile) {
-	strArrToLwm2m := func(str []string) []Lwm2mType {
-		lw := []Lwm2mType{}
+func (dr deviceRecord) mapToDevice() (models.Device, models.DeviceProfile) {
+	strArrToLwm2m := func(str []string) []models.Lwm2mType {
+		lw := []models.Lwm2mType{}
 		for _, s := range str {
-			lw = append(lw, Lwm2mType{Urn: s})
+			lw = append(lw, models.Lwm2mType{Urn: s})
 		}
 		return lw
 	}
 
-	device := Device{
+	device := models.Device{
 		Active:      dr.active,
 		SensorID:    dr.devEUI,
 		DeviceID:    dr.internalID,
 		Tenant:      dr.tenant,
 		Name:        dr.name,
 		Description: dr.description,
-		Location: Location{
+		Location: models.Location{
 			Latitude:  dr.lat,
 			Longitude: dr.lon,
 		},
 		Environment: dr.where,
 		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
-		DeviceProfile: DeviceProfile{
+		DeviceProfile: models.DeviceProfile{
 			Name:     dr.sensorType,
 			Decoder:  dr.sensorType,
 			Interval: dr.interval,
 		},
-		DeviceStatus: DeviceStatus{
+		DeviceStatus: models.DeviceStatus{
 			BatteryLevel: -1,
 		},
-		DeviceState: DeviceState{
+		DeviceState: models.DeviceState{
 			Online: false,
-			State:  DeviceStateUnknown,
+			State:  models.DeviceStateUnknown,
 		},
 	}
 

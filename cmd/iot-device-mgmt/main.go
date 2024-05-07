@@ -52,6 +52,8 @@ func main() {
 	mgmtSvc := devicemanagement.New(deviceStorage, messenger)
 	alarmSvc := alarms.New(alarmStorage, messenger)
 
+	seedDataOrDie(ctx, mgmtSvc)
+
 	watchdog := watchdog.New(deviceStorage, messenger)
 	watchdog.Start(ctx)
 	defer watchdog.Stop(ctx)
@@ -85,6 +87,10 @@ func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.
 		panic(err)
 	}
 
+	return repo
+}
+
+func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {
 	if _, err := os.Stat(knownDevicesFile); os.IsNotExist(err) {
 		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be found", knownDevicesFile), err)
 	}
@@ -95,12 +101,10 @@ func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.
 	}
 	defer f.Close()
 
-	err = repo.Seed(ctx, f, []string{"default"})
+	err = svc.Seed(ctx, f, []string{"default"})
 	if err != nil {
 		fatal(ctx, "could not seed database with devices", err)
 	}
-
-	return repo
 }
 
 func setupMessagingOrDie(ctx context.Context, serviceName string) messaging.MsgContext {

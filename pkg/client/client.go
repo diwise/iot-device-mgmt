@@ -304,7 +304,9 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	impls := []types.Device{}
+	impls := struct {
+		Data types.Device `json:"data"`
+	}{}
 
 	err = json.Unmarshal(respBody, &impls)
 	if err != nil {
@@ -312,12 +314,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 
-	if len(impls) == 0 {
-		err = fmt.Errorf("device management returned an empty list of devices")
-		return nil, err
-	}
-
-	device := impls[0]
+	device := impls.Data
 	return &deviceWrapper{&device}, nil
 }
 
@@ -437,15 +434,17 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 		return nil, err
 	}
 
-	impl := &types.Device{}
+	impl := struct {
+		Data types.Device `json:"data"`
+	}{}
 
-	err = json.Unmarshal(respBody, impl)
+	err = json.Unmarshal(respBody, &impl)
 	if err != nil {
 		err = fmt.Errorf("failed to unmarshal response body: %w", err)
 		return nil, err
 	}
 
-	return &deviceWrapper{impl}, nil
+	return &deviceWrapper{&impl.Data}, nil
 }
 
 //go:generate moq -rm -out ../test/device_mock.go . Device

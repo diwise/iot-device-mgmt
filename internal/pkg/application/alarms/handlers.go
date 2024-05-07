@@ -50,7 +50,7 @@ func NewDeviceNotObservedHandler(messenger messaging.MsgContext, svc AlarmServic
 			return
 		}
 
-		alarms, err := svc.GetAlarmsByRefID(ctx, msg.DeviceID, 0, 100, []string{msg.Tenant})
+		alarms, err := svc.GetByRefID(ctx, msg.DeviceID, 0, 100, []string{msg.Tenant})
 		if err != nil {
 			log.Error("could not fetch alarms", "err", err.Error())
 			return
@@ -110,7 +110,7 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc AlarmService) me
 			return
 		}
 
-		alarms, err := svc.GetAlarmsByRefID(ctx, status.DeviceID, 0, 100, []string{status.Tenant})
+		alarms, err := svc.GetByRefID(ctx, status.DeviceID, 0, 100, []string{status.Tenant})
 		if err != nil {
 			log.Error("could not fetch alarms", "err", err.Error())
 			return

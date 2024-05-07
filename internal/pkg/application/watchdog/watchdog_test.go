@@ -46,7 +46,7 @@ func TestCheckLastObserved(t *testing.T) {
 		GetTenantsFunc: func(ctx context.Context) []string {
 			return []string{"default"}
 		},
-		GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
 			for _, d := range devices {
 				if d.DeviceID == deviceID {
 					return d, nil

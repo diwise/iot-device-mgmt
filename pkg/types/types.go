@@ -22,6 +22,8 @@ type Device struct {
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
+
+	Alarms []string `json:"alarms"`
 }
 
 type Location struct {

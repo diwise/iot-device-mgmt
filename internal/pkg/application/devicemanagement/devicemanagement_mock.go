@@ -9,7 +9,6 @@ import (
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"io"
 	"sync"
-	"time"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -22,35 +21,35 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			AddAlarmFunc: func(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error {
-//				panic("mock out the AddAlarm method")
+//			CreateFunc: func(ctx context.Context, device models.Device) error {
+//				panic("mock out the Create method")
 //			},
-//			CreateDeviceFunc: func(ctx context.Context, device models.Device) error {
-//				panic("mock out the CreateDevice method")
+//			GetFunc: func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
+//				panic("mock out the Get method")
 //			},
-//			GetDeviceByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
-//				panic("mock out the GetDeviceByDeviceID method")
+//			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetByDeviceID method")
 //			},
-//			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
-//				panic("mock out the GetDeviceBySensorID method")
+//			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetBySensorID method")
 //			},
-//			GetDevicesFunc: func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
-//				panic("mock out the GetDevices method")
+//			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetWithAlarmID method")
 //			},
-//			ImportFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
-//				panic("mock out the Import method")
+//			MergeFunc: func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+//				panic("mock out the Merge method")
 //			},
-//			RemoveAlarmFunc: func(ctx context.Context, alarmID string, tenants []string) error {
-//				panic("mock out the RemoveAlarm method")
+//			SeedFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
+//				panic("mock out the Seed method")
 //			},
-//			UpdateDeviceFunc: func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
-//				panic("mock out the UpdateDevice method")
+//			UpdateFunc: func(ctx context.Context, device models.Device) error {
+//				panic("mock out the Update method")
 //			},
-//			UpdateDeviceStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
-//				panic("mock out the UpdateDeviceState method")
+//			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+//				panic("mock out the UpdateState method")
 //			},
-//			UpdateDeviceStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
-//				panic("mock out the UpdateDeviceStatus method")
+//			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+//				panic("mock out the UpdateStatus method")
 //			},
 //		}
 //
@@ -59,78 +58,47 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
-	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error
+	// CreateFunc mocks the Create method.
+	CreateFunc func(ctx context.Context, device models.Device) error
 
-	// CreateDeviceFunc mocks the CreateDevice method.
-	CreateDeviceFunc func(ctx context.Context, device models.Device) error
+	// GetFunc mocks the Get method.
+	GetFunc func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error)
 
-	// GetDeviceByDeviceIDFunc mocks the GetDeviceByDeviceID method.
-	GetDeviceByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
+	// GetByDeviceIDFunc mocks the GetByDeviceID method.
+	GetByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 
-	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
-	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
+	// GetBySensorIDFunc mocks the GetBySensorID method.
+	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 
-	// GetDevicesFunc mocks the GetDevices method.
-	GetDevicesFunc func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error)
+	// GetWithAlarmIDFunc mocks the GetWithAlarmID method.
+	GetWithAlarmIDFunc func(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
 
-	// ImportFunc mocks the Import method.
-	ImportFunc func(ctx context.Context, reader io.Reader, tenants []string) error
+	// MergeFunc mocks the Merge method.
+	MergeFunc func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 
-	// RemoveAlarmFunc mocks the RemoveAlarm method.
-	RemoveAlarmFunc func(ctx context.Context, alarmID string, tenants []string) error
+	// SeedFunc mocks the Seed method.
+	SeedFunc func(ctx context.Context, reader io.Reader, tenants []string) error
 
-	// UpdateDeviceFunc mocks the UpdateDevice method.
-	UpdateDeviceFunc func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
+	// UpdateFunc mocks the Update method.
+	UpdateFunc func(ctx context.Context, device models.Device) error
 
-	// UpdateDeviceStateFunc mocks the UpdateDeviceState method.
-	UpdateDeviceStateFunc func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error
+	// UpdateStateFunc mocks the UpdateState method.
+	UpdateStateFunc func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error
 
-	// UpdateDeviceStatusFunc mocks the UpdateDeviceStatus method.
-	UpdateDeviceStatusFunc func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error
+	// UpdateStatusFunc mocks the UpdateStatus method.
+	UpdateStatusFunc func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddAlarm holds details about calls to the AddAlarm method.
-		AddAlarm []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// AlarmID is the alarmID argument value.
-			AlarmID string
-			// Severity is the severity argument value.
-			Severity int
-			// ObservedAt is the observedAt argument value.
-			ObservedAt time.Time
-		}
-		// CreateDevice holds details about calls to the CreateDevice method.
-		CreateDevice []struct {
+		// Create holds details about calls to the Create method.
+		Create []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Device is the device argument value.
 			Device models.Device
 		}
-		// GetDeviceByDeviceID holds details about calls to the GetDeviceByDeviceID method.
-		GetDeviceByDeviceID []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// Tenants is the tenants argument value.
-			Tenants []string
-		}
-		// GetDeviceBySensorID holds details about calls to the GetDeviceBySensorID method.
-		GetDeviceBySensorID []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// SensorID is the sensorID argument value.
-			SensorID string
-			// Tenants is the tenants argument value.
-			Tenants []string
-		}
-		// GetDevices holds details about calls to the GetDevices method.
-		GetDevices []struct {
+		// Get holds details about calls to the Get method.
+		Get []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Offset is the offset argument value.
@@ -140,17 +108,26 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// Import holds details about calls to the Import method.
-		Import []struct {
+		// GetByDeviceID holds details about calls to the GetByDeviceID method.
+		GetByDeviceID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Reader is the reader argument value.
-			Reader io.Reader
+			// DeviceID is the deviceID argument value.
+			DeviceID string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// RemoveAlarm holds details about calls to the RemoveAlarm method.
-		RemoveAlarm []struct {
+		// GetBySensorID holds details about calls to the GetBySensorID method.
+		GetBySensorID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SensorID is the sensorID argument value.
+			SensorID string
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
+		// GetWithAlarmID holds details about calls to the GetWithAlarmID method.
+		GetWithAlarmID []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// AlarmID is the alarmID argument value.
@@ -158,8 +135,8 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// UpdateDevice holds details about calls to the UpdateDevice method.
-		UpdateDevice []struct {
+		// Merge holds details about calls to the Merge method.
+		Merge []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -169,8 +146,24 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// UpdateDeviceState holds details about calls to the UpdateDeviceState method.
-		UpdateDeviceState []struct {
+		// Seed holds details about calls to the Seed method.
+		Seed []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Reader is the reader argument value.
+			Reader io.Reader
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
+		// Update holds details about calls to the Update method.
+		Update []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Device is the device argument value.
+			Device models.Device
+		}
+		// UpdateState holds details about calls to the UpdateState method.
+		UpdateState []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -180,8 +173,8 @@ type DeviceManagementMock struct {
 			// DeviceState is the deviceState argument value.
 			DeviceState models.DeviceState
 		}
-		// UpdateDeviceStatus holds details about calls to the UpdateDeviceStatus method.
-		UpdateDeviceStatus []struct {
+		// UpdateStatus holds details about calls to the UpdateStatus method.
+		UpdateStatus []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -192,70 +185,22 @@ type DeviceManagementMock struct {
 			DeviceStatus models.DeviceStatus
 		}
 	}
-	lockAddAlarm            sync.RWMutex
-	lockCreateDevice        sync.RWMutex
-	lockGetDeviceByDeviceID sync.RWMutex
-	lockGetDeviceBySensorID sync.RWMutex
-	lockGetDevices          sync.RWMutex
-	lockImport              sync.RWMutex
-	lockRemoveAlarm         sync.RWMutex
-	lockUpdateDevice        sync.RWMutex
-	lockUpdateDeviceState   sync.RWMutex
-	lockUpdateDeviceStatus  sync.RWMutex
+	lockCreate         sync.RWMutex
+	lockGet            sync.RWMutex
+	lockGetByDeviceID  sync.RWMutex
+	lockGetBySensorID  sync.RWMutex
+	lockGetWithAlarmID sync.RWMutex
+	lockMerge          sync.RWMutex
+	lockSeed           sync.RWMutex
+	lockUpdate         sync.RWMutex
+	lockUpdateState    sync.RWMutex
+	lockUpdateStatus   sync.RWMutex
 }
 
-// AddAlarm calls AddAlarmFunc.
-func (mock *DeviceManagementMock) AddAlarm(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error {
-	if mock.AddAlarmFunc == nil {
-		panic("DeviceManagementMock.AddAlarmFunc: method is nil but DeviceManagement.AddAlarm was just called")
-	}
-	callInfo := struct {
-		Ctx        context.Context
-		DeviceID   string
-		AlarmID    string
-		Severity   int
-		ObservedAt time.Time
-	}{
-		Ctx:        ctx,
-		DeviceID:   deviceID,
-		AlarmID:    alarmID,
-		Severity:   severity,
-		ObservedAt: observedAt,
-	}
-	mock.lockAddAlarm.Lock()
-	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
-	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, deviceID, alarmID, severity, observedAt)
-}
-
-// AddAlarmCalls gets all the calls that were made to AddAlarm.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.AddAlarmCalls())
-func (mock *DeviceManagementMock) AddAlarmCalls() []struct {
-	Ctx        context.Context
-	DeviceID   string
-	AlarmID    string
-	Severity   int
-	ObservedAt time.Time
-} {
-	var calls []struct {
-		Ctx        context.Context
-		DeviceID   string
-		AlarmID    string
-		Severity   int
-		ObservedAt time.Time
-	}
-	mock.lockAddAlarm.RLock()
-	calls = mock.calls.AddAlarm
-	mock.lockAddAlarm.RUnlock()
-	return calls
-}
-
-// CreateDevice calls CreateDeviceFunc.
-func (mock *DeviceManagementMock) CreateDevice(ctx context.Context, device models.Device) error {
-	if mock.CreateDeviceFunc == nil {
-		panic("DeviceManagementMock.CreateDeviceFunc: method is nil but DeviceManagement.CreateDevice was just called")
+// Create calls CreateFunc.
+func (mock *DeviceManagementMock) Create(ctx context.Context, device models.Device) error {
+	if mock.CreateFunc == nil {
+		panic("DeviceManagementMock.CreateFunc: method is nil but DeviceManagement.Create was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
@@ -264,17 +209,17 @@ func (mock *DeviceManagementMock) CreateDevice(ctx context.Context, device model
 		Ctx:    ctx,
 		Device: device,
 	}
-	mock.lockCreateDevice.Lock()
-	mock.calls.CreateDevice = append(mock.calls.CreateDevice, callInfo)
-	mock.lockCreateDevice.Unlock()
-	return mock.CreateDeviceFunc(ctx, device)
+	mock.lockCreate.Lock()
+	mock.calls.Create = append(mock.calls.Create, callInfo)
+	mock.lockCreate.Unlock()
+	return mock.CreateFunc(ctx, device)
 }
 
-// CreateDeviceCalls gets all the calls that were made to CreateDevice.
+// CreateCalls gets all the calls that were made to Create.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.CreateDeviceCalls())
-func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
+//	len(mockedDeviceManagement.CreateCalls())
+func (mock *DeviceManagementMock) CreateCalls() []struct {
 	Ctx    context.Context
 	Device models.Device
 } {
@@ -282,96 +227,16 @@ func (mock *DeviceManagementMock) CreateDeviceCalls() []struct {
 		Ctx    context.Context
 		Device models.Device
 	}
-	mock.lockCreateDevice.RLock()
-	calls = mock.calls.CreateDevice
-	mock.lockCreateDevice.RUnlock()
+	mock.lockCreate.RLock()
+	calls = mock.calls.Create
+	mock.lockCreate.RUnlock()
 	return calls
 }
 
-// GetDeviceByDeviceID calls GetDeviceByDeviceIDFunc.
-func (mock *DeviceManagementMock) GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
-	if mock.GetDeviceByDeviceIDFunc == nil {
-		panic("DeviceManagementMock.GetDeviceByDeviceIDFunc: method is nil but DeviceManagement.GetDeviceByDeviceID was just called")
-	}
-	callInfo := struct {
-		Ctx      context.Context
-		DeviceID string
-		Tenants  []string
-	}{
-		Ctx:      ctx,
-		DeviceID: deviceID,
-		Tenants:  tenants,
-	}
-	mock.lockGetDeviceByDeviceID.Lock()
-	mock.calls.GetDeviceByDeviceID = append(mock.calls.GetDeviceByDeviceID, callInfo)
-	mock.lockGetDeviceByDeviceID.Unlock()
-	return mock.GetDeviceByDeviceIDFunc(ctx, deviceID, tenants)
-}
-
-// GetDeviceByDeviceIDCalls gets all the calls that were made to GetDeviceByDeviceID.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.GetDeviceByDeviceIDCalls())
-func (mock *DeviceManagementMock) GetDeviceByDeviceIDCalls() []struct {
-	Ctx      context.Context
-	DeviceID string
-	Tenants  []string
-} {
-	var calls []struct {
-		Ctx      context.Context
-		DeviceID string
-		Tenants  []string
-	}
-	mock.lockGetDeviceByDeviceID.RLock()
-	calls = mock.calls.GetDeviceByDeviceID
-	mock.lockGetDeviceByDeviceID.RUnlock()
-	return calls
-}
-
-// GetDeviceBySensorID calls GetDeviceBySensorIDFunc.
-func (mock *DeviceManagementMock) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
-	if mock.GetDeviceBySensorIDFunc == nil {
-		panic("DeviceManagementMock.GetDeviceBySensorIDFunc: method is nil but DeviceManagement.GetDeviceBySensorID was just called")
-	}
-	callInfo := struct {
-		Ctx      context.Context
-		SensorID string
-		Tenants  []string
-	}{
-		Ctx:      ctx,
-		SensorID: sensorID,
-		Tenants:  tenants,
-	}
-	mock.lockGetDeviceBySensorID.Lock()
-	mock.calls.GetDeviceBySensorID = append(mock.calls.GetDeviceBySensorID, callInfo)
-	mock.lockGetDeviceBySensorID.Unlock()
-	return mock.GetDeviceBySensorIDFunc(ctx, sensorID, tenants)
-}
-
-// GetDeviceBySensorIDCalls gets all the calls that were made to GetDeviceBySensorID.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.GetDeviceBySensorIDCalls())
-func (mock *DeviceManagementMock) GetDeviceBySensorIDCalls() []struct {
-	Ctx      context.Context
-	SensorID string
-	Tenants  []string
-} {
-	var calls []struct {
-		Ctx      context.Context
-		SensorID string
-		Tenants  []string
-	}
-	mock.lockGetDeviceBySensorID.RLock()
-	calls = mock.calls.GetDeviceBySensorID
-	mock.lockGetDeviceBySensorID.RUnlock()
-	return calls
-}
-
-// GetDevices calls GetDevicesFunc.
-func (mock *DeviceManagementMock) GetDevices(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
-	if mock.GetDevicesFunc == nil {
-		panic("DeviceManagementMock.GetDevicesFunc: method is nil but DeviceManagement.GetDevices was just called")
+// Get calls GetFunc.
+func (mock *DeviceManagementMock) Get(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
+	if mock.GetFunc == nil {
+		panic("DeviceManagementMock.GetFunc: method is nil but DeviceManagement.Get was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
@@ -384,17 +249,17 @@ func (mock *DeviceManagementMock) GetDevices(ctx context.Context, offset int, li
 		Limit:   limit,
 		Tenants: tenants,
 	}
-	mock.lockGetDevices.Lock()
-	mock.calls.GetDevices = append(mock.calls.GetDevices, callInfo)
-	mock.lockGetDevices.Unlock()
-	return mock.GetDevicesFunc(ctx, offset, limit, tenants)
+	mock.lockGet.Lock()
+	mock.calls.Get = append(mock.calls.Get, callInfo)
+	mock.lockGet.Unlock()
+	return mock.GetFunc(ctx, offset, limit, tenants)
 }
 
-// GetDevicesCalls gets all the calls that were made to GetDevices.
+// GetCalls gets all the calls that were made to Get.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.GetDevicesCalls())
-func (mock *DeviceManagementMock) GetDevicesCalls() []struct {
+//	len(mockedDeviceManagement.GetCalls())
+func (mock *DeviceManagementMock) GetCalls() []struct {
 	Ctx     context.Context
 	Offset  int
 	Limit   int
@@ -406,56 +271,96 @@ func (mock *DeviceManagementMock) GetDevicesCalls() []struct {
 		Limit   int
 		Tenants []string
 	}
-	mock.lockGetDevices.RLock()
-	calls = mock.calls.GetDevices
-	mock.lockGetDevices.RUnlock()
+	mock.lockGet.RLock()
+	calls = mock.calls.Get
+	mock.lockGet.RUnlock()
 	return calls
 }
 
-// Import calls ImportFunc.
-func (mock *DeviceManagementMock) Import(ctx context.Context, reader io.Reader, tenants []string) error {
-	if mock.ImportFunc == nil {
-		panic("DeviceManagementMock.ImportFunc: method is nil but DeviceManagement.Import was just called")
+// GetByDeviceID calls GetByDeviceIDFunc.
+func (mock *DeviceManagementMock) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+	if mock.GetByDeviceIDFunc == nil {
+		panic("DeviceManagementMock.GetByDeviceIDFunc: method is nil but DeviceManagement.GetByDeviceID was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		Reader  io.Reader
-		Tenants []string
+		Ctx      context.Context
+		DeviceID string
+		Tenants  []string
 	}{
-		Ctx:     ctx,
-		Reader:  reader,
-		Tenants: tenants,
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		Tenants:  tenants,
 	}
-	mock.lockImport.Lock()
-	mock.calls.Import = append(mock.calls.Import, callInfo)
-	mock.lockImport.Unlock()
-	return mock.ImportFunc(ctx, reader, tenants)
+	mock.lockGetByDeviceID.Lock()
+	mock.calls.GetByDeviceID = append(mock.calls.GetByDeviceID, callInfo)
+	mock.lockGetByDeviceID.Unlock()
+	return mock.GetByDeviceIDFunc(ctx, deviceID, tenants)
 }
 
-// ImportCalls gets all the calls that were made to Import.
+// GetByDeviceIDCalls gets all the calls that were made to GetByDeviceID.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.ImportCalls())
-func (mock *DeviceManagementMock) ImportCalls() []struct {
-	Ctx     context.Context
-	Reader  io.Reader
-	Tenants []string
+//	len(mockedDeviceManagement.GetByDeviceIDCalls())
+func (mock *DeviceManagementMock) GetByDeviceIDCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	Tenants  []string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		Reader  io.Reader
-		Tenants []string
+		Ctx      context.Context
+		DeviceID string
+		Tenants  []string
 	}
-	mock.lockImport.RLock()
-	calls = mock.calls.Import
-	mock.lockImport.RUnlock()
+	mock.lockGetByDeviceID.RLock()
+	calls = mock.calls.GetByDeviceID
+	mock.lockGetByDeviceID.RUnlock()
 	return calls
 }
 
-// RemoveAlarm calls RemoveAlarmFunc.
-func (mock *DeviceManagementMock) RemoveAlarm(ctx context.Context, alarmID string, tenants []string) error {
-	if mock.RemoveAlarmFunc == nil {
-		panic("DeviceManagementMock.RemoveAlarmFunc: method is nil but DeviceManagement.RemoveAlarm was just called")
+// GetBySensorID calls GetBySensorIDFunc.
+func (mock *DeviceManagementMock) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+	if mock.GetBySensorIDFunc == nil {
+		panic("DeviceManagementMock.GetBySensorIDFunc: method is nil but DeviceManagement.GetBySensorID was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+		Tenants  []string
+	}{
+		Ctx:      ctx,
+		SensorID: sensorID,
+		Tenants:  tenants,
+	}
+	mock.lockGetBySensorID.Lock()
+	mock.calls.GetBySensorID = append(mock.calls.GetBySensorID, callInfo)
+	mock.lockGetBySensorID.Unlock()
+	return mock.GetBySensorIDFunc(ctx, sensorID, tenants)
+}
+
+// GetBySensorIDCalls gets all the calls that were made to GetBySensorID.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.GetBySensorIDCalls())
+func (mock *DeviceManagementMock) GetBySensorIDCalls() []struct {
+	Ctx      context.Context
+	SensorID string
+	Tenants  []string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		SensorID string
+		Tenants  []string
+	}
+	mock.lockGetBySensorID.RLock()
+	calls = mock.calls.GetBySensorID
+	mock.lockGetBySensorID.RUnlock()
+	return calls
+}
+
+// GetWithAlarmID calls GetWithAlarmIDFunc.
+func (mock *DeviceManagementMock) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
+	if mock.GetWithAlarmIDFunc == nil {
+		panic("DeviceManagementMock.GetWithAlarmIDFunc: method is nil but DeviceManagement.GetWithAlarmID was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
@@ -466,17 +371,17 @@ func (mock *DeviceManagementMock) RemoveAlarm(ctx context.Context, alarmID strin
 		AlarmID: alarmID,
 		Tenants: tenants,
 	}
-	mock.lockRemoveAlarm.Lock()
-	mock.calls.RemoveAlarm = append(mock.calls.RemoveAlarm, callInfo)
-	mock.lockRemoveAlarm.Unlock()
-	return mock.RemoveAlarmFunc(ctx, alarmID, tenants)
+	mock.lockGetWithAlarmID.Lock()
+	mock.calls.GetWithAlarmID = append(mock.calls.GetWithAlarmID, callInfo)
+	mock.lockGetWithAlarmID.Unlock()
+	return mock.GetWithAlarmIDFunc(ctx, alarmID, tenants)
 }
 
-// RemoveAlarmCalls gets all the calls that were made to RemoveAlarm.
+// GetWithAlarmIDCalls gets all the calls that were made to GetWithAlarmID.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.RemoveAlarmCalls())
-func (mock *DeviceManagementMock) RemoveAlarmCalls() []struct {
+//	len(mockedDeviceManagement.GetWithAlarmIDCalls())
+func (mock *DeviceManagementMock) GetWithAlarmIDCalls() []struct {
 	Ctx     context.Context
 	AlarmID string
 	Tenants []string
@@ -486,16 +391,16 @@ func (mock *DeviceManagementMock) RemoveAlarmCalls() []struct {
 		AlarmID string
 		Tenants []string
 	}
-	mock.lockRemoveAlarm.RLock()
-	calls = mock.calls.RemoveAlarm
-	mock.lockRemoveAlarm.RUnlock()
+	mock.lockGetWithAlarmID.RLock()
+	calls = mock.calls.GetWithAlarmID
+	mock.lockGetWithAlarmID.RUnlock()
 	return calls
 }
 
-// UpdateDevice calls UpdateDeviceFunc.
-func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
-	if mock.UpdateDeviceFunc == nil {
-		panic("DeviceManagementMock.UpdateDeviceFunc: method is nil but DeviceManagement.UpdateDevice was just called")
+// Merge calls MergeFunc.
+func (mock *DeviceManagementMock) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+	if mock.MergeFunc == nil {
+		panic("DeviceManagementMock.MergeFunc: method is nil but DeviceManagement.Merge was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
@@ -508,17 +413,17 @@ func (mock *DeviceManagementMock) UpdateDevice(ctx context.Context, deviceID str
 		Fields:   fields,
 		Tenants:  tenants,
 	}
-	mock.lockUpdateDevice.Lock()
-	mock.calls.UpdateDevice = append(mock.calls.UpdateDevice, callInfo)
-	mock.lockUpdateDevice.Unlock()
-	return mock.UpdateDeviceFunc(ctx, deviceID, fields, tenants)
+	mock.lockMerge.Lock()
+	mock.calls.Merge = append(mock.calls.Merge, callInfo)
+	mock.lockMerge.Unlock()
+	return mock.MergeFunc(ctx, deviceID, fields, tenants)
 }
 
-// UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
+// MergeCalls gets all the calls that were made to Merge.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.UpdateDeviceCalls())
-func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
+//	len(mockedDeviceManagement.MergeCalls())
+func (mock *DeviceManagementMock) MergeCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
 	Fields   map[string]any
@@ -530,16 +435,92 @@ func (mock *DeviceManagementMock) UpdateDeviceCalls() []struct {
 		Fields   map[string]any
 		Tenants  []string
 	}
-	mock.lockUpdateDevice.RLock()
-	calls = mock.calls.UpdateDevice
-	mock.lockUpdateDevice.RUnlock()
+	mock.lockMerge.RLock()
+	calls = mock.calls.Merge
+	mock.lockMerge.RUnlock()
 	return calls
 }
 
-// UpdateDeviceState calls UpdateDeviceStateFunc.
-func (mock *DeviceManagementMock) UpdateDeviceState(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
-	if mock.UpdateDeviceStateFunc == nil {
-		panic("DeviceManagementMock.UpdateDeviceStateFunc: method is nil but DeviceManagement.UpdateDeviceState was just called")
+// Seed calls SeedFunc.
+func (mock *DeviceManagementMock) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+	if mock.SeedFunc == nil {
+		panic("DeviceManagementMock.SeedFunc: method is nil but DeviceManagement.Seed was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Reader  io.Reader
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Reader:  reader,
+		Tenants: tenants,
+	}
+	mock.lockSeed.Lock()
+	mock.calls.Seed = append(mock.calls.Seed, callInfo)
+	mock.lockSeed.Unlock()
+	return mock.SeedFunc(ctx, reader, tenants)
+}
+
+// SeedCalls gets all the calls that were made to Seed.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.SeedCalls())
+func (mock *DeviceManagementMock) SeedCalls() []struct {
+	Ctx     context.Context
+	Reader  io.Reader
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Reader  io.Reader
+		Tenants []string
+	}
+	mock.lockSeed.RLock()
+	calls = mock.calls.Seed
+	mock.lockSeed.RUnlock()
+	return calls
+}
+
+// Update calls UpdateFunc.
+func (mock *DeviceManagementMock) Update(ctx context.Context, device models.Device) error {
+	if mock.UpdateFunc == nil {
+		panic("DeviceManagementMock.UpdateFunc: method is nil but DeviceManagement.Update was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Device models.Device
+	}{
+		Ctx:    ctx,
+		Device: device,
+	}
+	mock.lockUpdate.Lock()
+	mock.calls.Update = append(mock.calls.Update, callInfo)
+	mock.lockUpdate.Unlock()
+	return mock.UpdateFunc(ctx, device)
+}
+
+// UpdateCalls gets all the calls that were made to Update.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.UpdateCalls())
+func (mock *DeviceManagementMock) UpdateCalls() []struct {
+	Ctx    context.Context
+	Device models.Device
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Device models.Device
+	}
+	mock.lockUpdate.RLock()
+	calls = mock.calls.Update
+	mock.lockUpdate.RUnlock()
+	return calls
+}
+
+// UpdateState calls UpdateStateFunc.
+func (mock *DeviceManagementMock) UpdateState(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+	if mock.UpdateStateFunc == nil {
+		panic("DeviceManagementMock.UpdateStateFunc: method is nil but DeviceManagement.UpdateState was just called")
 	}
 	callInfo := struct {
 		Ctx         context.Context
@@ -552,17 +533,17 @@ func (mock *DeviceManagementMock) UpdateDeviceState(ctx context.Context, deviceI
 		Tenant:      tenant,
 		DeviceState: deviceState,
 	}
-	mock.lockUpdateDeviceState.Lock()
-	mock.calls.UpdateDeviceState = append(mock.calls.UpdateDeviceState, callInfo)
-	mock.lockUpdateDeviceState.Unlock()
-	return mock.UpdateDeviceStateFunc(ctx, deviceID, tenant, deviceState)
+	mock.lockUpdateState.Lock()
+	mock.calls.UpdateState = append(mock.calls.UpdateState, callInfo)
+	mock.lockUpdateState.Unlock()
+	return mock.UpdateStateFunc(ctx, deviceID, tenant, deviceState)
 }
 
-// UpdateDeviceStateCalls gets all the calls that were made to UpdateDeviceState.
+// UpdateStateCalls gets all the calls that were made to UpdateState.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.UpdateDeviceStateCalls())
-func (mock *DeviceManagementMock) UpdateDeviceStateCalls() []struct {
+//	len(mockedDeviceManagement.UpdateStateCalls())
+func (mock *DeviceManagementMock) UpdateStateCalls() []struct {
 	Ctx         context.Context
 	DeviceID    string
 	Tenant      string
@@ -574,16 +555,16 @@ func (mock *DeviceManagementMock) UpdateDeviceStateCalls() []struct {
 		Tenant      string
 		DeviceState models.DeviceState
 	}
-	mock.lockUpdateDeviceState.RLock()
-	calls = mock.calls.UpdateDeviceState
-	mock.lockUpdateDeviceState.RUnlock()
+	mock.lockUpdateState.RLock()
+	calls = mock.calls.UpdateState
+	mock.lockUpdateState.RUnlock()
 	return calls
 }
 
-// UpdateDeviceStatus calls UpdateDeviceStatusFunc.
-func (mock *DeviceManagementMock) UpdateDeviceStatus(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
-	if mock.UpdateDeviceStatusFunc == nil {
-		panic("DeviceManagementMock.UpdateDeviceStatusFunc: method is nil but DeviceManagement.UpdateDeviceStatus was just called")
+// UpdateStatus calls UpdateStatusFunc.
+func (mock *DeviceManagementMock) UpdateStatus(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+	if mock.UpdateStatusFunc == nil {
+		panic("DeviceManagementMock.UpdateStatusFunc: method is nil but DeviceManagement.UpdateStatus was just called")
 	}
 	callInfo := struct {
 		Ctx          context.Context
@@ -596,17 +577,17 @@ func (mock *DeviceManagementMock) UpdateDeviceStatus(ctx context.Context, device
 		Tenant:       tenant,
 		DeviceStatus: deviceStatus,
 	}
-	mock.lockUpdateDeviceStatus.Lock()
-	mock.calls.UpdateDeviceStatus = append(mock.calls.UpdateDeviceStatus, callInfo)
-	mock.lockUpdateDeviceStatus.Unlock()
-	return mock.UpdateDeviceStatusFunc(ctx, deviceID, tenant, deviceStatus)
+	mock.lockUpdateStatus.Lock()
+	mock.calls.UpdateStatus = append(mock.calls.UpdateStatus, callInfo)
+	mock.lockUpdateStatus.Unlock()
+	return mock.UpdateStatusFunc(ctx, deviceID, tenant, deviceStatus)
 }
 
-// UpdateDeviceStatusCalls gets all the calls that were made to UpdateDeviceStatus.
+// UpdateStatusCalls gets all the calls that were made to UpdateStatus.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.UpdateDeviceStatusCalls())
-func (mock *DeviceManagementMock) UpdateDeviceStatusCalls() []struct {
+//	len(mockedDeviceManagement.UpdateStatusCalls())
+func (mock *DeviceManagementMock) UpdateStatusCalls() []struct {
 	Ctx          context.Context
 	DeviceID     string
 	Tenant       string
@@ -618,8 +599,8 @@ func (mock *DeviceManagementMock) UpdateDeviceStatusCalls() []struct {
 		Tenant       string
 		DeviceStatus models.DeviceStatus
 	}
-	mock.lockUpdateDeviceStatus.RLock()
-	calls = mock.calls.UpdateDeviceStatus
-	mock.lockUpdateDeviceStatus.RUnlock()
+	mock.lockUpdateStatus.RLock()
+	calls = mock.calls.UpdateStatus
+	mock.lockUpdateStatus.RUnlock()
 	return calls
 }

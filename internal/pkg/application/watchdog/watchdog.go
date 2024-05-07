@@ -134,7 +134,7 @@ func checkLastObservedIsAfter(ctx context.Context, lastObserved time.Time, t tim
 func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string, tenants []string) {
 	logger := logging.GetFromContext(ctx)
 
-	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID, tenants)
+	d, err := w.deviceRepository.GetByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
 		logger.Error("failed to get device by id", "err", err.Error())
 		return
