@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"time"
 
 	types "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
@@ -48,29 +46,25 @@ func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
 //go:generate moq -rm -out devicerepository_mock.go .
 
 type DeviceRepository interface {
-	GetDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
+	Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
 	GetOnlineDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
-	GetDeviceBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
-	GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
+	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
+	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
+	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
 
 	Save(ctx context.Context, device models.Device) error
 
-	UpdateDeviceStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error
-	UpdateDeviceState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
+	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error
+	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	GetTenants(ctx context.Context) []string
-
-	AddAlarm(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error
-	RemoveAlarmByID(ctx context.Context, alarmID string) (string, error)
-
-	Seed(ctx context.Context, csvReader io.Reader, tenants []string) error
 }
 
 type Repository struct {
 	storage jsonstore.JsonStorage
 }
 
-func (r Repository) GetDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error) {
+func (r Repository) Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error) {
 	result, err := r.storage.FetchType(ctx, TypeName, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
 	if err != nil {
 		return types.Collection[models.Device]{}, err
@@ -116,7 +110,7 @@ func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, ten
 	}, nil
 }
 
-func (r Repository) GetDeviceBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 	q := fmt.Sprintf("data ->> 'sensorID' = '%s'", sensorID)
 	result, err := r.storage.QueryType(ctx, TypeName, q, tenants)
 	if err != nil {
@@ -137,7 +131,7 @@ func (r Repository) GetDeviceBySensorID(ctx context.Context, sensorID string, te
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")
 
-func (r Repository) GetDeviceByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+func (r Repository) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
 	result, err := r.storage.FindByID(ctx, deviceID, TypeName, tenants)
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
@@ -150,6 +144,24 @@ func (r Repository) GetDeviceByDeviceID(ctx context.Context, deviceID string, te
 	}
 
 	return jsonstore.MapOne[models.Device](result)
+}
+
+func (r Repository) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
+	q := fmt.Sprintf("data @> '{\"alarms\":[\"%s\"]}'", alarmID)
+	result, err := r.storage.QueryType(ctx, TypeName, q, tenants)
+	if err != nil {
+		if errors.Is(err, jsonstore.ErrNoRows) {
+			return models.Device{}, ErrDeviceNotFound
+		}
+		return models.Device{}, err
+	}
+	if result.Count == 0 {
+		return models.Device{}, ErrDeviceNotFound
+	}
+	if result.Count > 1 {
+		return models.Device{}, fmt.Errorf("too many devices found")
+	}
+	return jsonstore.MapOne[models.Device](result.Data[0])
 }
 
 func (r Repository) Save(ctx context.Context, device models.Device) error {
@@ -166,8 +178,8 @@ func (r Repository) Save(ctx context.Context, device models.Device) error {
 	return nil
 }
 
-func (d Repository) UpdateDeviceStatus(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
-	device, err := d.GetDeviceByDeviceID(ctx, deviceID, []string{tenant})
+func (d Repository) UpdateStatus(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+	device, err := d.GetByDeviceID(ctx, deviceID, []string{tenant})
 	if err != nil {
 		return err
 	}
@@ -177,8 +189,8 @@ func (d Repository) UpdateDeviceStatus(ctx context.Context, deviceID string, ten
 	return d.Save(ctx, device)
 }
 
-func (d Repository) UpdateDeviceState(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
-	device, err := d.GetDeviceByDeviceID(ctx, deviceID, []string{tenant})
+func (d Repository) UpdateState(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+	device, err := d.GetByDeviceID(ctx, deviceID, []string{tenant})
 	if err != nil {
 		return err
 	}
@@ -190,12 +202,4 @@ func (d Repository) UpdateDeviceState(ctx context.Context, deviceID string, tena
 
 func (d Repository) GetTenants(ctx context.Context) []string {
 	return d.storage.GetTenants(ctx)
-}
-
-func (d Repository) AddAlarm(ctx context.Context, deviceID string, alarmID string, severity int, observedAt time.Time) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (d Repository) RemoveAlarmByID(ctx context.Context, alarmID string) (string, error) {
-	return "", fmt.Errorf("not implemented")
 }

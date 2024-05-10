@@ -50,6 +50,7 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Get("/{deviceID}", getDeviceDetails(log, svc))
 				r.Get("/{deviceID}/alarms", getAlarmsHandler(log, alarmSvc))
 				r.Post("/", createDeviceHandler(log, svc))
+				r.Put("/{deviceID}", updateDeviceHandler(log, svc))
 				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
 			})
 
@@ -151,7 +152,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		if sensorID != "" {
 			ctx = logging.NewContextWithLogger(ctx, requestLogger, slog.String("sensor_id", sensorID))
 
-			device, err := svc.GetDeviceBySensorID(ctx, sensorID, allowedTenants)
+			device, err := svc.GetBySensorID(ctx, sensorID, allowedTenants)
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				requestLogger.Debug("device not found", "sensor_id", sensorID)
 				w.WriteHeader(http.StatusNotFound)
@@ -173,7 +174,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		} else {
 			offset, limit := getOffsetAndLimit(r)
-			collection, err := svc.GetDevices(ctx, offset, limit, allowedTenants)
+			collection, err := svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
 				requestLogger.Error("unable to fetch devices", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -215,7 +216,7 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
-		device, err := svc.GetDeviceByDeviceID(ctx, deviceID, allowedTenants)
+		device, err := svc.GetByDeviceID(ctx, deviceID, allowedTenants)
 		if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 			requestLogger.Debug("device not found")
 			w.WriteHeader(http.StatusNotFound)
@@ -258,7 +259,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			err = svc.Import(ctx, file, allowedTenants)
+			err = svc.Seed(ctx, file, allowedTenants)
 			if err != nil {
 				requestLogger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -279,7 +280,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			var d types.Device
 			err = json.Unmarshal(body, &d)
 			if err != nil {
-				requestLogger.Error("unable to unmarshal body", "err", err.Error())
+				requestLogger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -290,7 +291,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			err = svc.CreateDevice(ctx, d)
+			err = svc.Create(ctx, d)
 			if err != nil {
 				requestLogger.Error("unable to create device", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -304,6 +305,55 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 		requestLogger.Error("Unsupported MediaType")
 		w.WriteHeader(http.StatusUnsupportedMediaType)
+	}
+}
+
+func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		defer r.Body.Close()
+
+		ctx, span := tracer.Start(r.Context(), "update-device")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		if !isApplicationJson(r) {
+			requestLogger.Error("Unsupported MediaType")
+			w.WriteHeader(http.StatusUnsupportedMediaType)
+		}
+
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			requestLogger.Error("unable to read body", "err", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var d types.Device
+		err = json.Unmarshal(body, &d)
+		if err != nil {
+			requestLogger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if !slices.Contains(allowedTenants, d.Tenant) {
+			requestLogger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		err = svc.Update(ctx, d)
+		if err != nil {
+			requestLogger.Error("unable to create device", "err", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -336,7 +386,7 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 			return
 		}
 
-		err = svc.UpdateDevice(ctx, deviceID, fields, allowedTenants)
+		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
 			requestLogger.Error("unable to update device", "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
@@ -365,13 +415,13 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 
 		if deviceID != "" {
 			ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", deviceID))
-			collection, err = svc.GetAlarmsByRefID(ctx, deviceID, offset, limit, allowedTenants)
+			collection, err = svc.GetByRefID(ctx, deviceID, offset, limit, allowedTenants)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 		} else {
-			collection, err = svc.GetAlarms(ctx, offset, limit, allowedTenants)
+			collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -409,7 +459,7 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		alarmID := chi.URLParam(r, "alarmID")
-		alarm, err := svc.GetAlarmByID(ctx, alarmID, allowedTenants)
+		alarm, err := svc.GetByID(ctx, alarmID, allowedTenants)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
@@ -437,7 +487,7 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		alarmID := chi.URLParam(r, "alarmID")
-		alarm, err := svc.GetAlarmByID(ctx, alarmID, allowedTenants)
+		alarm, err := svc.GetByID(ctx, alarmID, allowedTenants)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return

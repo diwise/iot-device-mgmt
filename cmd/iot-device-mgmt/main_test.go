@@ -152,15 +152,15 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 		t.SkipNow()
 	}
 
-	err = repo.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
-	is.NoErr(err)
-
 	msgCtx := messaging.MsgContextMock{}
 	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
 		return nil
 	}
 
 	app := devicemanagement.New(repo, &msgCtx)
+	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
+	is.NoErr(err)
+
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)

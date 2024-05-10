@@ -1,3 +1,0 @@
-deviceID;functionID;alarmName;alarmType;min;max;severity;description
-;;deviceNotObserved;-;;;1;
-;;UPLINK_FCNT_RETRANSMISSION;-;;;1;

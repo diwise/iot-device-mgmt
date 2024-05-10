@@ -10,9 +10,9 @@ import (
 const AlarmDeviceNotObserved string = "DeviceNotObserved"
 
 type AlarmCreated struct {
-	Alarm     types.Alarm  `json:"alarm"`
-	Tenant    string    `json:"tenant"`
-	Timestamp time.Time `json:"timestamp"`
+	Alarm     types.Alarm `json:"alarm"`
+	Tenant    string      `json:"tenant"`
+	Timestamp time.Time   `json:"timestamp"`
 }
 
 func (l *AlarmCreated) ContentType() string {
@@ -42,4 +42,3 @@ func (l *AlarmClosed) Body() []byte {
 	b, _ := json.Marshal(l)
 	return b
 }
-

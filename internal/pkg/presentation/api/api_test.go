@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
 )
@@ -25,14 +27,21 @@ func TestCreateDeviceHandler(t *testing.T) {
 	body := new(bytes.Buffer)
 
 	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SeedFunc: func(ctx context.Context, csvReader io.Reader, tenants []string) error {
+		SaveFunc: func(ctx context.Context, device types.Device) error {
 			return nil
+		},
+		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+			return types.Device{}, fmt.Errorf("device not found")
 		},
 	}
 
-	msgCtx := messaging.MsgContextMock{}
-	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
-		return nil
+	msgCtx := messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
 	}
 
 	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx)
@@ -53,7 +62,7 @@ func TestCreateDeviceHandler(t *testing.T) {
 
 	createDeviceHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
 
-	is.Equal(1, len(deviceMgmtRepoMock.SeedCalls()))
+	is.Equal(4, len(deviceMgmtRepoMock.SaveCalls()))
 }
 
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
