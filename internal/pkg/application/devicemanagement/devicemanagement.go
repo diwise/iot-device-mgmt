@@ -15,6 +15,7 @@ import (
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"gopkg.in/yaml.v2"
 )
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
@@ -23,7 +24,6 @@ type DeviceManagement interface {
 	Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
-
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
 
 	Create(ctx context.Context, device models.Device) error
@@ -34,6 +34,9 @@ type DeviceManagement interface {
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	Seed(ctx context.Context, reader io.Reader, tenants []string) error
+
+	GetDeviceProfiles(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error)
+	AddDeviceProfiles(ctx context.Context, reader io.Reader, tenants []string) error
 }
 
 type svc struct {
@@ -207,6 +210,39 @@ func (d svc) UpdateState(ctx context.Context, deviceID, tenant string, deviceSta
 		State:     deviceState.State,
 		Timestamp: deviceState.ObservedAt,
 	})
+}
+
+func (d svc) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error) {
+	return d.storage.GetDeviceProfiles(ctx, name, tenants)
+}
+
+type DeviceManagementConfig struct {
+	DeviceProfiles []models.DeviceProfile `yaml:"deviceprofiles"`
+}
+
+func (d svc) AddDeviceProfiles(ctx context.Context, reader io.Reader, tenants []string) error {
+	config := DeviceManagementConfig{}
+
+	b, err := io.ReadAll(reader)
+	if err != nil {
+		return err
+	}
+	
+	err = yaml.Unmarshal(b, &config)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, dp := range config.DeviceProfiles {
+		err := d.storage.AddDeviceProfile(ctx, dp)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
 }
 
 func MapOne[T any](v any) (T, error) {

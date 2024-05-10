@@ -20,6 +20,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //		// make and configure a mocked DeviceRepository
 //		mockedDeviceRepository := &DeviceRepositoryMock{
+//			AddDeviceProfileFunc: func(ctx context.Context, d models.DeviceProfile) error {
+//				panic("mock out the AddDeviceProfile method")
+//			},
 //			GetFunc: func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error) {
 //				panic("mock out the Get method")
 //			},
@@ -28,6 +31,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			},
 //			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetBySensorID method")
+//			},
+//			GetDeviceProfilesFunc: func(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error) {
+//				panic("mock out the GetDeviceProfiles method")
 //			},
 //			GetOnlineDevicesFunc: func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error) {
 //				panic("mock out the GetOnlineDevices method")
@@ -54,6 +60,9 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //	}
 type DeviceRepositoryMock struct {
+	// AddDeviceProfileFunc mocks the AddDeviceProfile method.
+	AddDeviceProfileFunc func(ctx context.Context, d models.DeviceProfile) error
+
 	// GetFunc mocks the Get method.
 	GetFunc func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error)
 
@@ -62,6 +71,9 @@ type DeviceRepositoryMock struct {
 
 	// GetBySensorIDFunc mocks the GetBySensorID method.
 	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
+
+	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
+	GetDeviceProfilesFunc func(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error)
 
 	// GetOnlineDevicesFunc mocks the GetOnlineDevices method.
 	GetOnlineDevicesFunc func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error)
@@ -83,6 +95,13 @@ type DeviceRepositoryMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// AddDeviceProfile holds details about calls to the AddDeviceProfile method.
+		AddDeviceProfile []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// D is the d argument value.
+			D models.DeviceProfile
+		}
 		// Get holds details about calls to the Get method.
 		Get []struct {
 			// Ctx is the ctx argument value.
@@ -109,6 +128,15 @@ type DeviceRepositoryMock struct {
 			Ctx context.Context
 			// SensorID is the sensorID argument value.
 			SensorID string
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
+		// GetDeviceProfiles holds details about calls to the GetDeviceProfiles method.
+		GetDeviceProfiles []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Name is the name argument value.
+			Name string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -167,15 +195,53 @@ type DeviceRepositoryMock struct {
 			DeviceStatus models.DeviceStatus
 		}
 	}
-	lockGet              sync.RWMutex
-	lockGetByDeviceID    sync.RWMutex
-	lockGetBySensorID    sync.RWMutex
-	lockGetOnlineDevices sync.RWMutex
-	lockGetTenants       sync.RWMutex
-	lockGetWithAlarmID   sync.RWMutex
-	lockSave             sync.RWMutex
-	lockUpdateState      sync.RWMutex
-	lockUpdateStatus     sync.RWMutex
+	lockAddDeviceProfile  sync.RWMutex
+	lockGet               sync.RWMutex
+	lockGetByDeviceID     sync.RWMutex
+	lockGetBySensorID     sync.RWMutex
+	lockGetDeviceProfiles sync.RWMutex
+	lockGetOnlineDevices  sync.RWMutex
+	lockGetTenants        sync.RWMutex
+	lockGetWithAlarmID    sync.RWMutex
+	lockSave              sync.RWMutex
+	lockUpdateState       sync.RWMutex
+	lockUpdateStatus      sync.RWMutex
+}
+
+// AddDeviceProfile calls AddDeviceProfileFunc.
+func (mock *DeviceRepositoryMock) AddDeviceProfile(ctx context.Context, d models.DeviceProfile) error {
+	if mock.AddDeviceProfileFunc == nil {
+		panic("DeviceRepositoryMock.AddDeviceProfileFunc: method is nil but DeviceRepository.AddDeviceProfile was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		D   models.DeviceProfile
+	}{
+		Ctx: ctx,
+		D:   d,
+	}
+	mock.lockAddDeviceProfile.Lock()
+	mock.calls.AddDeviceProfile = append(mock.calls.AddDeviceProfile, callInfo)
+	mock.lockAddDeviceProfile.Unlock()
+	return mock.AddDeviceProfileFunc(ctx, d)
+}
+
+// AddDeviceProfileCalls gets all the calls that were made to AddDeviceProfile.
+// Check the length with:
+//
+//	len(mockedDeviceRepository.AddDeviceProfileCalls())
+func (mock *DeviceRepositoryMock) AddDeviceProfileCalls() []struct {
+	Ctx context.Context
+	D   models.DeviceProfile
+} {
+	var calls []struct {
+		Ctx context.Context
+		D   models.DeviceProfile
+	}
+	mock.lockAddDeviceProfile.RLock()
+	calls = mock.calls.AddDeviceProfile
+	mock.lockAddDeviceProfile.RUnlock()
+	return calls
 }
 
 // Get calls GetFunc.
@@ -299,6 +365,46 @@ func (mock *DeviceRepositoryMock) GetBySensorIDCalls() []struct {
 	mock.lockGetBySensorID.RLock()
 	calls = mock.calls.GetBySensorID
 	mock.lockGetBySensorID.RUnlock()
+	return calls
+}
+
+// GetDeviceProfiles calls GetDeviceProfilesFunc.
+func (mock *DeviceRepositoryMock) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error) {
+	if mock.GetDeviceProfilesFunc == nil {
+		panic("DeviceRepositoryMock.GetDeviceProfilesFunc: method is nil but DeviceRepository.GetDeviceProfiles was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Name    string
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Name:    name,
+		Tenants: tenants,
+	}
+	mock.lockGetDeviceProfiles.Lock()
+	mock.calls.GetDeviceProfiles = append(mock.calls.GetDeviceProfiles, callInfo)
+	mock.lockGetDeviceProfiles.Unlock()
+	return mock.GetDeviceProfilesFunc(ctx, name, tenants)
+}
+
+// GetDeviceProfilesCalls gets all the calls that were made to GetDeviceProfiles.
+// Check the length with:
+//
+//	len(mockedDeviceRepository.GetDeviceProfilesCalls())
+func (mock *DeviceRepositoryMock) GetDeviceProfilesCalls() []struct {
+	Ctx     context.Context
+	Name    string
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Name    string
+		Tenants []string
+	}
+	mock.lockGetDeviceProfiles.RLock()
+	calls = mock.calls.GetDeviceProfiles
+	mock.lockGetDeviceProfiles.RUnlock()
 	return calls
 }
 

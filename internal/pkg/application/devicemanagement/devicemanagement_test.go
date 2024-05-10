@@ -16,6 +16,7 @@ import (
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
 	"github.com/matryer/is"
+	"gopkg.in/yaml.v2"
 )
 
 func TestUpdateDevice(t *testing.T) {
@@ -148,6 +149,14 @@ func TestSeed(t *testing.T) {
 	is.True(devices.TotalCount > 0)
 }
 
+func TestDeviceProfiles(t *testing.T) {
+	is := is.New(t)
+	b := []byte(deviceProfilesYaml)
+	dp := DeviceManagementConfig{}
+	err := yaml.Unmarshal(b, &dp)
+	is.NoErr(err)
+}
+
 func newAlarmClosed(alarmID string) *alarms.AlarmClosed {
 	return &alarms.AlarmClosed{
 		ID:        alarmID,
@@ -253,6 +262,35 @@ a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsy
 5679;intern-5679;0.0;0.0;;urn:oma:lwm2m:ext:3330,urn:oma:lwm2m:ext:3;axsensor;AXsensor;Mäter nivå i avlopp;true;default;0;
 `
 
-const internCsv string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-5678;intern-5678;62.0;17.0;soil;urn:oma:lwm2m:ext:3302;enviot;name-5678;desc-5678;false;_test;60; 
+
+
+
+
+const deviceProfilesYaml string = `
+deviceprofiles:
+  - name: qalcosonic
+    decoder: qalcosonic
+    interval: 3600
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3424
+      - urn:oma:lwm2m:ext:3303
+  - name: axsensor
+    decoder: axsensor
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3303
+`
+const typesYaml string = `
+types:
+- urn: urn:oma:lwm2m:ext:3
+  name: Device
+- urn: urn:oma:lwm2m:ext:3424 
+  name: WaterMeter
+- urn: urn:oma:lwm2m:ext:3303
+  name: Temperature
 `

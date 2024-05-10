@@ -26,8 +26,11 @@ import (
 
 const serviceName string = "iot-device-mgmt"
 
-var knownDevicesFile string
-var opaFilePath string
+var (
+	knownDevicesFile   string
+	opaFilePath        string
+	deviceProfilesFile string
+)
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -35,6 +38,7 @@ func main() {
 	defer cleanup()
 
 	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/data/devices.csv", "A file containing known devices")
+	flag.StringVar(&deviceProfilesFile, "profiles", "/opt/diwise/config/deviceprofiles.yaml", "A yaml file containing device profiles")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
@@ -52,6 +56,7 @@ func main() {
 	mgmtSvc := devicemanagement.New(deviceStorage, messenger)
 	alarmSvc := alarms.New(alarmStorage, messenger)
 
+	loadDeviceProfilesOrDie(ctx, mgmtSvc)
 	seedDataOrDie(ctx, mgmtSvc)
 
 	watchdog := watchdog.New(deviceStorage, messenger)
@@ -88,6 +93,23 @@ func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.
 	}
 
 	return repo
+}
+
+func loadDeviceProfilesOrDie(ctx context.Context, s devicemanagement.DeviceManagement) {
+	if _, err := os.Stat(deviceProfilesFile); os.IsNotExist(err) {
+		fatal(ctx, "deviceprofiles configuration file not found", err)
+	}
+
+	f, err := os.Open(deviceProfilesFile)
+	if err != nil {
+		fatal(ctx, "could not open device profiles configuration", err)
+	}
+	defer f.Close()
+
+	err = s.AddDeviceProfiles(ctx, f, []string{"default"})
+	if err != nil {
+		fatal(ctx, "could not add device profiles", err)
+	}
 }
 
 func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {

@@ -59,6 +59,10 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Get("/{alarmID}", getAlarmDetailsHandler(log, alarmSvc))
 				r.Patch("/{alarmID}/close", closeAlarmHandler(log, alarmSvc))
 			})
+
+			r.Route("/deviceprofiles", func(r chi.Router) {
+				r.Get("/", queryDeviceProfilesHandler(log, svc))
+			})
 		})
 	})
 
@@ -110,13 +114,13 @@ func createLinks(u *url.URL, m *meta) *links {
 	return links
 }
 
-type CollectionResponse struct {
+type ApiResponse struct {
 	Meta  *meta  `json:"meta,omitempty"`
 	Data  any    `json:"data"`
 	Links *links `json:"links,omitempty"`
 }
 
-func (r CollectionResponse) Body() []byte {
+func (r ApiResponse) Body() []byte {
 	b, _ := json.Marshal(r)
 	return b
 }
@@ -164,7 +168,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			response := CollectionResponse{
+			response := ApiResponse{
 				Data: device,
 			}
 
@@ -188,7 +192,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				Count:        collection.Count,
 			}
 
-			response := CollectionResponse{
+			response := ApiResponse{
 				Meta:  meta,
 				Data:  collection.Data,
 				Links: createLinks(r.URL, meta),
@@ -228,7 +232,7 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 			return
 		}
 
-		response := CollectionResponse{
+		response := ApiResponse{
 			Data: device,
 		}
 
@@ -421,13 +425,13 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 				return
 			}
 		} else {
-			collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 		}
 
+		collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 		meta := &meta{
 			TotalRecords: collection.TotalCount,
 			Offset:       &collection.Offset,
@@ -435,7 +439,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 			Count:        collection.Count,
 		}
 
-		response := CollectionResponse{
+		response := ApiResponse{
 			Meta:  meta,
 			Data:  collection.Data,
 			Links: createLinks(r.URL, meta),
@@ -465,7 +469,7 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 			return
 		}
 
-		response := CollectionResponse{
+		response := ApiResponse{
 			Data: alarm,
 		}
 
@@ -500,6 +504,56 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		}
 
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		defer r.Body.Close()
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "query-deviceprofiles")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		name := r.URL.Query().Get("name")
+
+		profiles, err := svc.GetDeviceProfiles(ctx, name, allowedTenants)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if len(profiles.Data) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var response ApiResponse
+
+		if len(profiles.Data) == 1 {
+			response = ApiResponse{
+				Data: profiles.Data[0],
+			}
+		} else {
+			meta := &meta{
+				TotalRecords: profiles.TotalCount,
+				Offset:       &profiles.Offset,
+				Limit:        &profiles.Limit,
+				Count:        profiles.Count,
+			}
+			response = ApiResponse{
+				Data:  profiles.Data,
+				Meta:  meta,
+				Links: createLinks(r.URL, meta),
+			}
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Body())
 	}
 }
 

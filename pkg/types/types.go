@@ -36,9 +36,10 @@ type Tag struct {
 }
 
 type DeviceProfile struct {
-	Name     string `json:"name"`
-	Decoder  string `json:"decoder"`
-	Interval int    `json:"interval"`
+	Name     string   `json:"name" yaml:"name"`
+	Decoder  string   `json:"decoder" yaml:"decoder"`
+	Interval int      `json:"interval" yaml:"interval"`
+	Types    []string `json:"types,omitempty" yaml:"types"`
 }
 
 type Lwm2mType struct {

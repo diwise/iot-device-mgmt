@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	types "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
@@ -13,17 +14,20 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const TypeName string = "Device"
+const (
+	TypeName              string = "Device"
+	DeviceProfileTypeName string = "DeviceProfile"
+)
 
 const storageConfiguration string = `
 serviceName: device-management
 entities:
   - idPattern: ^
     type: Device
-    tableName: devices
+    tableName: mgmt_devices
   - idPattern: ^
-    type: DeviceModel
-    tableName: deviceModels
+    type: DeviceProfile
+    tableName: mgmt_device_profiles
 `
 
 func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
@@ -58,6 +62,9 @@ type DeviceRepository interface {
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	GetTenants(ctx context.Context) []string
+
+	GetDeviceProfiles(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error)
+	AddDeviceProfile(ctx context.Context, d models.DeviceProfile) error
 }
 
 type Repository struct {
@@ -202,4 +209,54 @@ func (d Repository) UpdateState(ctx context.Context, deviceID string, tenant str
 
 func (d Repository) GetTenants(ctx context.Context) []string {
 	return d.storage.GetTenants(ctx)
+}
+
+func (d Repository) AddDeviceProfile(ctx context.Context, profile models.DeviceProfile) error {
+	b, err := json.Marshal(profile)
+	if err != nil {
+		return err
+	}
+
+	return d.storage.Store(ctx, profile.Name, DeviceProfileTypeName, b, "default")
+}
+
+func (d Repository) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error) {
+	// TODO: device profiles by tenant?
+
+	if !slices.Contains(tenants, "default") {
+		tenants = append(tenants, "default")
+	}
+
+	if len(name) > 0 {
+		b, err := d.storage.FindByID(ctx, name, DeviceProfileTypeName, tenants)
+		if err != nil {
+			return types.Collection[models.DeviceProfile]{}, err
+		}
+		dp, err := jsonstore.MapOne[models.DeviceProfile](b)
+		if err != nil {
+			return types.Collection[models.DeviceProfile]{}, err
+		}
+		collection := types.Collection[models.DeviceProfile]{
+			Data:       []models.DeviceProfile{dp},
+			Count:      1,
+			Offset:     0,
+			Limit:      1,
+			TotalCount: 1,
+		}
+		return collection, nil
+	}
+
+	result, err := d.storage.FetchType(ctx, DeviceProfileTypeName, tenants)
+	if err != nil {
+		return types.Collection[models.DeviceProfile]{}, err
+	}
+	dp, err := jsonstore.MapAll[models.DeviceProfile](result.Data)
+	collection := types.Collection[models.DeviceProfile]{
+		Data:       dp,
+		Count:      result.Count,
+		Offset:     result.Offset,
+		Limit:      result.Limit,
+		TotalCount: result.TotalCount,
+	}
+	return collection, nil
 }
