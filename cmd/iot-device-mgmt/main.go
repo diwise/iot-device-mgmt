@@ -10,9 +10,9 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	aDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
-	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	alarmStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"
+	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -21,38 +21,40 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const serviceName string = "iot-device-mgmt"
 
 var knownDevicesFile string
 var opaFilePath string
-var alarmConfigFile string
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
 	ctx, _, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
-	flag.StringVar(&alarmConfigFile, "alarms", "/opt/diwise/config/alarms.csv", "A file containing alarms")
+	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/data/devices.csv", "A file containing known devices")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	conn := setupDatabaseConnection(ctx)
-	deviceDB := setupDeviceDatabaseOrDie(ctx, conn)
-	alarmDB := setupAlarmDatabaseOrDie(ctx, conn)
+	p, err := jsonstore.NewPool(ctx, jsonstore.LoadConfiguration(ctx))
+	if err != nil {
+		panic(err)
+	}
+
+	deviceStorage := setupDeviceDatabaseOrDie(ctx, p)
+	alarmStorage := setupAlarmDatabaseOrDie(ctx, p)
 
 	messenger := setupMessagingOrDie(ctx, serviceName)
 	messenger.Start()
 
-	mgmtSvc := devicemanagement.New(deviceDB, messenger)
+	mgmtSvc := devicemanagement.New(deviceStorage, messenger)
+	alarmSvc := alarms.New(alarmStorage, messenger)
 
-	alarmSvc := alarms.New(alarmDB, messenger, alarms.LoadConfiguration(alarmConfigFile))
-	alarmSvc.Start()
-	defer alarmSvc.Stop()
+	seedDataOrDie(ctx, mgmtSvc)
 
-	watchdog := watchdog.New(deviceDB, messenger)
+	watchdog := watchdog.New(deviceStorage, messenger)
 	watchdog.Start(ctx)
 	defer watchdog.Stop(ctx)
 
@@ -69,37 +71,26 @@ func main() {
 	}
 }
 
-func setupDatabaseConnection(ctx context.Context) db.ConnectorFunc {
-	if os.Getenv("POSTGRES_HOST") != "" {
-		return db.NewPostgreSQLConnector(ctx, db.LoadConfigFromEnv(ctx))
+func setupAlarmDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) alarmStore.AlarmRepository {
+	repo, err := alarmStore.NewRepository(ctx, p)
+	if err != nil {
+		panic(err)
 	}
-
-	logger := logging.GetFromContext(ctx)
-	logger.Info("no sql database configured, using builtin sqlite instead")
-	return db.NewSQLiteConnector(ctx)
+	return repo
 }
 
-func setupAlarmDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) aDb.AlarmRepository {
-	var db aDb.AlarmRepository
+func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.DeviceRepository {
 	var err error
 
-	db, err = aDb.NewAlarmRepository(conn)
+	repo, err := deviceStore.NewRepository(ctx, p)
 	if err != nil {
-		fatal(ctx, "failed to connect to database", err)
+		panic(err)
 	}
 
-	return db
+	return repo
 }
 
-func setupDeviceDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) dmDb.DeviceRepository {
-	var db dmDb.DeviceRepository
-	var err error
-
-	db, err = dmDb.NewDeviceRepository(conn)
-	if err != nil {
-		fatal(ctx, "failed to connect to database", err)
-	}
-
+func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {
 	if _, err := os.Stat(knownDevicesFile); os.IsNotExist(err) {
 		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be found", knownDevicesFile), err)
 	}
@@ -110,12 +101,10 @@ func setupDeviceDatabaseOrDie(ctx context.Context, conn db.ConnectorFunc) dmDb.D
 	}
 	defer f.Close()
 
-	err = db.Seed(ctx, f)
+	err = svc.Seed(ctx, f, []string{"default"})
 	if err != nil {
 		fatal(ctx, "could not seed database with devices", err)
 	}
-
-	return db
 }
 
 func setupMessagingOrDie(ctx context.Context, serviceName string) messaging.MsgContext {

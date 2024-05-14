@@ -3,149 +3,161 @@ package devicemanagement
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
 	"log/slog"
 
+	"github.com/diwise/iot-device-mgmt/pkg/types"
+	models "github.com/diwise/iot-device-mgmt/pkg/types"
+
 	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-
-	r "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
-
-	"github.com/samber/lo"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
+	"go.opentelemetry.io/otel"
 )
 
-func DeviceStatusHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
-	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
-		log := l.With(slog.String("handler", "devicemanagement.DeviceStatusHandler"))
+var tracer = otel.Tracer("iot-device-mgmt/device")
 
-		status := struct {
-			DeviceID     string   `json:"deviceID"`
-			BatteryLevel int      `json:"batteryLevel"`
-			Code         int      `json:"statusCode"`
-			Messages     []string `json:"statusMessages,omitempty"`
-			Tenant       string   `json:"tenant,omitempty"`
-			Timestamp    string   `json:"timestamp"`
+func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement) messaging.TopicMessageHandler {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		var err error
+
+		ctx, span := tracer.Start(ctx, "device-status")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
+
+		deviceStatus := struct {
+			DeviceID  string `json:"deviceID"`
+			Tenant    string `json:"tenant,omitempty"`
+			Timestamp string `json:"timestamp"`
 		}{}
 
-		err := json.Unmarshal(itm.Body(), &status)
+		err = json.Unmarshal(itm.Body(), &deviceStatus)
 		if err != nil {
 			log.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
-		log = log.With(slog.String("device_id", status.DeviceID))
-		ctx = logging.NewContextWithLogger(ctx, log)
-
-		lastObserved, err := time.Parse(time.RFC3339Nano, status.Timestamp)
+		observedAt, err := time.Parse(time.RFC3339, deviceStatus.Timestamp)
 		if err != nil {
 			log.Error("no valid timestamp", "err", err.Error())
 			return
 		}
 
-		_, _, err = lo.AttemptWithDelay(3, 1*time.Second, func(index int, duration time.Duration) error {
-			return dm.UpdateDeviceStatus(ctx, status.DeviceID, r.DeviceStatus{
-				BatteryLevel: status.BatteryLevel,
-				LastObserved: lastObserved,
-			})
-		})
+		device, err := svc.GetByDeviceID(ctx, deviceStatus.DeviceID, []string{deviceStatus.Tenant})
 		if err != nil {
-			log.Error("could not update status on device", "err", err.Error())
+			log.Error("could not fetch device", "err", err.Error())
 			return
 		}
 
-		_, _, err = lo.AttemptWithDelay(3, 1*time.Second, func(index int, duration time.Duration) error {
-			return dm.UpdateDeviceState(ctx, status.DeviceID, r.DeviceState{
-				Online:     true,
-				State:      r.DeviceStateOK,
-				ObservedAt: lastObserved,
-			})
-		})
-		if err != nil {
-			log.Error("could not update state on device", "err", err.Error())
-			return
+		status := device.DeviceStatus
+		if observedAt.After(status.ObservedAt) || status.ObservedAt.IsZero() {
+			status.ObservedAt = observedAt
+			err := svc.UpdateStatus(ctx, device.DeviceID, device.Tenant, status)
+			if err != nil {
+				log.Error("could not update status", "err", err.Error())
+				return
+			}
+		}
+
+		state := device.DeviceState
+		if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
+			state.ObservedAt = observedAt
+			state.Online = true
+			state.State = models.DeviceStateOK
+			err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
+			if err != nil {
+				log.Error("could not update state", "err", err.Error())
+				return
+			}
 		}
 	}
 }
 
-func AlarmsCreatedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
+func NewAlarmCreatedHandler(svc DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
-		log := l.With(slog.String("handler", "AlarmsCreatedHandler"))
+		var err error
 
-		message := struct {
-			Alarm struct {
-				ID         uint      `json:"id"`
-				RefID      string    `json:"refID"`
-				Severity   int       `json:"severity"`
-				ObservedAt time.Time `json:"observedAt"`
-			} `json:"alarm"`
-			Timestamp time.Time `json:"timestamp"`
+		ctx, span := tracer.Start(ctx, "alarm-created")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
+
+		a := struct {
+			Alarm     types.Alarm `json:"alarm"`
+			Tenant    string      `json:"tenant"`
+			Timestamp time.Time   `json:"timestamp"`
 		}{}
 
-		err := json.Unmarshal(itm.Body(), &message)
+		err = json.Unmarshal(itm.Body(), &a)
 		if err != nil {
-			log.Error("failed to unmarshal message", "err", err.Error())
+			log.Error("failed to unmarshal alarm", "err", err.Error())
 			return
 		}
 
-		if len(message.Alarm.RefID) == 0 {
-			return
-		}
-
-		deviceID := message.Alarm.RefID
-		log = log.With(
-			slog.String("device_id", deviceID),
-			slog.Int("alarm_id", int(message.Alarm.ID)),
-		)
-		ctx = logging.NewContextWithLogger(ctx, log)
-
-		if message.Alarm.ID == 0 {
-			log.Error("alarm ID should not be 0")
-			return
-		}
-
-		d, err := dm.GetDeviceByDeviceID(ctx, deviceID)
+		device, err := svc.GetByDeviceID(ctx, a.Alarm.RefID, []string{a.Tenant})
 		if err != nil {
-			log.Debug("failed to retrieve device")
+			log.Error("could not get device by alarm refID", "device_id", a.Alarm.RefID, "err", err.Error())
 			return
 		}
 
-		err = dm.AddAlarm(ctx, deviceID, int(message.Alarm.ID), message.Alarm.Severity, message.Alarm.ObservedAt)
+		if slices.Contains(device.Alarms, a.Alarm.ID) {
+			log.Debug("alarm exists")
+			return
+		}
+
+		device.Alarms = append(device.Alarms, a.Alarm.ID)
+		if a.Timestamp.After(device.DeviceState.ObservedAt) {
+			device.DeviceState.State = types.DeviceStateWarning
+			device.DeviceState.ObservedAt = a.Timestamp
+		}
+
+		err = svc.Update(ctx, device)
 		if err != nil {
-			log.Debug("failed to add alarm")
+			log.Error("could not update device")
 			return
 		}
-
-		dm.UpdateDeviceState(ctx, deviceID, r.DeviceState{
-			Online:     d.DeviceState.Online,
-			State:      r.DeviceStateUnknown,
-			ObservedAt: message.Timestamp,
-		})
 	}
 }
 
-func AlarmsClosedHandler(messenger messaging.MsgContext, dm DeviceManagement) messaging.TopicMessageHandler {
+func NewAlarmClosedHandler(svc DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
-		log := l.With(slog.String("handler", "AlarmsClosedHandler"))
+		var err error
 
-		message := struct {
-			ID        int       `json:"id"`
+		ctx, span := tracer.Start(ctx, "alarm-closed")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
+
+		a := struct {
+			ID        string    `json:"id"`
 			Tenant    string    `json:"tenant"`
 			Timestamp time.Time `json:"timestamp"`
 		}{}
 
-		err := json.Unmarshal(itm.Body(), &message)
+		err = json.Unmarshal(itm.Body(), &a)
 		if err != nil {
-			log.Error("failed to unmarshal message", "err", err.Error())
+			log.Error("failed to unmarshal alarm", "err", err.Error())
 			return
 		}
 
-		log = log.With(slog.Int("alarm_id", message.ID))
-		ctx = logging.NewContextWithLogger(ctx, log)
-
-		err = dm.RemoveAlarm(ctx, message.ID)
+		device, err := svc.GetWithAlarmID(ctx, a.ID, []string{a.Tenant})
 		if err != nil {
-			log.Error("failed to remove alarm", "err", err.Error())
+			log.Error("could not get device by alarm id", "alarm_id", a.ID, "err", err.Error())
+			return
+		}
+
+		device.Alarms = slices.DeleteFunc(device.Alarms, func(s string) bool {
+			return s == a.ID
+		})
+
+		if len(device.Alarms) == 0 {
+			device.DeviceState.State = models.DeviceStateOK
+			device.DeviceState.ObservedAt = a.Timestamp
+		}
+
+		err = svc.Update(ctx, device)
+		if err != nil {
+			log.Error("could not update device")
 			return
 		}
 	}

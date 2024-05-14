@@ -5,7 +5,8 @@ package alarms
 
 import (
 	"context"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
+	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
 
@@ -19,29 +20,20 @@ var _ AlarmService = &AlarmServiceMock{}
 //
 //		// make and configure a mocked AlarmService
 //		mockedAlarmService := &AlarmServiceMock{
-//			AddAlarmFunc: func(ctx context.Context, alarm db.Alarm) error {
-//				panic("mock out the AddAlarm method")
+//			AddFunc: func(ctx context.Context, alarm models.Alarm) error {
+//				panic("mock out the Add method")
 //			},
-//			CloseAlarmFunc: func(ctx context.Context, alarmID int) error {
-//				panic("mock out the CloseAlarm method")
+//			CloseFunc: func(ctx context.Context, alarmID string, tenants []string) error {
+//				panic("mock out the Close method")
 //			},
-//			GetAlarmsFunc: func(ctx context.Context, tenants ...string) ([]db.Alarm, error) {
+//			GetAlarmByIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error) {
+//				panic("mock out the GetAlarmByID method")
+//			},
+//			GetAlarmsFunc: func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 //				panic("mock out the GetAlarms method")
 //			},
-//			GetAlarmsByIDFunc: func(ctx context.Context, id int) (db.Alarm, error) {
-//				panic("mock out the GetAlarmsByID method")
-//			},
-//			GetAlarmsByRefIDFunc: func(ctx context.Context, refID string, tenants ...string) ([]db.Alarm, error) {
+//			GetAlarmsByRefIDFunc: func(ctx context.Context, refID string, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 //				panic("mock out the GetAlarmsByRefID method")
-//			},
-//			GetConfigurationFunc: func() Configuration {
-//				panic("mock out the GetConfiguration method")
-//			},
-//			StartFunc: func()  {
-//				panic("mock out the Start method")
-//			},
-//			StopFunc: func()  {
-//				panic("mock out the Stop method")
 //			},
 //		}
 //
@@ -50,59 +42,58 @@ var _ AlarmService = &AlarmServiceMock{}
 //
 //	}
 type AlarmServiceMock struct {
-	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, alarm db.Alarm) error
+	// AddFunc mocks the Add method.
+	AddFunc func(ctx context.Context, alarm models.Alarm) error
 
-	// CloseAlarmFunc mocks the CloseAlarm method.
-	CloseAlarmFunc func(ctx context.Context, alarmID int) error
+	// CloseFunc mocks the Close method.
+	CloseFunc func(ctx context.Context, alarmID string, tenants []string) error
+
+	// GetAlarmByIDFunc mocks the GetAlarmByID method.
+	GetAlarmByIDFunc func(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error)
 
 	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, tenants ...string) ([]db.Alarm, error)
-
-	// GetAlarmsByIDFunc mocks the GetAlarmsByID method.
-	GetAlarmsByIDFunc func(ctx context.Context, id int) (db.Alarm, error)
+	GetAlarmsFunc func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error)
 
 	// GetAlarmsByRefIDFunc mocks the GetAlarmsByRefID method.
-	GetAlarmsByRefIDFunc func(ctx context.Context, refID string, tenants ...string) ([]db.Alarm, error)
-
-	// GetConfigurationFunc mocks the GetConfiguration method.
-	GetConfigurationFunc func() Configuration
-
-	// StartFunc mocks the Start method.
-	StartFunc func()
-
-	// StopFunc mocks the Stop method.
-	StopFunc func()
+	GetAlarmsByRefIDFunc func(ctx context.Context, refID string, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddAlarm holds details about calls to the AddAlarm method.
-		AddAlarm []struct {
+		// Add holds details about calls to the Add method.
+		Add []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Alarm is the alarm argument value.
-			Alarm db.Alarm
+			Alarm models.Alarm
 		}
-		// CloseAlarm holds details about calls to the CloseAlarm method.
-		CloseAlarm []struct {
+		// Close holds details about calls to the Close method.
+		Close []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// AlarmID is the alarmID argument value.
-			AlarmID int
+			AlarmID string
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
+		// GetAlarmByID holds details about calls to the GetAlarmByID method.
+		GetAlarmByID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// AlarmID is the alarmID argument value.
+			AlarmID string
+			// Tenants is the tenants argument value.
+			Tenants []string
 		}
 		// GetAlarms holds details about calls to the GetAlarms method.
 		GetAlarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
+			// Offset is the offset argument value.
+			Offset int
+			// Limit is the limit argument value.
+			Limit int
 			// Tenants is the tenants argument value.
 			Tenants []string
-		}
-		// GetAlarmsByID holds details about calls to the GetAlarmsByID method.
-		GetAlarmsByID []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// ID is the id argument value.
-			ID int
 		}
 		// GetAlarmsByRefID holds details about calls to the GetAlarmsByRefID method.
 		GetAlarmsByRefID []struct {
@@ -110,117 +101,157 @@ type AlarmServiceMock struct {
 			Ctx context.Context
 			// RefID is the refID argument value.
 			RefID string
+			// Offset is the offset argument value.
+			Offset int
+			// Limit is the limit argument value.
+			Limit int
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// GetConfiguration holds details about calls to the GetConfiguration method.
-		GetConfiguration []struct {
-		}
-		// Start holds details about calls to the Start method.
-		Start []struct {
-		}
-		// Stop holds details about calls to the Stop method.
-		Stop []struct {
-		}
 	}
-	lockAddAlarm         sync.RWMutex
-	lockCloseAlarm       sync.RWMutex
+	lockAdd              sync.RWMutex
+	lockClose            sync.RWMutex
+	lockGetAlarmByID     sync.RWMutex
 	lockGetAlarms        sync.RWMutex
-	lockGetAlarmsByID    sync.RWMutex
 	lockGetAlarmsByRefID sync.RWMutex
-	lockGetConfiguration sync.RWMutex
-	lockStart            sync.RWMutex
-	lockStop             sync.RWMutex
 }
 
-// AddAlarm calls AddAlarmFunc.
-func (mock *AlarmServiceMock) AddAlarm(ctx context.Context, alarm db.Alarm) error {
-	if mock.AddAlarmFunc == nil {
-		panic("AlarmServiceMock.AddAlarmFunc: method is nil but AlarmService.AddAlarm was just called")
+// Add calls AddFunc.
+func (mock *AlarmServiceMock) Add(ctx context.Context, alarm models.Alarm) error {
+	if mock.AddFunc == nil {
+		panic("AlarmServiceMock.AddFunc: method is nil but AlarmService.Add was just called")
 	}
 	callInfo := struct {
 		Ctx   context.Context
-		Alarm db.Alarm
+		Alarm models.Alarm
 	}{
 		Ctx:   ctx,
 		Alarm: alarm,
 	}
-	mock.lockAddAlarm.Lock()
-	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
-	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, alarm)
+	mock.lockAdd.Lock()
+	mock.calls.Add = append(mock.calls.Add, callInfo)
+	mock.lockAdd.Unlock()
+	return mock.AddFunc(ctx, alarm)
 }
 
-// AddAlarmCalls gets all the calls that were made to AddAlarm.
+// AddCalls gets all the calls that were made to Add.
 // Check the length with:
 //
-//	len(mockedAlarmService.AddAlarmCalls())
-func (mock *AlarmServiceMock) AddAlarmCalls() []struct {
+//	len(mockedAlarmService.AddCalls())
+func (mock *AlarmServiceMock) AddCalls() []struct {
 	Ctx   context.Context
-	Alarm db.Alarm
+	Alarm models.Alarm
 } {
 	var calls []struct {
 		Ctx   context.Context
-		Alarm db.Alarm
+		Alarm models.Alarm
 	}
-	mock.lockAddAlarm.RLock()
-	calls = mock.calls.AddAlarm
-	mock.lockAddAlarm.RUnlock()
+	mock.lockAdd.RLock()
+	calls = mock.calls.Add
+	mock.lockAdd.RUnlock()
 	return calls
 }
 
-// CloseAlarm calls CloseAlarmFunc.
-func (mock *AlarmServiceMock) CloseAlarm(ctx context.Context, alarmID int) error {
-	if mock.CloseAlarmFunc == nil {
-		panic("AlarmServiceMock.CloseAlarmFunc: method is nil but AlarmService.CloseAlarm was just called")
+// Close calls CloseFunc.
+func (mock *AlarmServiceMock) Close(ctx context.Context, alarmID string, tenants []string) error {
+	if mock.CloseFunc == nil {
+		panic("AlarmServiceMock.CloseFunc: method is nil but AlarmService.Close was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		AlarmID int
+		AlarmID string
+		Tenants []string
 	}{
 		Ctx:     ctx,
 		AlarmID: alarmID,
+		Tenants: tenants,
 	}
-	mock.lockCloseAlarm.Lock()
-	mock.calls.CloseAlarm = append(mock.calls.CloseAlarm, callInfo)
-	mock.lockCloseAlarm.Unlock()
-	return mock.CloseAlarmFunc(ctx, alarmID)
+	mock.lockClose.Lock()
+	mock.calls.Close = append(mock.calls.Close, callInfo)
+	mock.lockClose.Unlock()
+	return mock.CloseFunc(ctx, alarmID, tenants)
 }
 
-// CloseAlarmCalls gets all the calls that were made to CloseAlarm.
+// CloseCalls gets all the calls that were made to Close.
 // Check the length with:
 //
-//	len(mockedAlarmService.CloseAlarmCalls())
-func (mock *AlarmServiceMock) CloseAlarmCalls() []struct {
+//	len(mockedAlarmService.CloseCalls())
+func (mock *AlarmServiceMock) CloseCalls() []struct {
 	Ctx     context.Context
-	AlarmID int
+	AlarmID string
+	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
-		AlarmID int
+		AlarmID string
+		Tenants []string
 	}
-	mock.lockCloseAlarm.RLock()
-	calls = mock.calls.CloseAlarm
-	mock.lockCloseAlarm.RUnlock()
+	mock.lockClose.RLock()
+	calls = mock.calls.Close
+	mock.lockClose.RUnlock()
 	return calls
 }
 
-// GetAlarms calls GetAlarmsFunc.
-func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, tenants ...string) ([]db.Alarm, error) {
+// GetByID calls GetAlarmByIDFunc.
+func (mock *AlarmServiceMock) GetByID(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error) {
+	if mock.GetAlarmByIDFunc == nil {
+		panic("AlarmServiceMock.GetAlarmByIDFunc: method is nil but AlarmService.GetAlarmByID was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		AlarmID string
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		AlarmID: alarmID,
+		Tenants: tenants,
+	}
+	mock.lockGetAlarmByID.Lock()
+	mock.calls.GetAlarmByID = append(mock.calls.GetAlarmByID, callInfo)
+	mock.lockGetAlarmByID.Unlock()
+	return mock.GetAlarmByIDFunc(ctx, alarmID, tenants)
+}
+
+// GetAlarmByIDCalls gets all the calls that were made to GetAlarmByID.
+// Check the length with:
+//
+//	len(mockedAlarmService.GetAlarmByIDCalls())
+func (mock *AlarmServiceMock) GetAlarmByIDCalls() []struct {
+	Ctx     context.Context
+	AlarmID string
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		AlarmID string
+		Tenants []string
+	}
+	mock.lockGetAlarmByID.RLock()
+	calls = mock.calls.GetAlarmByID
+	mock.lockGetAlarmByID.RUnlock()
+	return calls
+}
+
+// Get calls GetAlarmsFunc.
+func (mock *AlarmServiceMock) Get(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 	if mock.GetAlarmsFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsFunc: method is nil but AlarmService.GetAlarms was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
+		Offset  int
+		Limit   int
 		Tenants []string
 	}{
 		Ctx:     ctx,
+		Offset:  offset,
+		Limit:   limit,
 		Tenants: tenants,
 	}
 	mock.lockGetAlarms.Lock()
 	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
 	mock.lockGetAlarms.Unlock()
-	return mock.GetAlarmsFunc(ctx, tenants...)
+	return mock.GetAlarmsFunc(ctx, offset, limit, tenants)
 }
 
 // GetAlarmsCalls gets all the calls that were made to GetAlarms.
@@ -229,10 +260,14 @@ func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, tenants ...string) 
 //	len(mockedAlarmService.GetAlarmsCalls())
 func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
 	Ctx     context.Context
+	Offset  int
+	Limit   int
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
+		Offset  int
+		Limit   int
 		Tenants []string
 	}
 	mock.lockGetAlarms.RLock()
@@ -241,60 +276,28 @@ func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
 	return calls
 }
 
-// GetAlarmsByID calls GetAlarmsByIDFunc.
-func (mock *AlarmServiceMock) GetAlarmsByID(ctx context.Context, id int) (db.Alarm, error) {
-	if mock.GetAlarmsByIDFunc == nil {
-		panic("AlarmServiceMock.GetAlarmsByIDFunc: method is nil but AlarmService.GetAlarmsByID was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-		ID  int
-	}{
-		Ctx: ctx,
-		ID:  id,
-	}
-	mock.lockGetAlarmsByID.Lock()
-	mock.calls.GetAlarmsByID = append(mock.calls.GetAlarmsByID, callInfo)
-	mock.lockGetAlarmsByID.Unlock()
-	return mock.GetAlarmsByIDFunc(ctx, id)
-}
-
-// GetAlarmsByIDCalls gets all the calls that were made to GetAlarmsByID.
-// Check the length with:
-//
-//	len(mockedAlarmService.GetAlarmsByIDCalls())
-func (mock *AlarmServiceMock) GetAlarmsByIDCalls() []struct {
-	Ctx context.Context
-	ID  int
-} {
-	var calls []struct {
-		Ctx context.Context
-		ID  int
-	}
-	mock.lockGetAlarmsByID.RLock()
-	calls = mock.calls.GetAlarmsByID
-	mock.lockGetAlarmsByID.RUnlock()
-	return calls
-}
-
-// GetAlarmsByRefID calls GetAlarmsByRefIDFunc.
-func (mock *AlarmServiceMock) GetAlarmsByRefID(ctx context.Context, refID string, tenants ...string) ([]db.Alarm, error) {
+// GetByRefID calls GetAlarmsByRefIDFunc.
+func (mock *AlarmServiceMock) GetByRefID(ctx context.Context, refID string, offset int, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
 	if mock.GetAlarmsByRefIDFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsByRefIDFunc: method is nil but AlarmService.GetAlarmsByRefID was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
 		RefID   string
+		Offset  int
+		Limit   int
 		Tenants []string
 	}{
 		Ctx:     ctx,
 		RefID:   refID,
+		Offset:  offset,
+		Limit:   limit,
 		Tenants: tenants,
 	}
 	mock.lockGetAlarmsByRefID.Lock()
 	mock.calls.GetAlarmsByRefID = append(mock.calls.GetAlarmsByRefID, callInfo)
 	mock.lockGetAlarmsByRefID.Unlock()
-	return mock.GetAlarmsByRefIDFunc(ctx, refID, tenants...)
+	return mock.GetAlarmsByRefIDFunc(ctx, refID, offset, limit, tenants)
 }
 
 // GetAlarmsByRefIDCalls gets all the calls that were made to GetAlarmsByRefID.
@@ -304,96 +307,19 @@ func (mock *AlarmServiceMock) GetAlarmsByRefID(ctx context.Context, refID string
 func (mock *AlarmServiceMock) GetAlarmsByRefIDCalls() []struct {
 	Ctx     context.Context
 	RefID   string
+	Offset  int
+	Limit   int
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
 		RefID   string
+		Offset  int
+		Limit   int
 		Tenants []string
 	}
 	mock.lockGetAlarmsByRefID.RLock()
 	calls = mock.calls.GetAlarmsByRefID
 	mock.lockGetAlarmsByRefID.RUnlock()
-	return calls
-}
-
-// GetConfiguration calls GetConfigurationFunc.
-func (mock *AlarmServiceMock) GetConfiguration() Configuration {
-	if mock.GetConfigurationFunc == nil {
-		panic("AlarmServiceMock.GetConfigurationFunc: method is nil but AlarmService.GetConfiguration was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockGetConfiguration.Lock()
-	mock.calls.GetConfiguration = append(mock.calls.GetConfiguration, callInfo)
-	mock.lockGetConfiguration.Unlock()
-	return mock.GetConfigurationFunc()
-}
-
-// GetConfigurationCalls gets all the calls that were made to GetConfiguration.
-// Check the length with:
-//
-//	len(mockedAlarmService.GetConfigurationCalls())
-func (mock *AlarmServiceMock) GetConfigurationCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockGetConfiguration.RLock()
-	calls = mock.calls.GetConfiguration
-	mock.lockGetConfiguration.RUnlock()
-	return calls
-}
-
-// Start calls StartFunc.
-func (mock *AlarmServiceMock) Start() {
-	if mock.StartFunc == nil {
-		panic("AlarmServiceMock.StartFunc: method is nil but AlarmService.Start was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockStart.Lock()
-	mock.calls.Start = append(mock.calls.Start, callInfo)
-	mock.lockStart.Unlock()
-	mock.StartFunc()
-}
-
-// StartCalls gets all the calls that were made to Start.
-// Check the length with:
-//
-//	len(mockedAlarmService.StartCalls())
-func (mock *AlarmServiceMock) StartCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockStart.RLock()
-	calls = mock.calls.Start
-	mock.lockStart.RUnlock()
-	return calls
-}
-
-// Stop calls StopFunc.
-func (mock *AlarmServiceMock) Stop() {
-	if mock.StopFunc == nil {
-		panic("AlarmServiceMock.StopFunc: method is nil but AlarmService.Stop was just called")
-	}
-	callInfo := struct {
-	}{}
-	mock.lockStop.Lock()
-	mock.calls.Stop = append(mock.calls.Stop, callInfo)
-	mock.lockStop.Unlock()
-	mock.StopFunc()
-}
-
-// StopCalls gets all the calls that were made to Stop.
-// Check the length with:
-//
-//	len(mockedAlarmService.StopCalls())
-func (mock *AlarmServiceMock) StopCalls() []struct {
-} {
-	var calls []struct {
-	}
-	mock.lockStop.RLock()
-	calls = mock.calls.Stop
-	mock.lockStop.RUnlock()
 	return calls
 }

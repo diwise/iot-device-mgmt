@@ -5,9 +5,9 @@ package test
 
 import (
 	"context"
+	"github.com/diwise/iot-device-mgmt/pkg/client"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
-	"github.com/diwise/iot-device-mgmt/pkg/client"
 )
 
 // Ensure, that DeviceManagementClientMock does implement DeviceManagementClient.
