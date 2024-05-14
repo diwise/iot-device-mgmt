@@ -115,13 +115,13 @@ types:
     name: FillingLevel 
   - urn: urn:oma:lwm2m:ext:3424
     name: WaterMeter
-  - urn: urn:oma:lwm2m:ext:3424
+  - urn: urn:oma:lwm2m:ext:3411
     name: Battery
-  - urn: urn:oma:lwm2m:ext:3424
+  - urn: urn:oma:lwm2m:ext:3434
     name: PeopleCounter
   - urn: urn:oma:lwm2m:ext:3328
     name: Power
   - urn: urn:oma:lwm2m:ext:3331
-    name: Enery
+    name: Energy
   - urn: urn:oma:lwm2m:ext:3350
     name: Stopwatch
