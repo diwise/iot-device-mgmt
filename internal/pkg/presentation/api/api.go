@@ -60,8 +60,10 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Patch("/{alarmID}/close", closeAlarmHandler(log, alarmSvc))
 			})
 
-			r.Route("/deviceprofiles", func(r chi.Router) {
-				r.Get("/", queryDeviceProfilesHandler(log, svc))
+			r.Route("/admin", func(r chi.Router) {
+				r.Get("/deviceprofiles", queryDeviceProfilesHandler(log, svc))
+				r.Get("/deviceprofiles/{deviceprofileid}", queryDeviceProfilesHandler(log, svc))
+				r.Get("/lwm2mtypes", queryLwm2mTypesHandler(log, svc))
 			})
 		})
 	})
@@ -90,27 +92,33 @@ func createLinks(u *url.URL, m *meta) *links {
 	}
 
 	query := u.Query()
+
 	newUrl := func(offset uint64) *string {
 		query.Set("offset", strconv.Itoa(int(offset)))
 		u.RawQuery = query.Encode()
 		u_ := u.String()
 		return &u_
 	}
-	f := uint64(0)
-	l := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
-	n := *m.Offset + *m.Limit
-	p := int64(*m.Offset) - int64(*m.Limit)
+
+	first := uint64(0)
+	last := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
+	next := *m.Offset + *m.Limit
+	prev := int64(*m.Offset) - int64(*m.Limit)
+
 	links := &links{
 		Self:  newUrl(*m.Offset),
-		First: newUrl(f),
-		Last:  newUrl(l),
+		First: newUrl(first),
+		Last:  newUrl(last),
 	}
-	if n < m.TotalRecords {
-		links.Next = newUrl(n)
+
+	if next < m.TotalRecords {
+		links.Next = newUrl(next)
 	}
-	if p >= 0 {
-		links.Prev = newUrl(uint64(p))
+
+	if prev >= 0 {
+		links.Prev = newUrl(uint64(prev))
 	}
+
 	return links
 }
 
@@ -512,18 +520,37 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 		var err error
 		defer r.Body.Close()
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
 		ctx, span := tracer.Start(r.Context(), "query-deviceprofiles")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		name := r.URL.Query().Get("name")
+		deviceprofileId := chi.URLParam(r, "deviceprofileid")
 
-		profiles, err := svc.GetDeviceProfiles(ctx, name, allowedTenants)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
+		if name == "" && deviceprofileId != "" {
+			name = deviceprofileId
+		}
+
+		var profiles repositories.Collection[types.DeviceProfile]
+
+		if name != "" {
+			names := []string{name}
+			if strings.Index(name, ",") > -1 {
+				parts := strings.Split(name, ",")
+				names = parts
+			}
+
+			profiles, err = svc.GetDeviceProfiles(ctx, names...)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+		} else {
+			profiles, err = svc.GetDeviceProfiles(ctx)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 		}
 
 		if len(profiles.Data) == 0 {
@@ -546,6 +573,59 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 			}
 			response = ApiResponse{
 				Data:  profiles.Data,
+				Meta:  meta,
+				Links: createLinks(r.URL, meta),
+			}
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Body())
+	}
+}
+
+func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+		defer r.Body.Close()
+
+		ctx, span := tracer.Start(r.Context(), "query-lwm2mtypes")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		urn := r.URL.Query().Get("urn")
+		urnParam := chi.URLParam(r, "urn")
+
+		if urn == "" && urnParam != "" {
+			urn = urnParam
+		}
+
+		types, err := svc.GetLwm2mTypes(ctx, urn)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if len(types.Data) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var response ApiResponse
+
+		if len(types.Data) == 1 {
+			response = ApiResponse{
+				Data: types.Data[0],
+			}
+		} else {
+			meta := &meta{
+				TotalRecords: types.TotalCount,
+				Offset:       &types.Offset,
+				Limit:        &types.Limit,
+				Count:        types.Count,
+			}
+			response = ApiResponse{
+				Data:  types.Data,
 				Meta:  meta,
 				Links: createLinks(r.URL, meta),
 			}

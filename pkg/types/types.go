@@ -43,7 +43,8 @@ type DeviceProfile struct {
 }
 
 type Lwm2mType struct {
-	Urn string `json:"urn"`
+	Urn  string `json:"urn" yaml:"urn"`
+	Name string `json:"name" yaml:"name"`
 }
 
 type DeviceStatus struct {

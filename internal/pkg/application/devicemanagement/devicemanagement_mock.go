@@ -21,9 +21,6 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			AddDeviceProfilesFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
-//				panic("mock out the AddDeviceProfiles method")
-//			},
 //			CreateFunc: func(ctx context.Context, device models.Device) error {
 //				panic("mock out the Create method")
 //			},
@@ -36,8 +33,11 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetBySensorID method")
 //			},
-//			GetDeviceProfilesFunc: func(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error) {
+//			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
 //				panic("mock out the GetDeviceProfiles method")
+//			},
+//			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+//				panic("mock out the GetLwm2mTypes method")
 //			},
 //			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetWithAlarmID method")
@@ -64,9 +64,6 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
-	// AddDeviceProfilesFunc mocks the AddDeviceProfiles method.
-	AddDeviceProfilesFunc func(ctx context.Context, reader io.Reader, tenants []string) error
-
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, device models.Device) error
 
@@ -80,7 +77,10 @@ type DeviceManagementMock struct {
 	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 
 	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
-	GetDeviceProfilesFunc func(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error)
+	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
+
+	// GetLwm2mTypesFunc mocks the GetLwm2mTypes method.
+	GetLwm2mTypesFunc func(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
 
 	// GetWithAlarmIDFunc mocks the GetWithAlarmID method.
 	GetWithAlarmIDFunc func(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
@@ -102,15 +102,6 @@ type DeviceManagementMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddDeviceProfiles holds details about calls to the AddDeviceProfiles method.
-		AddDeviceProfiles []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Reader is the reader argument value.
-			Reader io.Reader
-			// Tenants is the tenants argument value.
-			Tenants []string
-		}
 		// Create holds details about calls to the Create method.
 		Create []struct {
 			// Ctx is the ctx argument value.
@@ -152,9 +143,14 @@ type DeviceManagementMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Name is the name argument value.
-			Name string
-			// Tenants is the tenants argument value.
-			Tenants []string
+			Name []string
+		}
+		// GetLwm2mTypes holds details about calls to the GetLwm2mTypes method.
+		GetLwm2mTypes []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Urn is the urn argument value.
+			Urn []string
 		}
 		// GetWithAlarmID holds details about calls to the GetWithAlarmID method.
 		GetWithAlarmID []struct {
@@ -215,58 +211,18 @@ type DeviceManagementMock struct {
 			DeviceStatus models.DeviceStatus
 		}
 	}
-	lockAddDeviceProfiles sync.RWMutex
 	lockCreate            sync.RWMutex
 	lockGet               sync.RWMutex
 	lockGetByDeviceID     sync.RWMutex
 	lockGetBySensorID     sync.RWMutex
 	lockGetDeviceProfiles sync.RWMutex
+	lockGetLwm2mTypes     sync.RWMutex
 	lockGetWithAlarmID    sync.RWMutex
 	lockMerge             sync.RWMutex
 	lockSeed              sync.RWMutex
 	lockUpdate            sync.RWMutex
 	lockUpdateState       sync.RWMutex
 	lockUpdateStatus      sync.RWMutex
-}
-
-// AddDeviceProfiles calls AddDeviceProfilesFunc.
-func (mock *DeviceManagementMock) AddDeviceProfiles(ctx context.Context, reader io.Reader, tenants []string) error {
-	if mock.AddDeviceProfilesFunc == nil {
-		panic("DeviceManagementMock.AddDeviceProfilesFunc: method is nil but DeviceManagement.AddDeviceProfiles was just called")
-	}
-	callInfo := struct {
-		Ctx     context.Context
-		Reader  io.Reader
-		Tenants []string
-	}{
-		Ctx:     ctx,
-		Reader:  reader,
-		Tenants: tenants,
-	}
-	mock.lockAddDeviceProfiles.Lock()
-	mock.calls.AddDeviceProfiles = append(mock.calls.AddDeviceProfiles, callInfo)
-	mock.lockAddDeviceProfiles.Unlock()
-	return mock.AddDeviceProfilesFunc(ctx, reader, tenants)
-}
-
-// AddDeviceProfilesCalls gets all the calls that were made to AddDeviceProfiles.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.AddDeviceProfilesCalls())
-func (mock *DeviceManagementMock) AddDeviceProfilesCalls() []struct {
-	Ctx     context.Context
-	Reader  io.Reader
-	Tenants []string
-} {
-	var calls []struct {
-		Ctx     context.Context
-		Reader  io.Reader
-		Tenants []string
-	}
-	mock.lockAddDeviceProfiles.RLock()
-	calls = mock.calls.AddDeviceProfiles
-	mock.lockAddDeviceProfiles.RUnlock()
-	return calls
 }
 
 // Create calls CreateFunc.
@@ -430,23 +386,21 @@ func (mock *DeviceManagementMock) GetBySensorIDCalls() []struct {
 }
 
 // GetDeviceProfiles calls GetDeviceProfilesFunc.
-func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error) {
+func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
 	if mock.GetDeviceProfilesFunc == nil {
 		panic("DeviceManagementMock.GetDeviceProfilesFunc: method is nil but DeviceManagement.GetDeviceProfiles was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		Name    string
-		Tenants []string
+		Ctx  context.Context
+		Name []string
 	}{
-		Ctx:     ctx,
-		Name:    name,
-		Tenants: tenants,
+		Ctx:  ctx,
+		Name: name,
 	}
 	mock.lockGetDeviceProfiles.Lock()
 	mock.calls.GetDeviceProfiles = append(mock.calls.GetDeviceProfiles, callInfo)
 	mock.lockGetDeviceProfiles.Unlock()
-	return mock.GetDeviceProfilesFunc(ctx, name, tenants)
+	return mock.GetDeviceProfilesFunc(ctx, name...)
 }
 
 // GetDeviceProfilesCalls gets all the calls that were made to GetDeviceProfiles.
@@ -454,18 +408,52 @@ func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name st
 //
 //	len(mockedDeviceManagement.GetDeviceProfilesCalls())
 func (mock *DeviceManagementMock) GetDeviceProfilesCalls() []struct {
-	Ctx     context.Context
-	Name    string
-	Tenants []string
+	Ctx  context.Context
+	Name []string
 } {
 	var calls []struct {
-		Ctx     context.Context
-		Name    string
-		Tenants []string
+		Ctx  context.Context
+		Name []string
 	}
 	mock.lockGetDeviceProfiles.RLock()
 	calls = mock.calls.GetDeviceProfiles
 	mock.lockGetDeviceProfiles.RUnlock()
+	return calls
+}
+
+// GetLwm2mTypes calls GetLwm2mTypesFunc.
+func (mock *DeviceManagementMock) GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+	if mock.GetLwm2mTypesFunc == nil {
+		panic("DeviceManagementMock.GetLwm2mTypesFunc: method is nil but DeviceManagement.GetLwm2mTypes was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		Urn []string
+	}{
+		Ctx: ctx,
+		Urn: urn,
+	}
+	mock.lockGetLwm2mTypes.Lock()
+	mock.calls.GetLwm2mTypes = append(mock.calls.GetLwm2mTypes, callInfo)
+	mock.lockGetLwm2mTypes.Unlock()
+	return mock.GetLwm2mTypesFunc(ctx, urn...)
+}
+
+// GetLwm2mTypesCalls gets all the calls that were made to GetLwm2mTypes.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.GetLwm2mTypesCalls())
+func (mock *DeviceManagementMock) GetLwm2mTypesCalls() []struct {
+	Ctx context.Context
+	Urn []string
+} {
+	var calls []struct {
+		Ctx context.Context
+		Urn []string
+	}
+	mock.lockGetLwm2mTypes.RLock()
+	calls = mock.calls.GetLwm2mTypes
+	mock.lockGetLwm2mTypes.RUnlock()
 	return calls
 }
 

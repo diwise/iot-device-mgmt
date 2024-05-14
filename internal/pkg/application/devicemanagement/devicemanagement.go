@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"log/slog"
@@ -15,7 +16,6 @@ import (
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"gopkg.in/yaml.v2"
 )
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
@@ -35,19 +35,21 @@ type DeviceManagement interface {
 
 	Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
-	GetDeviceProfiles(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error)
-	AddDeviceProfiles(ctx context.Context, reader io.Reader, tenants []string) error
+	GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
+	GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
 }
 
 type svc struct {
 	storage   deviceStorage.DeviceRepository
 	messenger messaging.MsgContext
+	config    *DeviceManagementConfig
 }
 
-func New(d deviceStorage.DeviceRepository, m messaging.MsgContext) DeviceManagement {
+func New(d deviceStorage.DeviceRepository, m messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
 	dm := svc{
 		storage:   d,
 		messenger: m,
+		config:    config,
 	}
 
 	dm.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, dm))
@@ -212,37 +214,87 @@ func (d svc) UpdateState(ctx context.Context, deviceID, tenant string, deviceSta
 	})
 }
 
-func (d svc) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (repositories.Collection[models.DeviceProfile], error) {
-	return d.storage.GetDeviceProfiles(ctx, name, tenants)
-}
+var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
 
-type DeviceManagementConfig struct {
-	DeviceProfiles []models.DeviceProfile `yaml:"deviceprofiles"`
-}
+func (d svc) GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
+	var collection repositories.Collection[models.DeviceProfile]
 
-func (d svc) AddDeviceProfiles(ctx context.Context, reader io.Reader, tenants []string) error {
-	config := DeviceManagementConfig{}
+	if len(name) > 0 && name[0] != "" {
+		profiles := []models.DeviceProfile{}
 
-	b, err := io.ReadAll(reader)
-	if err != nil {
-		return err
-	}
-	
-	err = yaml.Unmarshal(b, &config)
-	if err != nil {
-		return err
-	}
-
-	var errs []error
-
-	for _, dp := range config.DeviceProfiles {
-		err := d.storage.AddDeviceProfile(ctx, dp)
-		if err != nil {
-			errs = append(errs, err)
+		for _, n := range name {
+			id := slices.IndexFunc(d.config.DeviceProfiles, func(p models.DeviceProfile) bool {
+				return n == p.Name
+			})
+			if id > -1 {
+				profiles = append(profiles, d.config.DeviceProfiles[id])
+			}
 		}
+
+		if len(profiles) > 0 {
+			collection = repositories.Collection[models.DeviceProfile]{
+				Data:       profiles,
+				Count:      uint64(len(profiles)),
+				Offset:     0,
+				Limit:      uint64(len(profiles)),
+				TotalCount: uint64(len(profiles)),
+			}
+			return collection, nil
+		}
+
+		return repositories.Collection[models.DeviceProfile]{}, ErrDeviceProfileNotFound
 	}
 
-	return errors.Join(errs...)
+	collection = repositories.Collection[models.DeviceProfile]{
+		Data:       d.config.DeviceProfiles,
+		Count:      uint64(len(d.config.DeviceProfiles)),
+		Offset:     0,
+		Limit:      uint64(len(d.config.DeviceProfiles)),
+		TotalCount: uint64(len(d.config.DeviceProfiles)),
+	}
+
+	return collection, nil
+
+}
+
+func (d svc) GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+	var collection repositories.Collection[models.Lwm2mType]
+
+	if len(urn) > 0 && urn[0] != "" {
+		types := []models.Lwm2mType{}
+
+		for _, u := range urn {
+			id := slices.IndexFunc(d.config.Types, func(p models.Lwm2mType) bool {
+				return u == p.Urn
+			})
+			if id > -1 {
+				types = append(types, d.config.Types[id])
+			}
+		}
+
+		if len(types) > 0 {
+			collection = repositories.Collection[models.Lwm2mType]{
+				Data:       types,
+				Count:      uint64(len(types)),
+				Offset:     0,
+				Limit:      uint64(len(types)),
+				TotalCount: uint64(len(types)),
+			}
+			return collection, nil
+		}
+
+		return repositories.Collection[models.Lwm2mType]{}, ErrDeviceProfileNotFound
+	}
+
+	collection = repositories.Collection[models.Lwm2mType]{
+		Data:       d.config.Types,
+		Count:      uint64(len(d.config.Types)),
+		Offset:     0,
+		Limit:      uint64(len(d.config.Types)),
+		TotalCount: uint64(len(d.config.Types)),
+	}
+
+	return collection, nil
 }
 
 func MapOne[T any](v any) (T, error) {

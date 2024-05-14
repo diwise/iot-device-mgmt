@@ -11,6 +11,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"gopkg.in/yaml.v2"
 
 	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
@@ -64,7 +65,6 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 
 	is.Equal(resp.StatusCode, http.StatusOK)
 	is.Equal("a81758fffe06bfa3", d.Data.DevEui)
-	//is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}]`)
 }
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
@@ -152,12 +152,19 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 		t.SkipNow()
 	}
 
-	msgCtx := messaging.MsgContextMock{}
-	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
-		return nil
+	msgCtx := messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
 	}
 
-	app := devicemanagement.New(repo, &msgCtx)
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	app := devicemanagement.New(repo, &msgCtx, cfg)
 	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
 	is.NoErr(err)
 
@@ -193,6 +200,31 @@ const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;de
 a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;default;60;
 a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe04d83f;desc-a81758fffe04d83f;true;default;60;`
+
+const configYaml string = `
+deviceprofiles:
+  - name: qalcosonic
+    decoder: qalcosonic
+    interval: 3600
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3424
+      - urn:oma:lwm2m:ext:3303
+  - name: axsensor
+    decoder: axsensor
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3303
+types:
+  - urn : urn:oma:lwm2m:ext:3
+    name: Device 
+  - urn: urn:oma:lwm2m:ext:3303
+    name: Temperature
+`
 
 const opaModule string = `
 #

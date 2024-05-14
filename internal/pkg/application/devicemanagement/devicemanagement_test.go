@@ -151,7 +151,7 @@ func TestSeed(t *testing.T) {
 
 func TestDeviceProfiles(t *testing.T) {
 	is := is.New(t)
-	b := []byte(deviceProfilesYaml)
+	b := []byte(configYaml)
 	dp := DeviceManagementConfig{}
 	err := yaml.Unmarshal(b, &dp)
 	is.NoErr(err)
@@ -218,7 +218,9 @@ func newDevice(deviceID string) types.Device {
 }
 
 func testSetup(t *testing.T) (*is.I, context.Context, repository.DeviceRepository, messaging.MsgContext, DeviceManagement) {
+	is := is.New(t)
 	ctx := context.Background()
+
 	p, err := jsonstore.NewPool(ctx, jsonstore.NewConfig(
 		"localhost",
 		"postgres",
@@ -245,8 +247,10 @@ func testSetup(t *testing.T) (*is.I, context.Context, repository.DeviceRepositor
 		},
 	}
 
-	svc := New(repo, msgCtx)
-	is := is.New(t)
+	cfg := &DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	svc := New(repo, msgCtx, cfg)
 
 	r := bytes.NewBuffer([]byte(csvMock))
 	svc.Seed(ctx, r, []string{"default"})
@@ -262,11 +266,7 @@ a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsy
 5679;intern-5679;0.0;0.0;;urn:oma:lwm2m:ext:3330,urn:oma:lwm2m:ext:3;axsensor;AXsensor;Mäter nivå i avlopp;true;default;0;
 `
 
-
-
-
-
-const deviceProfilesYaml string = `
+const configYaml string = `
 deviceprofiles:
   - name: qalcosonic
     decoder: qalcosonic
@@ -284,13 +284,9 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3304
       - urn:oma:lwm2m:ext:3327
       - urn:oma:lwm2m:ext:3303
-`
-const typesYaml string = `
 types:
-- urn: urn:oma:lwm2m:ext:3
-  name: Device
-- urn: urn:oma:lwm2m:ext:3424 
-  name: WaterMeter
-- urn: urn:oma:lwm2m:ext:3303
-  name: Temperature
+  - urn : urn:oma:lwm2m:ext:3
+    name: Device 
+  - urn: urn:oma:lwm2m:ext:3303
+    name: Temperature
 `

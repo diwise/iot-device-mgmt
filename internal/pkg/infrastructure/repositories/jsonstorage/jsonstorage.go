@@ -124,7 +124,7 @@ func NewWithPool(ctx context.Context, pool *pgxpool.Pool, r io.Reader) (JsonStor
 	}, nil
 }
 
-func (s JsonStorage) Initialize(ctx context.Context) error {
+func (s JsonStorage) Initialize(ctx context.Context, sql ...string) error {
 	var errs []error
 
 	if len(s.entityConfig) == 0 {
@@ -138,8 +138,11 @@ func (s JsonStorage) Initialize(ctx context.Context) error {
 		tenant		TEXT 	NOT NULL,	
 		created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,			
 		modified_on	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,	
+		deleted     BOOLEAN DEFAULT FALSE,
 		deleted_on  timestamp with time zone NULL,
-		CONSTRAINT pkey_%s_unique PRIMARY KEY (id, type));`
+		CONSTRAINT pkey_%s_unique PRIMARY KEY (id, type, deleted));
+		CREATE INDEX IF NOT EXISTS idx_%s_deleted ON %s (id, type) WHERE deleted = FALSE;
+		`
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -147,9 +150,16 @@ func (s JsonStorage) Initialize(ctx context.Context) error {
 	}
 
 	for _, v := range s.entityConfig {
-		query := fmt.Sprintf(ddl, v.TableName, v.TableName)
+		query := fmt.Sprintf(ddl, v.TableName, v.TableName, v.TableName, v.TableName)
 
 		_, err := tx.Exec(ctx, query)
+		if err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	for _, s := range sql {
+		_, err := tx.Exec(ctx, s)
 		if err != nil {
 			errs = append(errs, err)
 		}
@@ -189,7 +199,7 @@ func (s JsonStorage) Delete(ctx context.Context, id, typeName string, tenants []
 	tableName := s.entityConfig[typeName].TableName
 
 	sql := fmt.Sprintf(`UPDATE %s 
-	        			SET deleted_on=NOW()
+	        			SET deleted=TRUE, deleted_on=NOW()
 						WHERE id=@id AND type=@type AND tenant=any(@tenant)`, tableName)
 
 	_, err := s.db.Exec(ctx, sql, args)
@@ -213,7 +223,7 @@ func (s JsonStorage) FindByID(ctx context.Context, id, typeName string, tenants 
 
 	sql := fmt.Sprintf(`SELECT data 
 	        			FROM %s
-						WHERE id=@id AND type=@type AND tenant=any(@tenant) AND deleted_on IS NULL`, tableName)
+						WHERE id=@id AND type=@type AND tenant=any(@tenant) AND deleted = FALSE`, tableName)
 
 	var data json.RawMessage
 	err = s.db.QueryRow(ctx, sql, args).Scan(&data)
@@ -366,7 +376,7 @@ func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, cond
 	sb.WriteString("SELECT data, count(*) OVER () AS total_count FROM (")
 
 	for _, v := range s.entityConfig {
-		sb.WriteString(fmt.Sprintf("SELECT data FROM %s WHERE %s AND tenant=any(@tenant) AND deleted_on IS NULL\n", v.TableName, q))
+		sb.WriteString(fmt.Sprintf("SELECT data FROM %s WHERE %s AND tenant=any(@tenant) AND deleted = FALSE\n", v.TableName, q))
 		sb.WriteString("UNION\n")
 	}
 	query := strings.TrimSuffix(sb.String(), "UNION\n")
@@ -414,7 +424,7 @@ func (s JsonStorage) QueryType(ctx context.Context, typeName, q string, tenants 
 
 	query := fmt.Sprintf(`SELECT data, count(*) OVER () AS total_count 
 	                      FROM %s 
-						  WHERE %s AND type=@typeName AND tenant=any(@tenant) AND deleted_on IS NULL
+						  WHERE %s AND type=@typeName AND tenant=any(@tenant) AND deleted = FALSE
 						  OFFSET @offset LIMIT @limit`, s.entityConfig[typeName].TableName, q)
 	rows, err := s.db.Query(ctx, query, args)
 	if err != nil {
@@ -450,7 +460,7 @@ func (s JsonStorage) FetchType(ctx context.Context, typeName string, tenants []s
 
 	query := fmt.Sprintf(`SELECT data, count(*) OVER () AS total_count 
 	                      FROM %s 
-						  WHERE type=@typeName AND tenant=any(@tenant) AND deleted_on IS NULL
+						  WHERE type=@typeName AND tenant=any(@tenant) AND deleted = FALSE
 						  OFFSET @offset LIMIT @limit`, s.entityConfig[typeName].TableName)
 	rows, err := s.db.Query(ctx, query, args)
 	if err != nil {
@@ -478,7 +488,7 @@ func (s JsonStorage) GetTenants(ctx context.Context) []string {
 
 	sb.WriteString("SELECT DISTINCT tenant FROM (")
 	for _, v := range s.entityConfig {
-		sb.WriteString(fmt.Sprintf("SELECT DISTINCT tenant FROM %s WHERE deleted_on IS NULL\n", v.TableName))
+		sb.WriteString(fmt.Sprintf("SELECT DISTINCT tenant FROM %s WHERE deleted = FALSE\n", v.TableName))
 		sb.WriteString("UNION\n")
 	}
 	query := strings.TrimSuffix(sb.String(), "UNION\n")

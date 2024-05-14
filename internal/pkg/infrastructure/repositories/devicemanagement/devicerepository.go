@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 
 	types "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
@@ -15,8 +14,7 @@ import (
 )
 
 const (
-	TypeName              string = "Device"
-	DeviceProfileTypeName string = "DeviceProfile"
+	TypeName string = "Device"
 )
 
 const storageConfiguration string = `
@@ -25,9 +23,6 @@ entities:
   - idPattern: ^
     type: Device
     tableName: mgmt_devices
-  - idPattern: ^
-    type: DeviceProfile
-    tableName: mgmt_device_profiles
 `
 
 func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
@@ -37,7 +32,7 @@ func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
 		return Repository{}, err
 	}
 
-	err = store.Initialize(ctx)
+	err = store.Initialize(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_sensor_id_active ON mgmt_devices ((data ->> 'sensor_id'), (data ->> 'active'));")
 	if err != nil {
 		return Repository{}, err
 	}
@@ -62,9 +57,6 @@ type DeviceRepository interface {
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	GetTenants(ctx context.Context) []string
-
-	GetDeviceProfiles(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error)
-	AddDeviceProfile(ctx context.Context, d models.DeviceProfile) error
 }
 
 type Repository struct {
@@ -126,10 +118,22 @@ func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants 
 		}
 		return models.Device{}, err
 	}
+
 	if result.Count == 0 {
 		return models.Device{}, ErrDeviceNotFound
 	}
+
 	if result.Count > 1 {
+		for i := range result.Data {
+			d, err :=jsonstore.MapOne[models.Device](result.Data[i])
+			if err != nil {
+				continue
+			}			
+			if d.Active {
+				return d, nil
+			}
+		}
+
 		return models.Device{}, fmt.Errorf("too many devices found")
 	}
 
@@ -209,54 +213,4 @@ func (d Repository) UpdateState(ctx context.Context, deviceID string, tenant str
 
 func (d Repository) GetTenants(ctx context.Context) []string {
 	return d.storage.GetTenants(ctx)
-}
-
-func (d Repository) AddDeviceProfile(ctx context.Context, profile models.DeviceProfile) error {
-	b, err := json.Marshal(profile)
-	if err != nil {
-		return err
-	}
-
-	return d.storage.Store(ctx, profile.Name, DeviceProfileTypeName, b, "default")
-}
-
-func (d Repository) GetDeviceProfiles(ctx context.Context, name string, tenants []string) (types.Collection[models.DeviceProfile], error) {
-	// TODO: device profiles by tenant?
-
-	if !slices.Contains(tenants, "default") {
-		tenants = append(tenants, "default")
-	}
-
-	if len(name) > 0 {
-		b, err := d.storage.FindByID(ctx, name, DeviceProfileTypeName, tenants)
-		if err != nil {
-			return types.Collection[models.DeviceProfile]{}, err
-		}
-		dp, err := jsonstore.MapOne[models.DeviceProfile](b)
-		if err != nil {
-			return types.Collection[models.DeviceProfile]{}, err
-		}
-		collection := types.Collection[models.DeviceProfile]{
-			Data:       []models.DeviceProfile{dp},
-			Count:      1,
-			Offset:     0,
-			Limit:      1,
-			TotalCount: 1,
-		}
-		return collection, nil
-	}
-
-	result, err := d.storage.FetchType(ctx, DeviceProfileTypeName, tenants)
-	if err != nil {
-		return types.Collection[models.DeviceProfile]{}, err
-	}
-	dp, err := jsonstore.MapAll[models.DeviceProfile](result.Data)
-	collection := types.Collection[models.DeviceProfile]{
-		Data:       dp,
-		Count:      result.Count,
-		Offset:     result.Offset,
-		Limit:      result.Limit,
-		TotalCount: result.TotalCount,
-	}
-	return collection, nil
 }
