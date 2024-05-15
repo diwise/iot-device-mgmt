@@ -190,9 +190,14 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			q := r.URL.Query().Get("q")
 			if q != "" {
 				q, err = url.QueryUnescape(q)
-				ok := json.Valid([]byte(q))
-				if err != nil || !ok {
-					requestLogger.Error("wrong query parameter type", "err", err.Error())
+				if err != nil {
+					requestLogger.Error("wrong query parameter", "err", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				if !json.Valid([]byte(q)) {
+					requestLogger.Error("query parameter is not an valid json object")
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
