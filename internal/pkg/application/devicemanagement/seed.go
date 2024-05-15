@@ -32,16 +32,18 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)))
 
-	deviceProfiles := make(map[string]models.DeviceProfile)	
+	deviceProfiles := make(map[string]models.DeviceProfile)
 	for _, dp := range d.config.DeviceProfiles {
 		deviceProfiles[dp.Name] = dp
 	}
 
 	lwm2mTypes := make(map[string]models.Lwm2mType)
-	for _, l := range  d.config.Types {
-		lwm2mTypes[l.Urn] = l
+	for _, l := range d.config.Types {
+		if l.Urn != "" {
+			lwm2mTypes[l.Urn] = l
+		}
 	}
-	
+
 	for _, record := range records {
 		device, _ := record.mapToDevice()
 
@@ -53,10 +55,24 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 		e, err := d.GetByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
 		if err != nil {
 			log.Debug("create new device", "device_id", device.DeviceID)
+
+			interval := device.DeviceProfile.Interval
+			device.DeviceProfile = deviceProfiles[device.DeviceProfile.Name]
+			device.DeviceProfile.Interval = interval
+
+			deviceLwm2mTypes := device.Lwm2mTypes
+			device.Lwm2mTypes = []models.Lwm2mType{}
+			for _, l := range deviceLwm2mTypes {
+				if t, ok := lwm2mTypes[l.Urn]; ok {
+					device.Lwm2mTypes = append(device.Lwm2mTypes, t)
+				}
+			}
+
 			err := d.Create(ctx, device)
 			if err != nil {
 				log.Error("could not create new device", "device_id", device.DeviceID, "err", err.Error())
 			}
+
 			continue
 		}
 
@@ -65,12 +81,12 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 		// Add all configured properties for device profile, but not custom interval setting
 		e.DeviceProfile = deviceProfiles[device.DeviceProfile.Name]
-		e.DeviceProfile.Interval = device.DeviceProfile.Interval  
-		
+		e.DeviceProfile.Interval = device.DeviceProfile.Interval
+
 		e.Environment = device.Environment
 		e.Location = device.Location
 
-		// Add name to type from configured value
+		// Add all configured values to type
 		e.Lwm2mTypes = device.Lwm2mTypes
 		for i, l := range e.Lwm2mTypes {
 			e.Lwm2mTypes[i] = lwm2mTypes[l.Urn]
@@ -136,7 +152,7 @@ func (dr deviceRecord) mapToDevice() (models.Device, models.DeviceProfile) {
 		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: models.DeviceProfile{
-			Name:     dr.sensorType,			
+			Name:     dr.sensorType,
 			Interval: dr.interval,
 		},
 		DeviceStatus: models.DeviceStatus{
