@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"log/slog"
@@ -23,7 +24,6 @@ type DeviceManagement interface {
 	Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
-
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
 
 	Create(ctx context.Context, device models.Device) error
@@ -34,17 +34,22 @@ type DeviceManagement interface {
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	Seed(ctx context.Context, reader io.Reader, tenants []string) error
+
+	GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
+	GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
 }
 
 type svc struct {
 	storage   deviceStorage.DeviceRepository
 	messenger messaging.MsgContext
+	config    *DeviceManagementConfig
 }
 
-func New(d deviceStorage.DeviceRepository, m messaging.MsgContext) DeviceManagement {
+func New(d deviceStorage.DeviceRepository, m messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
 	dm := svc{
 		storage:   d,
 		messenger: m,
+		config:    config,
 	}
 
 	dm.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, dm))
@@ -207,6 +212,89 @@ func (d svc) UpdateState(ctx context.Context, deviceID, tenant string, deviceSta
 		State:     deviceState.State,
 		Timestamp: deviceState.ObservedAt,
 	})
+}
+
+var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
+
+func (d svc) GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
+	var collection repositories.Collection[models.DeviceProfile]
+
+	if len(name) > 0 && name[0] != "" {
+		profiles := []models.DeviceProfile{}
+
+		for _, n := range name {
+			id := slices.IndexFunc(d.config.DeviceProfiles, func(p models.DeviceProfile) bool {
+				return n == p.Name
+			})
+			if id > -1 {
+				profiles = append(profiles, d.config.DeviceProfiles[id])
+			}
+		}
+
+		if len(profiles) > 0 {
+			collection = repositories.Collection[models.DeviceProfile]{
+				Data:       profiles,
+				Count:      uint64(len(profiles)),
+				Offset:     0,
+				Limit:      uint64(len(profiles)),
+				TotalCount: uint64(len(profiles)),
+			}
+			return collection, nil
+		}
+
+		return repositories.Collection[models.DeviceProfile]{}, ErrDeviceProfileNotFound
+	}
+
+	collection = repositories.Collection[models.DeviceProfile]{
+		Data:       d.config.DeviceProfiles,
+		Count:      uint64(len(d.config.DeviceProfiles)),
+		Offset:     0,
+		Limit:      uint64(len(d.config.DeviceProfiles)),
+		TotalCount: uint64(len(d.config.DeviceProfiles)),
+	}
+
+	return collection, nil
+
+}
+
+func (d svc) GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+	var collection repositories.Collection[models.Lwm2mType]
+
+	if len(urn) > 0 && urn[0] != "" {
+		types := []models.Lwm2mType{}
+
+		for _, u := range urn {
+			id := slices.IndexFunc(d.config.Types, func(p models.Lwm2mType) bool {
+				return u == p.Urn
+			})
+			if id > -1 {
+				types = append(types, d.config.Types[id])
+			}
+		}
+
+		if len(types) > 0 {
+			collection = repositories.Collection[models.Lwm2mType]{
+				Data:       types,
+				Count:      uint64(len(types)),
+				Offset:     0,
+				Limit:      uint64(len(types)),
+				TotalCount: uint64(len(types)),
+			}
+			return collection, nil
+		}
+
+		return repositories.Collection[models.Lwm2mType]{}, ErrDeviceProfileNotFound
+	}
+
+	collection = repositories.Collection[models.Lwm2mType]{
+		Data:       d.config.Types,
+		Count:      uint64(len(d.config.Types)),
+		Offset:     0,
+		Limit:      uint64(len(d.config.Types)),
+		TotalCount: uint64(len(d.config.Types)),
+	}
+
+	return collection, nil
 }
 
 func MapOne[T any](v any) (T, error) {

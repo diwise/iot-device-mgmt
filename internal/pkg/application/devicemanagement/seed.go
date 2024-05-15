@@ -19,7 +19,7 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 	r := csv.NewReader(reader)
 	r.Comma = ';'
-	
+
 	rows, err := r.ReadAll()
 	if err != nil {
 		return err
@@ -32,22 +32,20 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)))
 
-	isAllowed := func(arr []string, s string) bool {
-		if len(arr) == 0 {
-			return true
-		}
-		for _, v := range arr {
-			if v == s {
-				return true
-			}
-		}
-		return false
+	deviceProfiles := make(map[string]models.DeviceProfile)	
+	for _, dp := range d.config.DeviceProfiles {
+		deviceProfiles[dp.Name] = dp
 	}
 
+	lwm2mTypes := make(map[string]models.Lwm2mType)
+	for _, l := range  d.config.Types {
+		lwm2mTypes[l.Urn] = l
+	}
+	
 	for _, record := range records {
 		device, _ := record.mapToDevice()
 
-		if !isAllowed(tenants, device.Tenant) {
+		if !slices.Contains(tenants, device.Tenant) {
 			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant)
 			continue
 		}
@@ -64,10 +62,20 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 		e.Active = device.Active
 		e.Description = device.Description
-		e.DeviceProfile = device.DeviceProfile
+
+		// Add all configured properties for device profile, but not custom interval setting
+		e.DeviceProfile = deviceProfiles[device.DeviceProfile.Name]
+		e.DeviceProfile.Interval = device.DeviceProfile.Interval  
+		
 		e.Environment = device.Environment
 		e.Location = device.Location
+
+		// Add name to type from configured value
 		e.Lwm2mTypes = device.Lwm2mTypes
+		for i, l := range e.Lwm2mTypes {
+			e.Lwm2mTypes[i] = lwm2mTypes[l.Urn]
+		}
+
 		e.Name = device.Name
 		e.Source = device.Source
 		e.Tags = device.Tags
@@ -128,8 +136,7 @@ func (dr deviceRecord) mapToDevice() (models.Device, models.DeviceProfile) {
 		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: models.DeviceProfile{
-			Name:     dr.sensorType,
-			Decoder:  dr.sensorType,
+			Name:     dr.sensorType,			
 			Interval: dr.interval,
 		},
 		DeviceStatus: models.DeviceStatus{

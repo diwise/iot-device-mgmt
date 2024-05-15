@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -22,12 +23,16 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/go-chi/chi/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"gopkg.in/yaml.v2"
 )
 
 const serviceName string = "iot-device-mgmt"
 
-var knownDevicesFile string
-var opaFilePath string
+var (
+	knownDevicesFile   string
+	opaFilePath        string
+	configurationFile string
+)
 
 func main() {
 	serviceVersion := buildinfo.SourceVersion()
@@ -35,6 +40,7 @@ func main() {
 	defer cleanup()
 
 	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/data/devices.csv", "A file containing known devices")
+	flag.StringVar(&configurationFile, "config", "/opt/diwise/config/config.yaml", "A yaml file containing configuration data")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
@@ -49,7 +55,7 @@ func main() {
 	messenger := setupMessagingOrDie(ctx, serviceName)
 	messenger.Start()
 
-	mgmtSvc := devicemanagement.New(deviceStorage, messenger)
+	mgmtSvc := devicemanagement.New(deviceStorage, messenger, loadConfigurationOrDie(ctx))
 	alarmSvc := alarms.New(alarmStorage, messenger)
 
 	seedDataOrDie(ctx, mgmtSvc)
@@ -88,6 +94,31 @@ func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.
 	}
 
 	return repo
+}
+
+func loadConfigurationOrDie(ctx context.Context) *devicemanagement.DeviceManagementConfig {
+	if _, err := os.Stat(configurationFile); os.IsNotExist(err) {
+		fatal(ctx, "configuration file not found", err)
+	}
+
+	f, err := os.Open(configurationFile)
+	if err != nil {
+		fatal(ctx, "could not open configuration", err)
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		fatal(ctx, "could not read configuration file", err)
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	err = yaml.Unmarshal(b, cfg)
+	if err != nil {
+		fatal(ctx, "could not unmarshal configuration file", err)
+	}
+
+	return cfg
 }
 
 func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {

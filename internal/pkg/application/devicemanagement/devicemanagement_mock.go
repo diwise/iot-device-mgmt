@@ -33,6 +33,12 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetBySensorID method")
 //			},
+//			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
+//				panic("mock out the GetDeviceProfiles method")
+//			},
+//			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+//				panic("mock out the GetLwm2mTypes method")
+//			},
 //			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetWithAlarmID method")
 //			},
@@ -69,6 +75,12 @@ type DeviceManagementMock struct {
 
 	// GetBySensorIDFunc mocks the GetBySensorID method.
 	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
+
+	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
+	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
+
+	// GetLwm2mTypesFunc mocks the GetLwm2mTypes method.
+	GetLwm2mTypesFunc func(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
 
 	// GetWithAlarmIDFunc mocks the GetWithAlarmID method.
 	GetWithAlarmIDFunc func(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
@@ -125,6 +137,20 @@ type DeviceManagementMock struct {
 			SensorID string
 			// Tenants is the tenants argument value.
 			Tenants []string
+		}
+		// GetDeviceProfiles holds details about calls to the GetDeviceProfiles method.
+		GetDeviceProfiles []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Name is the name argument value.
+			Name []string
+		}
+		// GetLwm2mTypes holds details about calls to the GetLwm2mTypes method.
+		GetLwm2mTypes []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Urn is the urn argument value.
+			Urn []string
 		}
 		// GetWithAlarmID holds details about calls to the GetWithAlarmID method.
 		GetWithAlarmID []struct {
@@ -185,16 +211,18 @@ type DeviceManagementMock struct {
 			DeviceStatus models.DeviceStatus
 		}
 	}
-	lockCreate         sync.RWMutex
-	lockGet            sync.RWMutex
-	lockGetByDeviceID  sync.RWMutex
-	lockGetBySensorID  sync.RWMutex
-	lockGetWithAlarmID sync.RWMutex
-	lockMerge          sync.RWMutex
-	lockSeed           sync.RWMutex
-	lockUpdate         sync.RWMutex
-	lockUpdateState    sync.RWMutex
-	lockUpdateStatus   sync.RWMutex
+	lockCreate            sync.RWMutex
+	lockGet               sync.RWMutex
+	lockGetByDeviceID     sync.RWMutex
+	lockGetBySensorID     sync.RWMutex
+	lockGetDeviceProfiles sync.RWMutex
+	lockGetLwm2mTypes     sync.RWMutex
+	lockGetWithAlarmID    sync.RWMutex
+	lockMerge             sync.RWMutex
+	lockSeed              sync.RWMutex
+	lockUpdate            sync.RWMutex
+	lockUpdateState       sync.RWMutex
+	lockUpdateStatus      sync.RWMutex
 }
 
 // Create calls CreateFunc.
@@ -354,6 +382,78 @@ func (mock *DeviceManagementMock) GetBySensorIDCalls() []struct {
 	mock.lockGetBySensorID.RLock()
 	calls = mock.calls.GetBySensorID
 	mock.lockGetBySensorID.RUnlock()
+	return calls
+}
+
+// GetDeviceProfiles calls GetDeviceProfilesFunc.
+func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
+	if mock.GetDeviceProfilesFunc == nil {
+		panic("DeviceManagementMock.GetDeviceProfilesFunc: method is nil but DeviceManagement.GetDeviceProfiles was just called")
+	}
+	callInfo := struct {
+		Ctx  context.Context
+		Name []string
+	}{
+		Ctx:  ctx,
+		Name: name,
+	}
+	mock.lockGetDeviceProfiles.Lock()
+	mock.calls.GetDeviceProfiles = append(mock.calls.GetDeviceProfiles, callInfo)
+	mock.lockGetDeviceProfiles.Unlock()
+	return mock.GetDeviceProfilesFunc(ctx, name...)
+}
+
+// GetDeviceProfilesCalls gets all the calls that were made to GetDeviceProfiles.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.GetDeviceProfilesCalls())
+func (mock *DeviceManagementMock) GetDeviceProfilesCalls() []struct {
+	Ctx  context.Context
+	Name []string
+} {
+	var calls []struct {
+		Ctx  context.Context
+		Name []string
+	}
+	mock.lockGetDeviceProfiles.RLock()
+	calls = mock.calls.GetDeviceProfiles
+	mock.lockGetDeviceProfiles.RUnlock()
+	return calls
+}
+
+// GetLwm2mTypes calls GetLwm2mTypesFunc.
+func (mock *DeviceManagementMock) GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+	if mock.GetLwm2mTypesFunc == nil {
+		panic("DeviceManagementMock.GetLwm2mTypesFunc: method is nil but DeviceManagement.GetLwm2mTypes was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		Urn []string
+	}{
+		Ctx: ctx,
+		Urn: urn,
+	}
+	mock.lockGetLwm2mTypes.Lock()
+	mock.calls.GetLwm2mTypes = append(mock.calls.GetLwm2mTypes, callInfo)
+	mock.lockGetLwm2mTypes.Unlock()
+	return mock.GetLwm2mTypesFunc(ctx, urn...)
+}
+
+// GetLwm2mTypesCalls gets all the calls that were made to GetLwm2mTypes.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.GetLwm2mTypesCalls())
+func (mock *DeviceManagementMock) GetLwm2mTypesCalls() []struct {
+	Ctx context.Context
+	Urn []string
+} {
+	var calls []struct {
+		Ctx context.Context
+		Urn []string
+	}
+	mock.lockGetLwm2mTypes.RLock()
+	calls = mock.calls.GetLwm2mTypes
+	mock.lockGetLwm2mTypes.RUnlock()
 	return calls
 }
 

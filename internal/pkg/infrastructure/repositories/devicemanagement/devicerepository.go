@@ -13,17 +13,16 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const TypeName string = "Device"
+const (
+	TypeName string = "Device"
+)
 
 const storageConfiguration string = `
 serviceName: device-management
 entities:
   - idPattern: ^
     type: Device
-    tableName: devices
-  - idPattern: ^
-    type: DeviceModel
-    tableName: deviceModels
+    tableName: mgmt_devices
 `
 
 func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
@@ -33,7 +32,7 @@ func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
 		return Repository{}, err
 	}
 
-	err = store.Initialize(ctx)
+	err = store.Initialize(ctx, "CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_sensor_id_active ON mgmt_devices ((data ->> 'sensor_id'), (data ->> 'active'));")
 	if err != nil {
 		return Repository{}, err
 	}
@@ -119,10 +118,22 @@ func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants 
 		}
 		return models.Device{}, err
 	}
+
 	if result.Count == 0 {
 		return models.Device{}, ErrDeviceNotFound
 	}
+
 	if result.Count > 1 {
+		for i := range result.Data {
+			d, err :=jsonstore.MapOne[models.Device](result.Data[i])
+			if err != nil {
+				continue
+			}			
+			if d.Active {
+				return d, nil
+			}
+		}
+
 		return models.Device{}, fmt.Errorf("too many devices found")
 	}
 
