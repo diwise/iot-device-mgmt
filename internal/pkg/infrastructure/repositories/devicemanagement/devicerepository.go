@@ -96,30 +96,12 @@ func (r Repository) Get(ctx context.Context, offset, limit int, q string, tenant
 }
 
 func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error) {
-	result, err := r.storage.QueryType(ctx, TypeName, "data @> '{\"deviceState\":{\"online\": true}}'", tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
-	if err != nil {
-		return types.Collection[models.Device]{}, err
-	}
-	if result.Count == 0 {
-		return types.Collection[models.Device]{}, nil
-	}
-
-	devices, err := jsonstore.MapAll[models.Device](result.Data)
-	if err != nil {
-		return types.Collection[models.Device]{}, err
-	}
-
-	return types.Collection[models.Device]{
-		Data:       devices,
-		Count:      result.Count,
-		Offset:     result.Offset,
-		Limit:      result.Limit,
-		TotalCount: result.TotalCount,
-	}, nil
+	return r.Get(ctx, offset,limit, "'{\"deviceState\":{\"online\": true}}", tenants)
 }
 
 func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 	q := fmt.Sprintf("data ->> 'sensorID' = '%s'", sensorID)
+	
 	result, err := r.storage.QueryType(ctx, TypeName, q, tenants)
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
@@ -167,8 +149,9 @@ func (r Repository) GetByDeviceID(ctx context.Context, deviceID string, tenants 
 }
 
 func (r Repository) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
-	q := fmt.Sprintf("data @> '{\"alarms\":[\"%s\"]}'", alarmID)
-	result, err := r.storage.QueryType(ctx, TypeName, q, tenants)
+	q := fmt.Sprintf("{\"alarms\":[\"%s\"]}", alarmID)
+
+	result, err :=  r.Get(ctx, 0, 100, q, tenants)		
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
 			return models.Device{}, ErrDeviceNotFound
@@ -181,7 +164,8 @@ func (r Repository) GetWithAlarmID(ctx context.Context, alarmID string, tenants 
 	if result.Count > 1 {
 		return models.Device{}, fmt.Errorf("too many devices found")
 	}
-	return jsonstore.MapOne[models.Device](result.Data[0])
+
+	return result.Data[0], nil
 }
 
 func (r Repository) Save(ctx context.Context, device models.Device) error {
