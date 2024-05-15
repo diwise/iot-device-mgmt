@@ -45,7 +45,7 @@ func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
 //go:generate moq -rm -out devicerepository_mock.go .
 
 type DeviceRepository interface {
-	Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
+	Get(ctx context.Context, offset, limit int, q string, tenants []string) (types.Collection[models.Device], error)
 	GetOnlineDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
@@ -63,8 +63,17 @@ type Repository struct {
 	storage jsonstore.JsonStorage
 }
 
-func (r Repository) Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error) {
-	result, err := r.storage.FetchType(ctx, TypeName, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
+func (r Repository) Get(ctx context.Context, offset, limit int, q string, tenants []string) (types.Collection[models.Device], error) {
+	var result jsonstore.QueryResult
+	var err error
+
+	if q != "" {
+		query := fmt.Sprintf("data @> '%s'", q)
+		result, err = r.storage.QueryType(ctx, TypeName, query, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
+	} else {
+		result, err = r.storage.FetchType(ctx, TypeName, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
+	}
+
 	if err != nil {
 		return types.Collection[models.Device]{}, err
 	}
@@ -125,10 +134,10 @@ func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants 
 
 	if result.Count > 1 {
 		for i := range result.Data {
-			d, err :=jsonstore.MapOne[models.Device](result.Data[i])
+			d, err := jsonstore.MapOne[models.Device](result.Data[i])
 			if err != nil {
 				continue
-			}			
+			}
 			if d.Active {
 				return d, nil
 			}

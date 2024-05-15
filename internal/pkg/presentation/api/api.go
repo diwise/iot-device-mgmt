@@ -186,7 +186,19 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		} else {
 			offset, limit := getOffsetAndLimit(r)
-			collection, err := svc.Get(ctx, offset, limit, allowedTenants)
+
+			q := r.URL.Query().Get("q")
+			if q != "" {
+				q, err = url.QueryUnescape(q)
+				ok := json.Valid([]byte(q))
+				if err != nil || !ok {
+					requestLogger.Error("wrong query parameter type", "err", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+			}
+
+			collection, err := svc.Get(ctx, offset, limit, q, allowedTenants)
 			if err != nil {
 				requestLogger.Error("unable to fetch devices", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)

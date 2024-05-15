@@ -24,7 +24,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			CreateFunc: func(ctx context.Context, device models.Device) error {
 //				panic("mock out the Create method")
 //			},
-//			GetFunc: func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
+//			GetFunc: func(ctx context.Context, offset int, limit int, q string, tenants []string) (repositories.Collection[models.Device], error) {
 //				panic("mock out the Get method")
 //			},
 //			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
@@ -68,7 +68,7 @@ type DeviceManagementMock struct {
 	CreateFunc func(ctx context.Context, device models.Device) error
 
 	// GetFunc mocks the Get method.
-	GetFunc func(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error)
+	GetFunc func(ctx context.Context, offset int, limit int, q string, tenants []string) (repositories.Collection[models.Device], error)
 
 	// GetByDeviceIDFunc mocks the GetByDeviceID method.
 	GetByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
@@ -117,6 +117,8 @@ type DeviceManagementMock struct {
 			Offset int
 			// Limit is the limit argument value.
 			Limit int
+			// Q is the q argument value.
+			Q string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -262,7 +264,7 @@ func (mock *DeviceManagementMock) CreateCalls() []struct {
 }
 
 // Get calls GetFunc.
-func (mock *DeviceManagementMock) Get(ctx context.Context, offset int, limit int, tenants []string) (repositories.Collection[models.Device], error) {
+func (mock *DeviceManagementMock) Get(ctx context.Context, offset int, limit int, q string, tenants []string) (repositories.Collection[models.Device], error) {
 	if mock.GetFunc == nil {
 		panic("DeviceManagementMock.GetFunc: method is nil but DeviceManagement.Get was just called")
 	}
@@ -270,17 +272,19 @@ func (mock *DeviceManagementMock) Get(ctx context.Context, offset int, limit int
 		Ctx     context.Context
 		Offset  int
 		Limit   int
+		Q       string
 		Tenants []string
 	}{
 		Ctx:     ctx,
 		Offset:  offset,
 		Limit:   limit,
+		Q:       q,
 		Tenants: tenants,
 	}
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(ctx, offset, limit, tenants)
+	return mock.GetFunc(ctx, offset, limit, q, tenants)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -291,12 +295,14 @@ func (mock *DeviceManagementMock) GetCalls() []struct {
 	Ctx     context.Context
 	Offset  int
 	Limit   int
+	Q       string
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
 		Offset  int
 		Limit   int
+		Q       string
 		Tenants []string
 	}
 	mock.lockGet.RLock()
