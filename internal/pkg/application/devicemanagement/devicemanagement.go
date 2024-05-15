@@ -21,7 +21,7 @@ import (
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error)
+	Get(ctx context.Context, offset, limit int, q string, tenants []string) (repositories.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
@@ -122,8 +122,8 @@ func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, 
 	return d.storage.Save(ctx, device)
 }
 
-func (d svc) Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Device], error) {
-	return d.storage.Get(ctx, offset, limit, tenants)
+func (d svc) Get(ctx context.Context, offset, limit int, q string, tenants []string) (repositories.Collection[models.Device], error) {
+	return d.storage.Get(ctx, offset, limit, q, tenants)
 }
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")
