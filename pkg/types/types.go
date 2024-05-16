@@ -12,18 +12,18 @@ type Device struct {
 	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Location    Location `json:"location"`
-	Environment string   `json:"environment"`
-	Source      string   `json:"source"`
+	Environment string   `json:"environment,omitempty"`
+	Source      string   `json:"source,omitempty"`
 
 	Lwm2mTypes []Lwm2mType `json:"types"`
-	Tags       []Tag       `json:"tags"`
+	Tags       []Tag       `json:"tags,omitempty"`
 
 	DeviceProfile DeviceProfile `json:"deviceProfile"`
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
 
-	Alarms []string `json:"alarms"`
+	Alarms []string `json:"alarms,omitempty"`
 }
 
 type Location struct {
@@ -75,7 +75,7 @@ type Alarm struct {
 	ID          string    `json:"id"`
 	Type        string    `json:"type"`
 	AlarmType   string    `json:"alarmType"`
-	Description string    `json:"description"`
+	Description string    `json:"description,omitempty"`
 	ObservedAt  time.Time `json:"observedAt"`
 	RefID       string    `json:"refID"`
 	Severity    int       `json:"severity"`

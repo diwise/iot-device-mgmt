@@ -71,21 +71,6 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 	return router, nil
 }
 
-type meta struct {
-	TotalRecords uint64  `json:"totalRecords"`
-	Offset       *uint64 `json:"offset,omitempty"`
-	Limit        *uint64 `json:"limit,omitempty"`
-	Count        uint64  `json:"count"`
-}
-
-type links struct {
-	Self  *string `json:"self,omitempty"`
-	First *string `json:"first,omitempty"`
-	Prev  *string `json:"prev,omitempty"`
-	Next  *string `json:"next,omitempty"`
-	Last  *string `json:"last,omitempty"`
-}
-
 func createLinks(u *url.URL, m *meta) *links {
 	if m == nil || m.TotalRecords == 0 {
 		return nil
@@ -120,17 +105,6 @@ func createLinks(u *url.URL, m *meta) *links {
 	}
 
 	return links
-}
-
-type ApiResponse struct {
-	Meta  *meta  `json:"meta,omitempty"`
-	Data  any    `json:"data"`
-	Links *links `json:"links,omitempty"`
-}
-
-func (r ApiResponse) Body() []byte {
-	b, _ := json.Marshal(r)
-	return b
 }
 
 func getOffsetAndLimit(r *http.Request) (int, int) {
@@ -182,7 +156,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write(response.Body())
+			w.Write(response.Byte())
 			return
 		} else {
 			offset, limit := getOffsetAndLimit(r)
@@ -217,15 +191,39 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				Count:        collection.Count,
 			}
 
+			links := createLinks(r.URL, meta)
+
+			if wantsGeoJSON(r) {
+				response, err := NewFeatureCollectionFromDevices(collection.Data)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				response.Meta = meta
+				response.Links = links
+
+				b, err := json.Marshal(response)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Add("Content-Type", "application/geo+json")
+				w.WriteHeader(http.StatusOK)
+				w.Write(b)
+				return
+			}
+
 			response := ApiResponse{
 				Meta:  meta,
 				Data:  collection.Data,
-				Links: createLinks(r.URL, meta),
+				Links: links,
 			}
 
 			w.Header().Add("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
-			w.Write(response.Body())
+			w.Write(response.Byte())
 			return
 		}
 	}
@@ -265,7 +263,7 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(response.Body())
+		w.Write(response.Byte())
 	}
 }
 
@@ -472,7 +470,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(response.Body())
+		w.Write(response.Byte())
 	}
 }
 
@@ -500,7 +498,7 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(response.Body())
+		w.Write(response.Byte())
 	}
 }
 
@@ -597,7 +595,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(response.Body())
+		w.Write(response.Byte())
 	}
 }
 
@@ -650,7 +648,7 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write(response.Body())
+		w.Write(response.Byte())
 	}
 }
 
@@ -662,4 +660,9 @@ func isMultipartFormData(r *http.Request) bool {
 func isApplicationJson(r *http.Request) bool {
 	contentType := r.Header.Get("Content-Type")
 	return strings.Contains(contentType, "application/json")
+}
+
+func wantsGeoJSON(r *http.Request) bool {
+	contentType := r.Header.Get("Accept")
+	return strings.Contains(contentType, "application/geo+json")
 }
