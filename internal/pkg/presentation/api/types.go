@@ -51,7 +51,7 @@ type GeoJSONFeature struct {
 	Properties map[string]any `json:"properties"`
 }
 
-func NewFeatureCollectionFromDevices(devices []types.Device) (*GeoJSONFeatureCollection, error) {
+func NewFeatureCollectionWithDevices(devices []types.Device) (*GeoJSONFeatureCollection, error) {
 	fc := NewFeatureCollection()
 
 	for _, d := range devices {

@@ -194,7 +194,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			links := createLinks(r.URL, meta)
 
 			if wantsGeoJSON(r) {
-				response, err := NewFeatureCollectionFromDevices(collection.Data)
+				response, err := NewFeatureCollectionWithDevices(collection.Data)
 				if err != nil {
 					w.WriteHeader(http.StatusInternalServerError)
 					return
