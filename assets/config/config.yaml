@@ -89,6 +89,27 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3330
       - urn:oma:lwm2m:ext:3303
+  - name: virtual
+    decoder: virtual
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200
+      - urn:oma:lwm2m:ext:3301
+      - urn:oma:lwm2m:ext:3302
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3323
+      - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3328
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3331
+      - urn:oma:lwm2m:ext:3350
+      - urn:oma:lwm2m:ext:3411
+      - urn:oma:lwm2m:ext:3424
+      - urn:oma:lwm2m:ext:3428
+      - urn:oma:lwm2m:ext:3434
+      - urn:oma:lwm2m:ext:3435  
 
 types:
   - urn : urn:oma:lwm2m:ext:3
