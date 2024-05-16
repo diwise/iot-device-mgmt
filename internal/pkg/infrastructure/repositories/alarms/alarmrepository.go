@@ -36,7 +36,7 @@ serviceName: device-management-alarms
 entities:
   - idPattern: ^
     type: Alarm
-    tableName: alarms
+    tableName: mgmt_alarms
 `
 
 func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
