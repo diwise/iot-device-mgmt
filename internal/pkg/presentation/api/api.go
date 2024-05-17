@@ -550,7 +550,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 
 		if name != "" {
 			names := []string{name}
-			if strings.Index(name, ",") > -1 {
+			if strings.Contains(name, ",") {
 				parts := strings.Split(name, ",")
 				names = parts
 			}
