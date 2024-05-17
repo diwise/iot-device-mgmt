@@ -11,8 +11,11 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database"
-	dmDb "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	"gopkg.in/yaml.v2"
+
+	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
+
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -53,14 +56,15 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
-	d := []struct {
-		DevEui string `json:"sensorID"`
+	d := struct {
+		Data struct {
+			DevEui string `json:"sensorID"`
+		} `json:"data"`
 	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d[0].DevEui)
-	//is.Equal(body, `[{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}]`)
+	is.Equal("a81758fffe06bfa3", d.Data.DevEui)
 }
 
 func TestThatGetKnownDeviceReturns200(t *testing.T) {
@@ -72,12 +76,14 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	d := struct {
-		DevEui string `json:"sensorID"`
+		Data struct {
+			DevEui string `json:"sensorID"`
+		} `json:"data"`
 	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d.DevEui)
+	is.Equal("a81758fffe06bfa3", d.Data.DevEui)
 	//is.Equal(body, `{"devEUI":"a81758fffe06bfa3","deviceID":"intern-a81758fffe06bfa3","name":"name-a81758fffe06bfa3","description":"desc-a81758fffe06bfa3","location":{"latitude":62.3916,"longitude":17.30723,"altitude":0},"environment":"water","types":["urn:oma:lwm2m:ext:3303","urn:oma:lwm2m:ext:3302","urn:oma:lwm2m:ext:3301"],"sensorType":{"id":1,"name":"elsys","description":"","interval":3600},"lastObserved":"0001-01-01T00:00:00Z","active":true,"tenant":"default","status":{"batteryLevel":0,"statusCode":0,"timestamp":""},"interval":60}`)
 }
 
@@ -89,12 +95,14 @@ func TestThatGetKnownDeviceMarshalToType(t *testing.T) {
 	token := createJWTWithTenants([]string{"default"})
 	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
-	d := types.Device{}
+	d := struct {
+		Data types.Device
+	}{}
 	json.Unmarshal([]byte(body), &d)
 
 	is.Equal(resp.StatusCode, http.StatusOK)
-	is.Equal("a81758fffe06bfa3", d.SensorID)
-	is.Equal("default", d.Tenant.Name)
+	is.Equal("a81758fffe06bfa3", d.Data.SensorID)
+	is.Equal("default", d.Data.Tenant)
 }
 
 func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {
@@ -121,19 +129,45 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 
 func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
+	ctx := context.Background()
 
-	db, err := dmDb.NewDeviceRepository(db.NewSQLiteConnector(context.Background()))
-	is.NoErr(err)
+	config := jsonstore.NewConfig(
+		"localhost",
+		"postgres",
+		"password",
+		"5432",
+		"postgres",
+		"disable",
+	)
 
-	err = db.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)))
-	is.NoErr(err)
-
-	msgCtx := messaging.MsgContextMock{}
-	msgCtx.RegisterTopicMessageHandlerFunc = func(routingKey string, handler messaging.TopicMessageHandler) error {
-		return nil
+	p, err := jsonstore.NewPool(ctx, config)
+	if err != nil {
+		t.Log("could not connect to postgres, will skip test")
+		t.SkipNow()
 	}
 
-	app := devicemanagement.New(db, &msgCtx)
+	repo, err := deviceStore.NewRepository(ctx, p)
+	if err != nil {
+		t.Log("could not initialize repository, will skip test")
+		t.SkipNow()
+	}
+
+	msgCtx := messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	app := devicemanagement.New(repo, &msgCtx, cfg)
+	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
+	is.NoErr(err)
+
 	router := router.New("testService")
 
 	policies := bytes.NewBufferString(opaModule)
@@ -166,6 +200,31 @@ const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;de
 a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;default;60;
 a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe04d83f;desc-a81758fffe04d83f;true;default;60;`
+
+const configYaml string = `
+deviceprofiles:
+  - name: qalcosonic
+    decoder: qalcosonic
+    interval: 3600
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3424
+      - urn:oma:lwm2m:ext:3303
+  - name: axsensor
+    decoder: axsensor
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3303
+types:
+  - urn : urn:oma:lwm2m:ext:3
+    name: Device 
+  - urn: urn:oma:lwm2m:ext:3303
+    name: Temperature
+`
 
 const opaModule string = `
 #

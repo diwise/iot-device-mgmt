@@ -2,10 +2,10 @@ package watchdog
 
 import (
 	"context"
+	"sync"
 	"time"
 
-	. "github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog/events"
-	db "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/database/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -19,11 +19,11 @@ type Watchdog interface {
 
 type watchdogImpl struct {
 	done             chan bool
-	deviceRepository db.DeviceRepository
+	deviceRepository devicemanagement.DeviceRepository
 	messenger        messaging.MsgContext
 }
 
-func New(d db.DeviceRepository, m messaging.MsgContext) Watchdog {
+func New(d devicemanagement.DeviceRepository, m messaging.MsgContext) Watchdog {
 	w := &watchdogImpl{
 		done:             make(chan bool),
 		deviceRepository: d,
@@ -42,17 +42,11 @@ func (w *watchdogImpl) Stop(ctx context.Context) {
 }
 
 func (w *watchdogImpl) run(ctx context.Context) {
-
-	b := &batteryLevelWatcher{
-		deviceRepository: w.deviceRepository,
-		batteryLevels:    map[string]int{},
-		messenger:        w.messenger,
-	}
-	go b.Watch(ctx)
-
 	l := &lastObservedWatcher{
 		deviceRepository: w.deviceRepository,
 		messenger:        w.messenger,
+		running:          false,
+		interval:         10 * time.Minute,
 	}
 	go l.Watch(ctx)
 
@@ -66,123 +60,69 @@ type Watcher interface {
 	Watch(ctx context.Context)
 }
 
-type batteryLevelWatcher struct {
-	deviceRepository db.DeviceRepository
-	batteryLevels    map[string]int
-	messenger        messaging.MsgContext
-}
-
-func (b *batteryLevelWatcher) Watch(ctx context.Context) {
-	b.batteryLevels = make(map[string]int)
-
-	ticker := time.NewTicker(30 * time.Minute)
-	logger := logging.GetFromContext(ctx)
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			changed, err := b.checkBatteryLevels(ctx)
-			if err != nil {
-				logger.Error("could not check batteryLevels", "err", err.Error())
-			}
-
-			for _, c := range changed {
-				err := b.publish(ctx, c)
-				if err != nil {
-					logger.Error("could not publish BatteryLevelChanged", "err", err.Error())
-				}
-			}
-		}
-	}
-}
-
-func (b *batteryLevelWatcher) checkBatteryLevels(ctx context.Context) ([]string, error) {
-	devices, err := b.deviceRepository.GetOnlineDevices(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	changedDevices := []string{}
-
-	for _, d := range devices {
-		if level, ok := b.batteryLevels[d.DeviceID]; ok {
-			if d.DeviceStatus.BatteryLevel > 0 && d.DeviceStatus.BatteryLevel != level {
-				changedDevices = append(changedDevices, d.DeviceID)
-			}
-		} else {
-			b.batteryLevels[d.DeviceID] = d.DeviceStatus.BatteryLevel
-		}
-	}
-
-	return changedDevices, nil
-}
-
-func (b *batteryLevelWatcher) publish(ctx context.Context, deviceID string) error {
-	d, err := b.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
-	if err != nil {
-		return err
-	}
-
-	err = b.messenger.PublishOnTopic(ctx, &BatteryLevelChanged{
-		DeviceID:     deviceID,
-		BatteryLevel: d.DeviceStatus.BatteryLevel,
-		Tenant:       d.Tenant.Name,
-		ObservedAt:   time.Now().UTC(),
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 type lastObservedWatcher struct {
-	deviceRepository db.DeviceRepository
+	deviceRepository devicemanagement.DeviceRepository
 	messenger        messaging.MsgContext
+	running          bool
+	interval         time.Duration
+	mu               sync.Mutex
 }
 
 func (l *lastObservedWatcher) Watch(ctx context.Context) {
-	ticker := time.NewTicker(10 * time.Minute)
-	logger := logging.GetFromContext(ctx)
+	ticker := time.NewTicker(l.interval)
+	tenants := l.deviceRepository.GetTenants(ctx)
+	pub := make(chan string, 0)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			checked, err := l.checkLastObserved(ctx)
-			if err != nil {
-				logger.Error("failed to check last observed", "err", err.Error())
-				break
-			}
-			for _, c := range checked {
-				err := l.publish(ctx, c)
-				if err != nil {
-					logger.Error("failed to publish last observed", "err", err.Error())
-					break
-				}
-			}
+			tenants = l.deviceRepository.GetTenants(ctx)
+			go l.checkLastObserved(ctx, tenants, pub)
+		case deviceID := <-pub:
+			l.publish(ctx, deviceID, tenants)
 		}
 	}
 }
 
-func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) ([]string, error) {
-	devices, err := l.deviceRepository.GetOnlineDevices(ctx)
-	if err != nil {
-		return nil, err
+func (l *lastObservedWatcher) setRunning(b bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.running = b
+}
+
+func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, tenants []string, pub chan string) {
+	if l.running {
+		return
 	}
 
-	checkedDeviceIDs := []string{}
+	l.setRunning(true)
 
-	for _, d := range devices {
-		if !checkLastObservedIsAfter(ctx, d.DeviceStatus.LastObserved.UTC(), time.Now().UTC(), d.DeviceProfile.Interval) {
-			checkedDeviceIDs = append(checkedDeviceIDs, d.DeviceID)
+	offset := 0
+	limit := 10
+
+	do := func() bool {
+		collection, err := l.deviceRepository.GetOnlineDevices(ctx, offset, limit, tenants)
+		if err != nil {
+			return false
 		}
+
+		for _, d := range collection.Data {
+			if !checkLastObservedIsAfter(ctx, d.DeviceStatus.ObservedAt, time.Now(), d.DeviceProfile.Interval) {
+				pub <- d.DeviceID
+			}
+		}
+
+		return collection.Count != 0
 	}
 
-	return checkedDeviceIDs, nil
+	for do() {
+		offset = offset + limit
+	}
+
+	l.setRunning(false)
 }
 
 func checkLastObservedIsAfter(ctx context.Context, lastObserved time.Time, t time.Time, i int) bool {
@@ -191,20 +131,21 @@ func checkLastObservedIsAfter(ctx context.Context, lastObserved time.Time, t tim
 	return after
 }
 
-func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string) error {
-	d, err := w.deviceRepository.GetDeviceByDeviceID(ctx, deviceID)
+func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string, tenants []string) {
+	logger := logging.GetFromContext(ctx)
+
+	d, err := w.deviceRepository.GetByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
-		return err
+		logger.Error("failed to get device by id", "err", err.Error())
+		return
 	}
 
 	err = w.messenger.PublishOnTopic(ctx, &DeviceNotObserved{
 		DeviceID:   deviceID,
-		Tenant:     d.Tenant.Name,
+		Tenant:     d.Tenant,
 		ObservedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		return err
+		logger.Error("failed to publish last observed", "err", err.Error())
 	}
-
-	return nil
 }

@@ -20,3 +20,7 @@
 .DS_Store
 
 *.db
+
+*.develop.rego
+*.develop.csv
+
