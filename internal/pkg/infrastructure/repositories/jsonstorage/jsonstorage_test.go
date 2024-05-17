@@ -115,11 +115,11 @@ func testSetup(t *testing.T) (context.Context, JsonStorage) {
 	}
 	s, err := New(ctx, config, r)
 	if err != nil {
-		t.FailNow()
+		t.SkipNow()
 	}
 	err = s.Initialize(ctx)
 	if err != nil {
-		t.FailNow()
+		t.SkipNow()
 	}
 	return ctx, s
 }

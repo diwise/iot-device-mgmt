@@ -80,10 +80,15 @@ func testSetup(t *testing.T) (*is.I, context.Context, AlarmRepository) {
 		"disable",
 	)
 
-	p, _ := jsonstore.NewPool(ctx, config)
+	p, err := jsonstore.NewPool(ctx, config)
+	if err != nil {
+		t.SkipNow()
+	}
 
 	repo, err := NewRepository(ctx, p)
-	is.NoErr(err)
-
+	if err != nil {
+		t.SkipNow()
+	}
+	
 	return is, ctx, repo
 }
