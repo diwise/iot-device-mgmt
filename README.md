@@ -19,12 +19,15 @@ flowchart LR
 ```
 
 ## Dependencies 
+
 # Storage
 When the service is started data will be loaded from configuration files and stored in a database. If `POSTGRES_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
+
 # Watchdog
 Watchdog is a feature that will periodically verify the sensors. Currently only last observed time is checked. If larger than `interval` a warning status will be set. 
 
 # Security
+
 ## Authorization
 Authorization is handled via OIDC access tokens that are delegated to [Open Policy Agent](https://www.openpolicyagent.org) for validation and decoding. This service does not impose any restrictions on the structure of a token's claims, allowing freedom for policy writers to integrate with existing organisational policies more easily.
 
