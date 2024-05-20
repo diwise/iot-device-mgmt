@@ -39,7 +39,7 @@ func main() {
 	ctx, _, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion)
 	defer cleanup()
 
-	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/data/devices.csv", "A file containing known devices")
+	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
 	flag.StringVar(&configurationFile, "config", "/opt/diwise/config/config.yaml", "A yaml file containing configuration data")
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
