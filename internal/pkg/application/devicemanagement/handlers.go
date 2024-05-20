@@ -13,6 +13,7 @@ import (
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/otel"
 )
@@ -33,11 +34,14 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement
 			Timestamp string `json:"timestamp"`
 		}{}
 
+		
 		err = json.Unmarshal(itm.Body(), &deviceStatus)
 		if err != nil {
 			log.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
+
+		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", deviceStatus.DeviceID), slog.String("tenant", deviceStatus.Tenant))
 
 		observedAt, err := time.Parse(time.RFC3339, deviceStatus.Timestamp)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
@@ -228,6 +229,8 @@ func (s JsonStorage) FindByID(ctx context.Context, id, typeName string, tenants 
 	var data json.RawMessage
 	err = s.db.QueryRow(ctx, sql, args).Scan(&data)
 	if err != nil {
+		logging.GetFromContext(ctx).Debug("could not FindByID", "id", id, "table_name", tableName, "err", err.Error())
+
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNoRows
 		}
