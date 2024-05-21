@@ -145,7 +145,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 			if err != nil {
-				requestLogger.Error("could not fetch data", "err", err.Error())
+				requestLogger.Error("could not fetch data", "sensor_id", sensorID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -245,12 +245,12 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 
 		device, err := svc.GetByDeviceID(ctx, deviceID, allowedTenants)
 		if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
-			requestLogger.Debug("device not found")
+			requestLogger.Debug("device not found", slog.String("device_id", deviceID))
 			w.WriteHeader(http.StatusNotFound)
 			return
 		}
 		if err != nil {
-			requestLogger.Error("could not fetch device details", "err", err.Error())
+			requestLogger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -259,7 +259,7 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 			Data: device,
 		}
 
-		requestLogger.Debug("returning information about device")
+		requestLogger.Debug("returning information about device", slog.String("device_id", device.DeviceID))
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -313,14 +313,14 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			}
 
 			if !slices.Contains(allowedTenants, d.Tenant) {
-				requestLogger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID)
+				requestLogger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
 			err = svc.Create(ctx, d)
 			if err != nil {
-				requestLogger.Error("unable to create device", "err", err.Error())
+				requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -367,14 +367,14 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		}
 
 		if !slices.Contains(allowedTenants, d.Tenant) {
-			requestLogger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID)
+			requestLogger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
 		err = svc.Update(ctx, d)
 		if err != nil {
-			requestLogger.Error("unable to create device", "err", err.Error())
+			requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -415,7 +415,7 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 
 		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
-			requestLogger.Error("unable to update device", "err", err.Error())
+			requestLogger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
