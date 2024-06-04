@@ -45,8 +45,8 @@ func NewRepository(ctx context.Context, p *pgxpool.Pool) (Repository, error) {
 //go:generate moq -rm -out devicerepository_mock.go .
 
 type DeviceRepository interface {
-	Get(ctx context.Context, offset, limit int, q string, tenants []string) (types.Collection[models.Device], error)
-	GetOnlineDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error)
+	Get(ctx context.Context, offset, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error)
+	GetOnlineDevices(ctx context.Context, offset, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
@@ -63,15 +63,15 @@ type Repository struct {
 	storage jsonstore.JsonStorage
 }
 
-func (r Repository) Get(ctx context.Context, offset, limit int, q string, tenants []string) (types.Collection[models.Device], error) {
+func (r Repository) Get(ctx context.Context, offset, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error) {
 	var result jsonstore.QueryResult
 	var err error
 
 	if q != "" {
 		query := fmt.Sprintf("data @> '%s'", q)
-		result, err = r.storage.QueryType(ctx, TypeName, query, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
+		result, err = r.storage.QueryType(ctx, TypeName, query, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit), jsonstore.SortBy(sortBy))
 	} else {
-		result, err = r.storage.FetchType(ctx, TypeName, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit))
+		result, err = r.storage.FetchType(ctx, TypeName, tenants, jsonstore.Offset(offset), jsonstore.Limit(limit), jsonstore.SortBy(sortBy))
 	}
 
 	if err != nil {
@@ -95,8 +95,8 @@ func (r Repository) Get(ctx context.Context, offset, limit int, q string, tenant
 	}, nil
 }
 
-func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[models.Device], error) {
-	return r.Get(ctx, offset,limit, "'{\"deviceState\":{\"online\": true}}", tenants)
+func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
+	return r.Get(ctx, offset,limit, "'{\"deviceState\":{\"online\": true}}", sortBy, tenants)
 }
 
 func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
@@ -151,7 +151,7 @@ func (r Repository) GetByDeviceID(ctx context.Context, deviceID string, tenants 
 func (r Repository) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
 	q := fmt.Sprintf("{\"alarms\":[\"%s\"]}", alarmID)
 
-	result, err :=  r.Get(ctx, 0, 100, q, tenants)		
+	result, err :=  r.Get(ctx, 0, 100, q, "", tenants)		
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
 			return models.Device{}, ErrDeviceNotFound

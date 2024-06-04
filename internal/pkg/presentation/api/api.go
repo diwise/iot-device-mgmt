@@ -177,7 +177,12 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				}
 			}
 
-			collection, err := svc.Get(ctx, offset, limit, q, allowedTenants)
+			sortBy := r.URL.Query().Get("sortBy")
+			if sortBy == "" {
+				sortBy = "name"
+			}
+
+			collection, err := svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
 			if err != nil {
 				requestLogger.Error("unable to fetch devices", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)

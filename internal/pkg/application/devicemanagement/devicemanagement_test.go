@@ -144,7 +144,7 @@ func TestGetWithAlarmID(t *testing.T) {
 
 func TestSeed(t *testing.T) {
 	is, ctx, _, _, svc := testSetup(t)
-	devices, err := svc.Get(ctx, 0, 100, "", []string{"default"})
+	devices, err := svc.Get(ctx, 0, 100, "","", []string{"default"})
 	is.NoErr(err)
 	is.True(devices.TotalCount > 0)
 }
