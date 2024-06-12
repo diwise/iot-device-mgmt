@@ -361,6 +361,15 @@ func Limit(v int) Condition {
 	}
 }
 
+func SortBy(colName string) Condition {
+	return func(q map[string]any) map[string]any {
+		if colName != "" {
+			q["sortBy"] = colName
+		}
+		return q
+	}
+}
+
 func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, conditions ...Condition) (QueryResult, error) {
 	if len(q) == 0 {
 		return QueryResult{}, fmt.Errorf("no query specified")
@@ -370,6 +379,7 @@ func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, cond
 		"tenant": tenants,
 		"offset": 0,
 		"limit":  100,
+		"sortBy": "id",
 	}
 	for _, condition := range conditions {
 		condition(args)
@@ -383,7 +393,7 @@ func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, cond
 		sb.WriteString("UNION\n")
 	}
 	query := strings.TrimSuffix(sb.String(), "UNION\n")
-	query = query + ") all_tables OFFSET @offset LIMIT @limit"
+	query = query + ") all_tables ORDER BY (data->>@sortBy) OFFSET @offset LIMIT @limit"
 
 	rows, err := s.db.Query(ctx, query, args)
 	if err != nil {
@@ -420,6 +430,7 @@ func (s JsonStorage) QueryType(ctx context.Context, typeName, q string, tenants 
 		"tenant":   tenants,
 		"offset":   0,
 		"limit":    100,
+		"sortBy":   "id",
 	}
 	for _, condition := range conditions {
 		condition(args)
@@ -428,6 +439,7 @@ func (s JsonStorage) QueryType(ctx context.Context, typeName, q string, tenants 
 	query := fmt.Sprintf(`SELECT data, count(*) OVER () AS total_count 
 	                      FROM %s 
 						  WHERE %s AND type=@typeName AND tenant=any(@tenant) AND deleted = FALSE
+						  ORDER BY (data->>@sortBy) 
 						  OFFSET @offset LIMIT @limit`, s.entityConfig[typeName].TableName, q)
 	rows, err := s.db.Query(ctx, query, args)
 	if err != nil {
@@ -456,6 +468,7 @@ func (s JsonStorage) FetchType(ctx context.Context, typeName string, tenants []s
 		"tenant":   tenants,
 		"offset":   0,
 		"limit":    100,
+		"sortBy":   "id",
 	}
 	for _, condition := range conditions {
 		condition(args)
@@ -464,6 +477,7 @@ func (s JsonStorage) FetchType(ctx context.Context, typeName string, tenants []s
 	query := fmt.Sprintf(`SELECT data, count(*) OVER () AS total_count 
 	                      FROM %s 
 						  WHERE type=@typeName AND tenant=any(@tenant) AND deleted = FALSE
+						  ORDER BY (data->>@sortBy)
 						  OFFSET @offset LIMIT @limit`, s.entityConfig[typeName].TableName)
 	rows, err := s.db.Query(ctx, query, args)
 	if err != nil {

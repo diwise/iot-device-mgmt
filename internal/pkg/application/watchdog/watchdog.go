@@ -104,7 +104,7 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, tenants []s
 	limit := 10
 
 	do := func() bool {
-		collection, err := l.deviceRepository.GetOnlineDevices(ctx, offset, limit, tenants)
+		collection, err := l.deviceRepository.GetOnlineDevices(ctx, offset, limit, "", tenants)
 		if err != nil {
 			return false
 		}

@@ -3,6 +3,7 @@ package devicemanagement
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"slices"
@@ -58,6 +59,36 @@ func TestUpdateDevice(t *testing.T) {
 		t.Log("properties not updated")
 		t.FailNow()
 	}
+}
+
+func TestUpdateDevice2(t *testing.T) {
+	is, ctx, _, _, svc := testSetup(t)
+	body := `
+	{
+		"active": true,
+		"description": "AK Snörmakaregatan BB_Nivå",
+		"deviceID": "ak.bb.sb243.lt1",
+		"deviceProfile": "vegapuls_air_41",
+		"latitude": 57.744267,
+		"longitude": 12.047268,
+		"name": "AK.BB.SB243.LT1",
+		"tenant": "default",
+		"types": [
+			"urn:oma:lwm2m:ext:3",
+			"urn:oma:lwm2m:ext:3303"
+		]
+	}`
+
+	fields := make(map[string]any)
+	json.Unmarshal([]byte(body), &fields)
+
+	deviceID := uuid.NewString()
+	d := newDevice(deviceID)
+	err := svc.Create(ctx, d)
+	is.NoErr(err)
+
+	err = svc.Merge(ctx, deviceID, fields, []string{"default"})
+	is.NoErr(err)
 }
 
 func TestAlarmCreatedHandler(t *testing.T) {
@@ -144,7 +175,7 @@ func TestGetWithAlarmID(t *testing.T) {
 
 func TestSeed(t *testing.T) {
 	is, ctx, _, _, svc := testSetup(t)
-	devices, err := svc.Get(ctx, 0, 100, "", []string{"default"})
+	devices, err := svc.Get(ctx, 0, 100, "", "", []string{"default"})
 	is.NoErr(err)
 	is.True(devices.TotalCount > 0)
 }

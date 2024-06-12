@@ -21,7 +21,7 @@ import (
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	Get(ctx context.Context, offset, limit int, q string, tenants []string) (repositories.Collection[models.Device], error)
+	Get(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[models.Device], error)
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
@@ -87,43 +87,59 @@ func (d svc) Update(ctx context.Context, device models.Device) error {
 }
 
 func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+	log := logging.GetFromContext(ctx)
+
 	device, err := d.storage.GetByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
 		return err
 	}
 
-	m := make(map[string]any)
-	b, err := json.Marshal(device)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(b, &m)
-	if err != nil {
-		return err
-	}
-
-	for key := range m {
-		if v, ok := fields[key]; ok {
-			m[key] = v
+	for k, v := range fields {
+		switch k {
+		case "deviceID":
+			continue
+		case "active":
+			device.Active = v.(bool)
+		case "description":
+			device.Description = v.(string)
+		case "latitude":
+			lat := v.(float64)
+			device.Location.Latitude = lat
+		case "longitude":
+			lon := v.(float64)
+			device.Location.Longitude = lon
+		case "name":
+			device.Name = v.(string)
+		case "tenant":
+			device.Tenant = v.(string)
+		case "types":
+			typs := []string{}
+			if anys, ok := v.([]any); ok {
+				for _, a := range anys {
+					if s, ok := a.(string); ok {
+						typs = append(typs, s)
+					}
+				}
+			}
+			if types, err := d.GetLwm2mTypes(ctx, typs...); err == nil {
+				device.Lwm2mTypes = types.Data
+			}
+		case "deviceProfile":
+			if deviceProfile, err := d.GetDeviceProfiles(ctx, v.(string)); err == nil {
+				if deviceProfile.Count == 1 {
+					device.DeviceProfile = deviceProfile.Data[0]
+				}
+			}
+		default:
+			log.Debug("MERGE: key not found", slog.String("key", k), slog.Any("value", v))
 		}
-	}
-
-	b, err = json.Marshal(m)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(b, &device)
-	if err != nil {
-		return err
 	}
 
 	return d.storage.Save(ctx, device)
 }
 
-func (d svc) Get(ctx context.Context, offset, limit int, q string, tenants []string) (repositories.Collection[models.Device], error) {
-	return d.storage.Get(ctx, offset, limit, q, tenants)
+func (d svc) Get(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[models.Device], error) {
+	return d.storage.Get(ctx, offset, limit, q, sortBy, tenants)
 }
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")

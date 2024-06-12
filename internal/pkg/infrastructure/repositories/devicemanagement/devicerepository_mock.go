@@ -20,7 +20,7 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //		// make and configure a mocked DeviceRepository
 //		mockedDeviceRepository := &DeviceRepositoryMock{
-//			GetFunc: func(ctx context.Context, offset int, limit int, q string, tenants []string) (types.Collection[models.Device], error) {
+//			GetFunc: func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error) {
 //				panic("mock out the Get method")
 //			},
 //			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
@@ -29,7 +29,7 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 //				panic("mock out the GetBySensorID method")
 //			},
-//			GetOnlineDevicesFunc: func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error) {
+//			GetOnlineDevicesFunc: func(ctx context.Context, offset int, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
 //				panic("mock out the GetOnlineDevices method")
 //			},
 //			GetTenantsFunc: func(ctx context.Context) []string {
@@ -55,7 +55,7 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //	}
 type DeviceRepositoryMock struct {
 	// GetFunc mocks the Get method.
-	GetFunc func(ctx context.Context, offset int, limit int, q string, tenants []string) (types.Collection[models.Device], error)
+	GetFunc func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error)
 
 	// GetByDeviceIDFunc mocks the GetByDeviceID method.
 	GetByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
@@ -64,7 +64,7 @@ type DeviceRepositoryMock struct {
 	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 
 	// GetOnlineDevicesFunc mocks the GetOnlineDevices method.
-	GetOnlineDevicesFunc func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error)
+	GetOnlineDevicesFunc func(ctx context.Context, offset int, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error)
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) []string
@@ -93,6 +93,8 @@ type DeviceRepositoryMock struct {
 			Limit int
 			// Q is the q argument value.
 			Q string
+			// SortBy is the sortBy argument value.
+			SortBy string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -122,6 +124,8 @@ type DeviceRepositoryMock struct {
 			Offset int
 			// Limit is the limit argument value.
 			Limit int
+			// SortBy is the sortBy argument value.
+			SortBy string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -181,7 +185,7 @@ type DeviceRepositoryMock struct {
 }
 
 // Get calls GetFunc.
-func (mock *DeviceRepositoryMock) Get(ctx context.Context, offset int, limit int, q string, tenants []string) (types.Collection[models.Device], error) {
+func (mock *DeviceRepositoryMock) Get(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error) {
 	if mock.GetFunc == nil {
 		panic("DeviceRepositoryMock.GetFunc: method is nil but DeviceRepository.Get was just called")
 	}
@@ -190,18 +194,20 @@ func (mock *DeviceRepositoryMock) Get(ctx context.Context, offset int, limit int
 		Offset  int
 		Limit   int
 		Q       string
+		SortBy  string
 		Tenants []string
 	}{
 		Ctx:     ctx,
 		Offset:  offset,
 		Limit:   limit,
 		Q:       q,
+		SortBy:  sortBy,
 		Tenants: tenants,
 	}
 	mock.lockGet.Lock()
 	mock.calls.Get = append(mock.calls.Get, callInfo)
 	mock.lockGet.Unlock()
-	return mock.GetFunc(ctx, offset, limit, q, tenants)
+	return mock.GetFunc(ctx, offset, limit, q, sortBy, tenants)
 }
 
 // GetCalls gets all the calls that were made to Get.
@@ -213,6 +219,7 @@ func (mock *DeviceRepositoryMock) GetCalls() []struct {
 	Offset  int
 	Limit   int
 	Q       string
+	SortBy  string
 	Tenants []string
 } {
 	var calls []struct {
@@ -220,6 +227,7 @@ func (mock *DeviceRepositoryMock) GetCalls() []struct {
 		Offset  int
 		Limit   int
 		Q       string
+		SortBy  string
 		Tenants []string
 	}
 	mock.lockGet.RLock()
@@ -309,7 +317,7 @@ func (mock *DeviceRepositoryMock) GetBySensorIDCalls() []struct {
 }
 
 // GetOnlineDevices calls GetOnlineDevicesFunc.
-func (mock *DeviceRepositoryMock) GetOnlineDevices(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[models.Device], error) {
+func (mock *DeviceRepositoryMock) GetOnlineDevices(ctx context.Context, offset int, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
 	if mock.GetOnlineDevicesFunc == nil {
 		panic("DeviceRepositoryMock.GetOnlineDevicesFunc: method is nil but DeviceRepository.GetOnlineDevices was just called")
 	}
@@ -317,17 +325,19 @@ func (mock *DeviceRepositoryMock) GetOnlineDevices(ctx context.Context, offset i
 		Ctx     context.Context
 		Offset  int
 		Limit   int
+		SortBy  string
 		Tenants []string
 	}{
 		Ctx:     ctx,
 		Offset:  offset,
 		Limit:   limit,
+		SortBy:  sortBy,
 		Tenants: tenants,
 	}
 	mock.lockGetOnlineDevices.Lock()
 	mock.calls.GetOnlineDevices = append(mock.calls.GetOnlineDevices, callInfo)
 	mock.lockGetOnlineDevices.Unlock()
-	return mock.GetOnlineDevicesFunc(ctx, offset, limit, tenants)
+	return mock.GetOnlineDevicesFunc(ctx, offset, limit, sortBy, tenants)
 }
 
 // GetOnlineDevicesCalls gets all the calls that were made to GetOnlineDevices.
@@ -338,12 +348,14 @@ func (mock *DeviceRepositoryMock) GetOnlineDevicesCalls() []struct {
 	Ctx     context.Context
 	Offset  int
 	Limit   int
+	SortBy  string
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
 		Offset  int
 		Limit   int
+		SortBy  string
 		Tenants []string
 	}
 	mock.lockGetOnlineDevices.RLock()
