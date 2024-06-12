@@ -64,6 +64,7 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Get("/deviceprofiles", queryDeviceProfilesHandler(log, svc))
 				r.Get("/deviceprofiles/{deviceprofileid}", queryDeviceProfilesHandler(log, svc))
 				r.Get("/lwm2mtypes", queryLwm2mTypesHandler(log, svc))
+				r.Get("/tenants", queryTenantsHandler())
 			})
 		})
 	})
@@ -120,6 +121,25 @@ func getOffsetAndLimit(r *http.Request) (int, int) {
 	}
 
 	return conv(offset, 0), conv(limit, 10)
+}
+
+func queryTenantsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		_, span := tracer.Start(r.Context(), "query-tenants")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+		response := ApiResponse{
+			Data: allowedTenants,
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
 }
 
 func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {

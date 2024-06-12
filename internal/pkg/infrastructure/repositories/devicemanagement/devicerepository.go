@@ -96,7 +96,7 @@ func (r Repository) Get(ctx context.Context, offset, limit int, q string, sortBy
 }
 
 func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
-	return r.Get(ctx, offset,limit, "'{\"deviceState\":{\"online\": true}}", sortBy, tenants)
+	return r.Get(ctx, offset,limit, "{\"deviceState\":{\"online\": true}}", sortBy, tenants)
 }
 
 func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
