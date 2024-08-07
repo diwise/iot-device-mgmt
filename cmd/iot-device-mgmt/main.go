@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
@@ -29,8 +30,8 @@ import (
 const serviceName string = "iot-device-mgmt"
 
 var (
-	knownDevicesFile   string
-	opaFilePath        string
+	knownDevicesFile  string
+	opaFilePath       string
 	configurationFile string
 )
 
@@ -132,7 +133,13 @@ func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {
 	}
 	defer f.Close()
 
-	err = svc.Seed(ctx, f, []string{"default"})
+	logger := logging.GetFromContext(ctx)
+
+	tenants := env.GetVariableOrDefault(ctx, "ALLOWED_SEED_TENANTS", "default")
+
+	logger.Debug(fmt.Sprintf("Allowed seed tenants: %s", tenants))
+
+	err = svc.Seed(ctx, f, strings.Split(tenants, ","))
 	if err != nil {
 		fatal(ctx, "could not seed database with devices", err)
 	}
