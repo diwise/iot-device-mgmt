@@ -179,6 +179,62 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			w.Write(response.Byte())
 			return
 		} else {
+
+			bounds := r.URL.Query().Get("bounds")
+			if bounds != "" {
+
+				coords := extractCoordsFromQuery(bounds)
+
+				collection, err := svc.GetWithinBounds(ctx, coords)
+				if err != nil {
+					requestLogger.Error("failed to retrieve devices within bounds", "err", err.Error())
+					w.WriteHeader(http.StatusBadRequest)
+					return
+				}
+
+				meta := &meta{
+					TotalRecords: collection.TotalCount,
+					Offset:       &collection.Offset,
+					Limit:        &collection.Limit,
+					Count:        collection.Count,
+				}
+
+				links := createLinks(r.URL, meta)
+
+				if wantsGeoJSON(r) {
+					response, err := NewFeatureCollectionWithDevices(collection.Data)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+
+					response.Meta = meta
+					response.Links = links
+
+					b, err := json.Marshal(response)
+					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
+						return
+					}
+
+					w.Header().Add("Content-Type", "application/geo+json")
+					w.WriteHeader(http.StatusOK)
+					w.Write(b)
+					return
+				}
+
+				response := ApiResponse{
+					Meta:  meta,
+					Data:  collection.Data,
+					Links: links,
+				}
+
+				w.Header().Add("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write(response.Byte())
+				return
+			}
+
 			offset, limit := getOffsetAndLimit(r)
 
 			q := r.URL.Query().Get("q")
@@ -191,7 +247,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				}
 
 				if !json.Valid([]byte(q)) {
-					requestLogger.Error("query parameter is not an valid json object")
+					requestLogger.Error("query parameter is not a valid json object")
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
@@ -201,6 +257,10 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			if sortBy == "" {
 				sortBy = "name"
 			}
+
+			// called either svc.Get or svc.GetWithinBounds depending on if bounds is found in query
+			// collection can be created before the call to either Get or GetWithinBounds.
+			// eliminate duplicate code
 
 			collection, err := svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
 			if err != nil {
@@ -252,6 +312,29 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		}
 	}
+}
+
+func extractCoordsFromQuery(bounds string) repositories.Bounds {
+	trimmed := strings.Trim(bounds, "[]")
+
+	pairs := strings.Split(trimmed, ";")
+
+	coords1 := strings.Split(pairs[0], ",")
+	coords2 := strings.Split(pairs[1], ",")
+
+	seLat, _ := strconv.ParseFloat(coords1[0], 64)
+	nwLon, _ := strconv.ParseFloat(coords1[1], 64)
+	nwLat, _ := strconv.ParseFloat(coords2[0], 64)
+	seLon, _ := strconv.ParseFloat(coords2[1], 64)
+
+	coords := repositories.Bounds{
+		MinLat: seLat,
+		MinLon: nwLon,
+		MaxLat: nwLat,
+		MaxLon: seLon,
+	}
+
+	return coords
 }
 
 func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {

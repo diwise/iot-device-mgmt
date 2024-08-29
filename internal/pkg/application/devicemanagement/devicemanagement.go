@@ -25,6 +25,7 @@ type DeviceManagement interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
+	GetWithinBounds(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[models.Device], error)
 
 	Create(ctx context.Context, device models.Device) error
 	Update(ctx context.Context, device models.Device) error
@@ -164,6 +165,14 @@ func (d svc) GetWithAlarmID(ctx context.Context, alarmID string, tenants []strin
 		return models.Device{}, err
 	}
 	return device, nil
+}
+
+func (d svc) GetWithinBounds(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[models.Device], error) {
+	collection, err := d.storage.GetWithinBounds(ctx, bounds)
+	if err != nil {
+		return repositories.Collection[models.Device]{}, err
+	}
+	return collection, nil
 }
 
 func (d svc) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {

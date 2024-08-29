@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -20,6 +21,57 @@ import (
 	"github.com/matryer/is"
 	"gopkg.in/yaml.v2"
 )
+
+func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
+	is := is.New(t)
+
+	filePath := "devices.csv"
+	fieldName := "fileupload"
+	body := new(bytes.Buffer)
+
+	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
+		GetFunc: func(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+		GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+	}
+
+	msgCtx := messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx, cfg)
+
+	part := multipart.NewWriter(body)
+
+	w, err := part.CreateFormFile(fieldName, filePath)
+	is.NoErr(err)
+
+	_, err = io.Copy(w, strings.NewReader(csvMock))
+	is.NoErr(err)
+
+	part.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/devices?bounds=%5B62.387942893965395%2C17.2897328765558%3B62.3955798771803%2C17.33788389279115%5D", nil)
+	ctx := auth.WithAllowedTenants(req.Context(), []string{"default", "_default"})
+	req = req.WithContext(ctx)
+
+	req.Header.Add("Content-Type", part.FormDataContentType())
+	res := httptest.NewRecorder()
+
+	queryDevicesHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
+	is.Equal(len(deviceMgmtRepoMock.GetWithinBoundsCalls()), 1)
+}
 
 func TestCreateDeviceHandler(t *testing.T) {
 	is := is.New(t)

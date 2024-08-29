@@ -7,3 +7,10 @@ type Collection[T any] struct {
 	Limit      uint64
 	TotalCount uint64
 }
+
+type Bounds struct {
+	MinLon float64
+	MaxLon float64
+	MinLat float64
+	MaxLat float64
+}
