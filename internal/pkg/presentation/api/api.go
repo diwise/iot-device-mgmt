@@ -179,61 +179,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			w.Write(response.Byte())
 			return
 		} else {
-
-			bounds := r.URL.Query().Get("bounds")
-			if bounds != "" {
-
-				coords := extractCoordsFromQuery(bounds)
-
-				collection, err := svc.GetWithinBounds(ctx, coords)
-				if err != nil {
-					requestLogger.Error("failed to retrieve devices within bounds", "err", err.Error())
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				meta := &meta{
-					TotalRecords: collection.TotalCount,
-					Offset:       &collection.Offset,
-					Limit:        &collection.Limit,
-					Count:        collection.Count,
-				}
-
-				links := createLinks(r.URL, meta)
-
-				if wantsGeoJSON(r) {
-					response, err := NewFeatureCollectionWithDevices(collection.Data)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					response.Meta = meta
-					response.Links = links
-
-					b, err := json.Marshal(response)
-					if err != nil {
-						w.WriteHeader(http.StatusInternalServerError)
-						return
-					}
-
-					w.Header().Add("Content-Type", "application/geo+json")
-					w.WriteHeader(http.StatusOK)
-					w.Write(b)
-					return
-				}
-
-				response := ApiResponse{
-					Meta:  meta,
-					Data:  collection.Data,
-					Links: links,
-				}
-
-				w.Header().Add("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				w.Write(response.Byte())
-				return
-			}
+			collection := repositories.Collection[types.Device]{}
 
 			offset, limit := getOffsetAndLimit(r)
 
@@ -258,15 +204,24 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				sortBy = "name"
 			}
 
-			// called either svc.Get or svc.GetWithinBounds depending on if bounds is found in query
-			// collection can be created before the call to either Get or GetWithinBounds.
-			// eliminate duplicate code
+			bounds := r.URL.Query().Get("bounds")
+			if bounds != "" {
 
-			collection, err := svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
-			if err != nil {
-				requestLogger.Error("unable to fetch devices", "err", err.Error())
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+				coords := extractCoordsFromQuery(bounds)
+
+				collection, err = svc.GetWithinBounds(ctx, coords)
+				if err != nil {
+					requestLogger.Error("failed to retrieve devices within bounds", "err", err.Error())
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+			} else {
+				collection, err = svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
+				if err != nil {
+					requestLogger.Error("unable to fetch devices", "err", err.Error())
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
 			}
 
 			meta := &meta{

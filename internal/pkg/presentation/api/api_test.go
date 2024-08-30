@@ -23,34 +23,13 @@ import (
 )
 
 func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
-	is := is.New(t)
+	is, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
 
 	filePath := "devices.csv"
 	fieldName := "fileupload"
 	body := new(bytes.Buffer)
 
-	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		GetFunc: func(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[types.Device], error) {
-			return repositories.Collection[types.Device]{}, nil
-		},
-		GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[types.Device], error) {
-			return repositories.Collection[types.Device]{}, nil
-		},
-	}
-
-	msgCtx := messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			return nil
-		},
-	}
-
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
-
-	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx, cfg)
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
 
 	part := multipart.NewWriter(body)
 
@@ -74,34 +53,14 @@ func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
 }
 
 func TestCreateDeviceHandler(t *testing.T) {
-	is := is.New(t)
+
+	is, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
 
 	filePath := "devices.csv"
 	fieldName := "fileupload"
 	body := new(bytes.Buffer)
 
-	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SaveFunc: func(ctx context.Context, device types.Device) error {
-			return nil
-		},
-		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-			return types.Device{}, fmt.Errorf("device not found")
-		},
-	}
-
-	msgCtx := messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			return nil
-		},
-	}
-
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
-
-	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx, cfg)
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
 
 	part := multipart.NewWriter(body)
 
@@ -123,6 +82,39 @@ func TestCreateDeviceHandler(t *testing.T) {
 	createDeviceHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
 
 	is.Equal(2, len(deviceMgmtRepoMock.SaveCalls()))
+}
+
+func testSetup(t *testing.T) (*is.I, *messaging.MsgContextMock, *repository.DeviceRepositoryMock, *devicemanagement.DeviceManagementConfig) {
+	is := is.New(t)
+
+	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
+		GetFunc: func(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+		GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+		SaveFunc: func(ctx context.Context, device types.Device) error {
+			return nil
+		},
+		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+			return types.Device{}, fmt.Errorf("device not found")
+		},
+	}
+
+	msgCtx := &messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	return is, msgCtx, deviceMgmtRepoMock, cfg
 }
 
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
