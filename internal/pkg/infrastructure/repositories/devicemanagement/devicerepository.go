@@ -97,7 +97,29 @@ func (r Repository) Get(ctx context.Context, offset, limit int, q string, sortBy
 }
 
 func (r Repository) GetWithinBounds(ctx context.Context, bounds types.Bounds) (types.Collection[models.Device], error) {
-	return types.Collection[models.Device]{}, nil
+	var result jsonstore.QueryResult
+	var err error
+
+	result, err = r.storage.QueryWithinBounds(ctx, bounds)
+
+	if err != nil {
+		return types.Collection[models.Device]{}, err
+	}
+	if result.Count == 0 {
+		return types.Collection[models.Device]{}, nil
+	}
+
+	devices, err := jsonstore.MapAll[models.Device](result.Data)
+	if err != nil {
+		return types.Collection[models.Device]{}, err
+	}
+
+	return types.Collection[models.Device]{
+		Data:       devices,
+		Count:      result.Count,
+		Offset:     result.Offset,
+		Limit:      result.Limit,
+		TotalCount: result.TotalCount}, nil
 }
 
 func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
