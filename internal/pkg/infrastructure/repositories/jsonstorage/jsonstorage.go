@@ -418,10 +418,10 @@ func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, cond
 }
 
 func (s JsonStorage) QueryWithinBounds(ctx context.Context, bounds types.Bounds) (QueryResult, error) {
-	q := "latitude BETWEEN @minLat AND @maxLat AND longitude BETWEEN @minLon AND @maxLon"
+	q := "(data->'location'->>'latitude')::float BETWEEN @minLat AND @maxLat AND (data->'location'->>'longitude')::float BETWEEN @minLon AND @maxLon"
 
 	args := pgx.NamedArgs{
-		"tenant": "default",
+		"tenant": s.GetTenants(ctx),
 		"offset": 0,
 		"limit":  100,
 		"sortBy": "id",
