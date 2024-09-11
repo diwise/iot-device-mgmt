@@ -14,8 +14,8 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	alarmStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"
 	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -45,7 +45,7 @@ func main() {
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	p, err := jsonstore.NewPool(ctx, jsonstore.LoadConfiguration(ctx))
+	p, err := storage.NewPool(ctx, storage.LoadConfiguration(ctx))
 	if err != nil {
 		panic(err)
 	}
@@ -88,8 +88,14 @@ func setupAlarmDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) alarmStore.Al
 
 func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.DeviceRepository {
 	var err error
+	s := storage.NewWithPool(p)
+	err = s.CreateTables(ctx)
+	if err != nil {
+		panic(err)
+	}
+	repo := deviceStore.NewDeviceStorage(s)
 
-	repo, err := deviceStore.NewRepository(ctx, p)
+	//repo, err := deviceStore.NewRepository(ctx, p)
 	if err != nil {
 		panic(err)
 	}

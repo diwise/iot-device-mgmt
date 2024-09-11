@@ -38,6 +38,8 @@ type DeviceManagement interface {
 
 	GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
 	GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
+
+	Query(ctx context.Context, params map[string][]string, tenants []string) (repositories.Collection[models.Device], error)
 }
 
 type svc struct {
@@ -60,6 +62,7 @@ func New(d deviceStorage.DeviceRepository, m messaging.MsgContext, config *Devic
 
 	return dm
 }
+
 
 func (d svc) Create(ctx context.Context, device models.Device) error {
 	err := d.storage.Save(ctx, device)
@@ -138,6 +141,10 @@ func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, 
 	}
 
 	return d.storage.Save(ctx, device)
+}
+
+func (d svc) Query(ctx context.Context, params map[string][]string, tenants []string) (repositories.Collection[models.Device], error){
+	return d.storage.Query(ctx, params, tenants)
 }
 
 func (d svc) Get(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[models.Device], error) {

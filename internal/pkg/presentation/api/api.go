@@ -153,6 +153,12 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
+		_, err = svc.Query(ctx, r.URL.Query(), allowedTenants)
+		if err != nil {
+			return
+		}
+
+
 		sensorID := r.URL.Query().Get("devEUI")
 
 		if sensorID != "" {

@@ -12,7 +12,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
@@ -252,7 +252,7 @@ func testSetup(t *testing.T) (*is.I, context.Context, repository.DeviceRepositor
 	is := is.New(t)
 	ctx := context.Background()
 
-	p, err := jsonstore.NewPool(ctx, jsonstore.NewConfig(
+	p, err := storage.NewPool(ctx, storage.NewConfig(
 		"localhost",
 		"postgres",
 		"password",
@@ -264,10 +264,8 @@ func testSetup(t *testing.T) (*is.I, context.Context, repository.DeviceRepositor
 		t.SkipNow()
 	}
 
-	repo, err := repository.NewRepository(ctx, p)
-	if err != nil {
-		t.SkipNow()
-	}
+	s := storage.NewWithPool(p)
+	repo := repository.NewDeviceStorage(s)
 
 	msgCtx := &messaging.MsgContextMock{
 		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {

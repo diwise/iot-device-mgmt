@@ -58,6 +58,8 @@ type DeviceRepository interface {
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
 
 	GetTenants(ctx context.Context) []string
+
+	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[models.Device], error)
 }
 
 type Repository struct {

@@ -11,12 +11,14 @@ import (
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
-func NewDeviceStorage() DeviceRepository {
-	return &devices{}
+func NewDeviceStorage(s *storage.Storage) DeviceRepository {
+	return &devices{
+		Storage: s,
+	}
 }
 
 type devices struct {
-	storage.Storage
+	Storage *storage.Storage
 }
 
 func (ds *devices) Get(ctx context.Context, offset, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error) {

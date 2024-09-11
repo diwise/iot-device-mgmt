@@ -76,6 +76,10 @@ type Storage struct {
 	pool *pgxpool.Pool
 }
 
+func NewWithPool(pool *pgxpool.Pool) *Storage {
+	return &Storage{pool: pool}
+}
+
 func New(ctx context.Context, config Config) (*Storage, error) {
 	pool, err := NewPool(ctx, config)
 	if err != nil {

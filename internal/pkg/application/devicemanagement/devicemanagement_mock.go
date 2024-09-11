@@ -17,55 +17,58 @@ var _ DeviceManagement = &DeviceManagementMock{}
 
 // DeviceManagementMock is a mock implementation of DeviceManagement.
 //
-// 	func TestSomethingThatUsesDeviceManagement(t *testing.T) {
+//	func TestSomethingThatUsesDeviceManagement(t *testing.T) {
 //
-// 		// make and configure a mocked DeviceManagement
-// 		mockedDeviceManagement := &DeviceManagementMock{
-// 			CreateFunc: func(ctx context.Context, device models.Device) error {
-// 				panic("mock out the Create method")
-// 			},
-// 			GetFunc: func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (repositories.Collection[Device], error) {
-// 				panic("mock out the Get method")
-// 			},
-// 			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
-// 				panic("mock out the GetByDeviceID method")
-// 			},
-// 			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
-// 				panic("mock out the GetBySensorID method")
-// 			},
-// 			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (repositories.Collection[DeviceProfile], error) {
-// 				panic("mock out the GetDeviceProfiles method")
-// 			},
-// 			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (repositories.Collection[Lwm2mType], error) {
-// 				panic("mock out the GetLwm2mTypes method")
-// 			},
-// 			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
-// 				panic("mock out the GetWithAlarmID method")
-// 			},
-// 			GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[Device], error) {
-// 				panic("mock out the GetWithinBounds method")
-// 			},
-// 			MergeFunc: func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
-// 				panic("mock out the Merge method")
-// 			},
-// 			SeedFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
-// 				panic("mock out the Seed method")
-// 			},
-// 			UpdateFunc: func(ctx context.Context, device models.Device) error {
-// 				panic("mock out the Update method")
-// 			},
-// 			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
-// 				panic("mock out the UpdateState method")
-// 			},
-// 			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
-// 				panic("mock out the UpdateStatus method")
-// 			},
-// 		}
+//		// make and configure a mocked DeviceManagement
+//		mockedDeviceManagement := &DeviceManagementMock{
+//			CreateFunc: func(ctx context.Context, device models.Device) error {
+//				panic("mock out the Create method")
+//			},
+//			GetFunc: func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (repositories.Collection[models.Device], error) {
+//				panic("mock out the Get method")
+//			},
+//			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetByDeviceID method")
+//			},
+//			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetBySensorID method")
+//			},
+//			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
+//				panic("mock out the GetDeviceProfiles method")
+//			},
+//			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
+//				panic("mock out the GetLwm2mTypes method")
+//			},
+//			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
+//				panic("mock out the GetWithAlarmID method")
+//			},
+//			GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[models.Device], error) {
+//				panic("mock out the GetWithinBounds method")
+//			},
+//			MergeFunc: func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+//				panic("mock out the Merge method")
+//			},
+//			QueryFunc: func(ctx context.Context, params map[string][]string, tenants []string) (repositories.Collection[models.Device], error) {
+//				panic("mock out the Query method")
+//			},
+//			SeedFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
+//				panic("mock out the Seed method")
+//			},
+//			UpdateFunc: func(ctx context.Context, device models.Device) error {
+//				panic("mock out the Update method")
+//			},
+//			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+//				panic("mock out the UpdateState method")
+//			},
+//			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+//				panic("mock out the UpdateStatus method")
+//			},
+//		}
 //
-// 		// use mockedDeviceManagement in code that requires DeviceManagement
-// 		// and then make assertions.
+//		// use mockedDeviceManagement in code that requires DeviceManagement
+//		// and then make assertions.
 //
-// 	}
+//	}
 type DeviceManagementMock struct {
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, device models.Device) error
@@ -93,6 +96,9 @@ type DeviceManagementMock struct {
 
 	// MergeFunc mocks the Merge method.
 	MergeFunc func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
+
+	// QueryFunc mocks the Query method.
+	QueryFunc func(ctx context.Context, params map[string][]string, tenants []string) (repositories.Collection[models.Device], error)
 
 	// SeedFunc mocks the Seed method.
 	SeedFunc func(ctx context.Context, reader io.Reader, tenants []string) error
@@ -189,6 +195,15 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// Query holds details about calls to the Query method.
+		Query []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Params is the params argument value.
+			Params map[string][]string
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
 		// Seed holds details about calls to the Seed method.
 		Seed []struct {
 			// Ctx is the ctx argument value.
@@ -237,6 +252,7 @@ type DeviceManagementMock struct {
 	lockGetWithAlarmID    sync.RWMutex
 	lockGetWithinBounds   sync.RWMutex
 	lockMerge             sync.RWMutex
+	lockQuery             sync.RWMutex
 	lockSeed              sync.RWMutex
 	lockUpdate            sync.RWMutex
 	lockUpdateState       sync.RWMutex
@@ -263,7 +279,8 @@ func (mock *DeviceManagementMock) Create(ctx context.Context, device models.Devi
 
 // CreateCalls gets all the calls that were made to Create.
 // Check the length with:
-//     len(mockedDeviceManagement.CreateCalls())
+//
+//	len(mockedDeviceManagement.CreateCalls())
 func (mock *DeviceManagementMock) CreateCalls() []struct {
 	Ctx    context.Context
 	Device models.Device
@@ -306,7 +323,8 @@ func (mock *DeviceManagementMock) Get(ctx context.Context, offset int, limit int
 
 // GetCalls gets all the calls that were made to Get.
 // Check the length with:
-//     len(mockedDeviceManagement.GetCalls())
+//
+//	len(mockedDeviceManagement.GetCalls())
 func (mock *DeviceManagementMock) GetCalls() []struct {
 	Ctx     context.Context
 	Offset  int
@@ -351,7 +369,8 @@ func (mock *DeviceManagementMock) GetByDeviceID(ctx context.Context, deviceID st
 
 // GetByDeviceIDCalls gets all the calls that were made to GetByDeviceID.
 // Check the length with:
-//     len(mockedDeviceManagement.GetByDeviceIDCalls())
+//
+//	len(mockedDeviceManagement.GetByDeviceIDCalls())
 func (mock *DeviceManagementMock) GetByDeviceIDCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -390,7 +409,8 @@ func (mock *DeviceManagementMock) GetBySensorID(ctx context.Context, sensorID st
 
 // GetBySensorIDCalls gets all the calls that were made to GetBySensorID.
 // Check the length with:
-//     len(mockedDeviceManagement.GetBySensorIDCalls())
+//
+//	len(mockedDeviceManagement.GetBySensorIDCalls())
 func (mock *DeviceManagementMock) GetBySensorIDCalls() []struct {
 	Ctx      context.Context
 	SensorID string
@@ -427,7 +447,8 @@ func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name ..
 
 // GetDeviceProfilesCalls gets all the calls that were made to GetDeviceProfiles.
 // Check the length with:
-//     len(mockedDeviceManagement.GetDeviceProfilesCalls())
+//
+//	len(mockedDeviceManagement.GetDeviceProfilesCalls())
 func (mock *DeviceManagementMock) GetDeviceProfilesCalls() []struct {
 	Ctx  context.Context
 	Name []string
@@ -462,7 +483,8 @@ func (mock *DeviceManagementMock) GetLwm2mTypes(ctx context.Context, urn ...stri
 
 // GetLwm2mTypesCalls gets all the calls that were made to GetLwm2mTypes.
 // Check the length with:
-//     len(mockedDeviceManagement.GetLwm2mTypesCalls())
+//
+//	len(mockedDeviceManagement.GetLwm2mTypesCalls())
 func (mock *DeviceManagementMock) GetLwm2mTypesCalls() []struct {
 	Ctx context.Context
 	Urn []string
@@ -499,7 +521,8 @@ func (mock *DeviceManagementMock) GetWithAlarmID(ctx context.Context, alarmID st
 
 // GetWithAlarmIDCalls gets all the calls that were made to GetWithAlarmID.
 // Check the length with:
-//     len(mockedDeviceManagement.GetWithAlarmIDCalls())
+//
+//	len(mockedDeviceManagement.GetWithAlarmIDCalls())
 func (mock *DeviceManagementMock) GetWithAlarmIDCalls() []struct {
 	Ctx     context.Context
 	AlarmID string
@@ -536,7 +559,8 @@ func (mock *DeviceManagementMock) GetWithinBounds(ctx context.Context, bounds re
 
 // GetWithinBoundsCalls gets all the calls that were made to GetWithinBounds.
 // Check the length with:
-//     len(mockedDeviceManagement.GetWithinBoundsCalls())
+//
+//	len(mockedDeviceManagement.GetWithinBoundsCalls())
 func (mock *DeviceManagementMock) GetWithinBoundsCalls() []struct {
 	Ctx    context.Context
 	Bounds repositories.Bounds
@@ -575,7 +599,8 @@ func (mock *DeviceManagementMock) Merge(ctx context.Context, deviceID string, fi
 
 // MergeCalls gets all the calls that were made to Merge.
 // Check the length with:
-//     len(mockedDeviceManagement.MergeCalls())
+//
+//	len(mockedDeviceManagement.MergeCalls())
 func (mock *DeviceManagementMock) MergeCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -591,6 +616,46 @@ func (mock *DeviceManagementMock) MergeCalls() []struct {
 	mock.lockMerge.RLock()
 	calls = mock.calls.Merge
 	mock.lockMerge.RUnlock()
+	return calls
+}
+
+// Query calls QueryFunc.
+func (mock *DeviceManagementMock) Query(ctx context.Context, params map[string][]string, tenants []string) (repositories.Collection[models.Device], error) {
+	if mock.QueryFunc == nil {
+		panic("DeviceManagementMock.QueryFunc: method is nil but DeviceManagement.Query was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Params  map[string][]string
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Params:  params,
+		Tenants: tenants,
+	}
+	mock.lockQuery.Lock()
+	mock.calls.Query = append(mock.calls.Query, callInfo)
+	mock.lockQuery.Unlock()
+	return mock.QueryFunc(ctx, params, tenants)
+}
+
+// QueryCalls gets all the calls that were made to Query.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.QueryCalls())
+func (mock *DeviceManagementMock) QueryCalls() []struct {
+	Ctx     context.Context
+	Params  map[string][]string
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Params  map[string][]string
+		Tenants []string
+	}
+	mock.lockQuery.RLock()
+	calls = mock.calls.Query
+	mock.lockQuery.RUnlock()
 	return calls
 }
 
@@ -616,7 +681,8 @@ func (mock *DeviceManagementMock) Seed(ctx context.Context, reader io.Reader, te
 
 // SeedCalls gets all the calls that were made to Seed.
 // Check the length with:
-//     len(mockedDeviceManagement.SeedCalls())
+//
+//	len(mockedDeviceManagement.SeedCalls())
 func (mock *DeviceManagementMock) SeedCalls() []struct {
 	Ctx     context.Context
 	Reader  io.Reader
@@ -653,7 +719,8 @@ func (mock *DeviceManagementMock) Update(ctx context.Context, device models.Devi
 
 // UpdateCalls gets all the calls that were made to Update.
 // Check the length with:
-//     len(mockedDeviceManagement.UpdateCalls())
+//
+//	len(mockedDeviceManagement.UpdateCalls())
 func (mock *DeviceManagementMock) UpdateCalls() []struct {
 	Ctx    context.Context
 	Device models.Device
@@ -692,7 +759,8 @@ func (mock *DeviceManagementMock) UpdateState(ctx context.Context, deviceID stri
 
 // UpdateStateCalls gets all the calls that were made to UpdateState.
 // Check the length with:
-//     len(mockedDeviceManagement.UpdateStateCalls())
+//
+//	len(mockedDeviceManagement.UpdateStateCalls())
 func (mock *DeviceManagementMock) UpdateStateCalls() []struct {
 	Ctx         context.Context
 	DeviceID    string
@@ -735,7 +803,8 @@ func (mock *DeviceManagementMock) UpdateStatus(ctx context.Context, deviceID str
 
 // UpdateStatusCalls gets all the calls that were made to UpdateStatus.
 // Check the length with:
-//     len(mockedDeviceManagement.UpdateStatusCalls())
+//
+//	len(mockedDeviceManagement.UpdateStatusCalls())
 func (mock *DeviceManagementMock) UpdateStatusCalls() []struct {
 	Ctx          context.Context
 	DeviceID     string

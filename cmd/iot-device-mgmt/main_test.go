@@ -13,8 +13,8 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"gopkg.in/yaml.v2"
 
-	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
+	devicemanagementRepositories "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -131,7 +131,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	ctx := context.Background()
 
-	config := jsonstore.NewConfig(
+	config := storage.NewConfig(
 		"localhost",
 		"postgres",
 		"password",
@@ -140,13 +140,15 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 		"disable",
 	)
 
-	p, err := jsonstore.NewPool(ctx, config)
+	p, err := storage.NewPool(ctx, config)
 	if err != nil {
 		t.Log("could not connect to postgres, will skip test")
 		t.SkipNow()
 	}
 
-	repo, err := deviceStore.NewRepository(ctx, p)
+	s := storage.NewWithPool(p)
+
+	repo := devicemanagementRepositories.NewDeviceStorage(s)
 	if err != nil {
 		t.Log("could not initialize repository, will skip test")
 		t.SkipNow()
