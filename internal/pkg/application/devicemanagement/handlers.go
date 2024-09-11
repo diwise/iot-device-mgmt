@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
+	"strings"
 	"time"
 
 	"log/slog"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/senml"
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -34,7 +36,6 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement
 			Timestamp string `json:"timestamp"`
 		}{}
 
-		
 		err = json.Unmarshal(itm.Body(), &deviceStatus)
 		if err != nil {
 			log.Error("failed to unmarshal message", "err", err.Error())
@@ -75,6 +76,82 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement
 				log.Error("could not update state", "err", err.Error())
 				return
 			}
+		}
+	}
+}
+
+func NewMessageAcceptedHandler(svc DeviceManagement) messaging.TopicMessageHandler {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		var err error
+
+		ctx, span := tracer.Start(ctx, "message-accepted")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
+
+		message := struct {
+			Pack senml.Pack `json:"pack"`
+		}{}
+
+		err = json.Unmarshal(itm.Body(), &message)
+		if err != nil {
+			log.Error("failed to unmarshal message", "err", err.Error())
+			return
+		}
+
+		getObjectURN := func(m senml.Pack) string {
+			r, ok := m.GetStringValue(senml.FindByName("0"))
+			if !ok {
+				return ""
+			}
+			return r
+		}
+
+		if getObjectURN(message.Pack) != "urn:oma:lwm2m:ext:3" { // only accept Device Object
+			return
+		}
+
+		batteryLevel, ok := message.Pack.GetValue(senml.FindByName("9"))
+		if !ok {
+			log.Debug("no battery level found")
+			return
+		}
+
+		getDeviceID := func(m senml.Pack) string {
+			r, ok := m.GetRecord(senml.FindByName("0"))
+			if !ok {
+				return ""
+			}
+			return strings.Split(r.Name, "/")[0]
+		}
+
+		getTenant := func(m senml.Pack) string {
+			r, ok := m.GetRecord(senml.FindByName("tenant"))
+			if !ok {
+				return ""
+			}
+			return r.StringValue
+		}
+
+		var ts time.Time
+		ts, ok = message.Pack.GetTime(senml.FindByName("9"))
+		if !ok {
+			ts = time.Now().UTC()
+		}
+
+		status := models.DeviceStatus{
+			BatteryLevel: int(batteryLevel),
+			ObservedAt:   ts.UTC(),
+		}
+
+		tenant := getTenant(message.Pack)
+		deviceID := getDeviceID(message.Pack)
+
+		log.Debug("received battery level", "device_id", deviceID, "battery_level", status.BatteryLevel, "tenant", tenant)
+
+		err = svc.UpdateStatus(ctx, deviceID, tenant, status)
+		if err != nil {
+			log.Error("could not update status/batterylevel", "err", err.Error())
+			return
 		}
 	}
 }

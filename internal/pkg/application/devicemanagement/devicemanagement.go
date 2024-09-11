@@ -55,6 +55,7 @@ func New(d deviceStorage.DeviceRepository, m messaging.MsgContext, config *Devic
 	dm.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, dm))
 	dm.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", NewAlarmCreatedHandler(dm))
 	dm.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", NewAlarmClosedHandler(dm))
+	dm.messenger.RegisterTopicMessageHandler("message.accepted", NewMessageAcceptedHandler(dm))
 
 	return dm
 }

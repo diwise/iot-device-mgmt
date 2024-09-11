@@ -1,6 +1,8 @@
 module github.com/diwise/iot-device-mgmt
 
-go 1.22
+go 1.22.0
+
+toolchain go1.23.1
 
 require (
 	github.com/diwise/messaging-golang v0.0.0-20240506092815-fc973e9e4a4f
@@ -73,6 +75,7 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
+	github.com/diwise/senml v0.0.0-20240402140901-e4008e065e05
 	github.com/diwise/service-chassis v0.0.0-20240426080527-94892f253835
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
