@@ -9,7 +9,6 @@ import (
 
 	"log/slog"
 
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	models "github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/senml"
 
@@ -165,9 +164,9 @@ func NewAlarmCreatedHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
 
 		a := struct {
-			Alarm     types.Alarm `json:"alarm"`
-			Tenant    string      `json:"tenant"`
-			Timestamp time.Time   `json:"timestamp"`
+			Alarm     models.Alarm `json:"alarm"`
+			Tenant    string       `json:"tenant"`
+			Timestamp time.Time    `json:"timestamp"`
 		}{}
 
 		err = json.Unmarshal(itm.Body(), &a)
@@ -189,7 +188,7 @@ func NewAlarmCreatedHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 
 		device.Alarms = append(device.Alarms, a.Alarm.ID)
 		if a.Timestamp.After(device.DeviceState.ObservedAt) {
-			device.DeviceState.State = types.DeviceStateWarning
+			device.DeviceState.State = models.DeviceStateWarning
 			device.DeviceState.ObservedAt = a.Timestamp
 		}
 
