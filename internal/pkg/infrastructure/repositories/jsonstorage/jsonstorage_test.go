@@ -7,7 +7,10 @@ import (
 	"testing"
 	"time"
 
+	types "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/matryer/is"
 )
 
 type Thing struct {
@@ -99,6 +102,58 @@ func TestDelete(t *testing.T) {
 	if countAfterDelete == countBeforeDelete {
 		t.Log("found equal number of things after delete. Should be one less")
 		t.Fail()
+	}
+}
+
+func TestQueryWithinBounds(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	insertTestData(ctx, t, s.db)
+
+	bounds := types.Bounds{
+		MinLat: 40.0,
+		MinLon: -75.0,
+		MaxLat: 41.0,
+		MaxLon: -73.0,
+	}
+
+	result, err := s.QueryWithinBounds(ctx, bounds)
+	is.NoErr(err)
+	is.Equal(2, result.Count)
+
+	var data []map[string]interface{}
+	for _, d := range result.Data {
+		var device map[string]interface{}
+		err := json.Unmarshal(d, &device)
+		is.NoErr(err)
+		data = append(data, device)
+	}
+
+	expectedDevices := []map[string]interface{}{
+		{"id": 1, "latitude": 40.712776, "longitude": -74.005974, "tenant": "default"},
+		{"id": 2, "latitude": 40.730610, "longitude": -73.935242, "tenant": "default"},
+	}
+
+	is.Equal(expectedDevices, data)
+}
+
+func insertTestData(ctx context.Context, t *testing.T, db *pgxpool.Pool) {
+	_, err := db.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS devices (
+			id SERIAL PRIMARY KEY,
+			latitude FLOAT NOT NULL,
+			longitude FLOAT NOT NULL,
+			tenant TEXT NOT NULL,
+			data JSONB
+		);
+		INSERT INTO devices (latitude, longitude, tenant, data) VALUES
+		(40.712776, -74.005974, 'default', '{"id": 1, "latitude": 40.712776, "longitude": -74.005974, "tenant": "default"}'),
+		(40.730610, -73.935242, 'default', '{"id": 2, "latitude": 40.730610, "longitude": -73.935242, "tenant": "default"}'),
+		(34.052235, -118.243683, 'default', '{"id": 3, "latitude": 34.052235, "longitude": -118.243683, "tenant": "default"}');
+	`)
+	if err != nil {
+		t.Fatalf("Unable to insert test data: %v", err)
 	}
 }
 

@@ -16,43 +16,46 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 
 // DeviceRepositoryMock is a mock implementation of DeviceRepository.
 //
-//	func TestSomethingThatUsesDeviceRepository(t *testing.T) {
+// 	func TestSomethingThatUsesDeviceRepository(t *testing.T) {
 //
-//		// make and configure a mocked DeviceRepository
-//		mockedDeviceRepository := &DeviceRepositoryMock{
-//			GetFunc: func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error) {
-//				panic("mock out the Get method")
-//			},
-//			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
-//				panic("mock out the GetByDeviceID method")
-//			},
-//			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
-//				panic("mock out the GetBySensorID method")
-//			},
-//			GetOnlineDevicesFunc: func(ctx context.Context, offset int, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
-//				panic("mock out the GetOnlineDevices method")
-//			},
-//			GetTenantsFunc: func(ctx context.Context) []string {
-//				panic("mock out the GetTenants method")
-//			},
-//			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
-//				panic("mock out the GetWithAlarmID method")
-//			},
-//			SaveFunc: func(ctx context.Context, device models.Device) error {
-//				panic("mock out the Save method")
-//			},
-//			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
-//				panic("mock out the UpdateState method")
-//			},
-//			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
-//				panic("mock out the UpdateStatus method")
-//			},
-//		}
+// 		// make and configure a mocked DeviceRepository
+// 		mockedDeviceRepository := &DeviceRepositoryMock{
+// 			GetFunc: func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[Device], error) {
+// 				panic("mock out the Get method")
+// 			},
+// 			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
+// 				panic("mock out the GetByDeviceID method")
+// 			},
+// 			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
+// 				panic("mock out the GetBySensorID method")
+// 			},
+// 			GetOnlineDevicesFunc: func(ctx context.Context, offset int, limit int, sortBy string, tenants []string) (types.Collection[Device], error) {
+// 				panic("mock out the GetOnlineDevices method")
+// 			},
+// 			GetTenantsFunc: func(ctx context.Context) []string {
+// 				panic("mock out the GetTenants method")
+// 			},
+// 			GetWithAlarmIDFunc: func(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
+// 				panic("mock out the GetWithAlarmID method")
+// 			},
+// 			GetWithinBoundsFunc: func(ctx context.Context, bounds types.Bounds) (types.Collection[Device], error) {
+// 				panic("mock out the GetWithinBounds method")
+// 			},
+// 			SaveFunc: func(ctx context.Context, device models.Device) error {
+// 				panic("mock out the Save method")
+// 			},
+// 			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+// 				panic("mock out the UpdateState method")
+// 			},
+// 			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+// 				panic("mock out the UpdateStatus method")
+// 			},
+// 		}
 //
-//		// use mockedDeviceRepository in code that requires DeviceRepository
-//		// and then make assertions.
+// 		// use mockedDeviceRepository in code that requires DeviceRepository
+// 		// and then make assertions.
 //
-//	}
+// 	}
 type DeviceRepositoryMock struct {
 	// GetFunc mocks the Get method.
 	GetFunc func(ctx context.Context, offset int, limit int, q string, sortBy string, tenants []string) (types.Collection[models.Device], error)
@@ -71,6 +74,9 @@ type DeviceRepositoryMock struct {
 
 	// GetWithAlarmIDFunc mocks the GetWithAlarmID method.
 	GetWithAlarmIDFunc func(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
+
+	// GetWithinBoundsFunc mocks the GetWithinBounds method.
+	GetWithinBoundsFunc func(ctx context.Context, bounds types.Bounds) (types.Collection[models.Device], error)
 
 	// SaveFunc mocks the Save method.
 	SaveFunc func(ctx context.Context, device models.Device) error
@@ -143,6 +149,13 @@ type DeviceRepositoryMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// GetWithinBounds holds details about calls to the GetWithinBounds method.
+		GetWithinBounds []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Bounds is the bounds argument value.
+			Bounds types.Bounds
+		}
 		// Save holds details about calls to the Save method.
 		Save []struct {
 			// Ctx is the ctx argument value.
@@ -179,6 +192,7 @@ type DeviceRepositoryMock struct {
 	lockGetOnlineDevices sync.RWMutex
 	lockGetTenants       sync.RWMutex
 	lockGetWithAlarmID   sync.RWMutex
+	lockGetWithinBounds  sync.RWMutex
 	lockSave             sync.RWMutex
 	lockUpdateState      sync.RWMutex
 	lockUpdateStatus     sync.RWMutex
@@ -212,8 +226,7 @@ func (mock *DeviceRepositoryMock) Get(ctx context.Context, offset int, limit int
 
 // GetCalls gets all the calls that were made to Get.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetCalls())
+//     len(mockedDeviceRepository.GetCalls())
 func (mock *DeviceRepositoryMock) GetCalls() []struct {
 	Ctx     context.Context
 	Offset  int
@@ -258,8 +271,7 @@ func (mock *DeviceRepositoryMock) GetByDeviceID(ctx context.Context, deviceID st
 
 // GetByDeviceIDCalls gets all the calls that were made to GetByDeviceID.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetByDeviceIDCalls())
+//     len(mockedDeviceRepository.GetByDeviceIDCalls())
 func (mock *DeviceRepositoryMock) GetByDeviceIDCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
@@ -298,8 +310,7 @@ func (mock *DeviceRepositoryMock) GetBySensorID(ctx context.Context, sensorID st
 
 // GetBySensorIDCalls gets all the calls that were made to GetBySensorID.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetBySensorIDCalls())
+//     len(mockedDeviceRepository.GetBySensorIDCalls())
 func (mock *DeviceRepositoryMock) GetBySensorIDCalls() []struct {
 	Ctx      context.Context
 	SensorID string
@@ -342,8 +353,7 @@ func (mock *DeviceRepositoryMock) GetOnlineDevices(ctx context.Context, offset i
 
 // GetOnlineDevicesCalls gets all the calls that were made to GetOnlineDevices.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetOnlineDevicesCalls())
+//     len(mockedDeviceRepository.GetOnlineDevicesCalls())
 func (mock *DeviceRepositoryMock) GetOnlineDevicesCalls() []struct {
 	Ctx     context.Context
 	Offset  int
@@ -382,8 +392,7 @@ func (mock *DeviceRepositoryMock) GetTenants(ctx context.Context) []string {
 
 // GetTenantsCalls gets all the calls that were made to GetTenants.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetTenantsCalls())
+//     len(mockedDeviceRepository.GetTenantsCalls())
 func (mock *DeviceRepositoryMock) GetTenantsCalls() []struct {
 	Ctx context.Context
 } {
@@ -418,8 +427,7 @@ func (mock *DeviceRepositoryMock) GetWithAlarmID(ctx context.Context, alarmID st
 
 // GetWithAlarmIDCalls gets all the calls that were made to GetWithAlarmID.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.GetWithAlarmIDCalls())
+//     len(mockedDeviceRepository.GetWithAlarmIDCalls())
 func (mock *DeviceRepositoryMock) GetWithAlarmIDCalls() []struct {
 	Ctx     context.Context
 	AlarmID string
@@ -433,6 +441,41 @@ func (mock *DeviceRepositoryMock) GetWithAlarmIDCalls() []struct {
 	mock.lockGetWithAlarmID.RLock()
 	calls = mock.calls.GetWithAlarmID
 	mock.lockGetWithAlarmID.RUnlock()
+	return calls
+}
+
+// GetWithinBounds calls GetWithinBoundsFunc.
+func (mock *DeviceRepositoryMock) GetWithinBounds(ctx context.Context, bounds types.Bounds) (types.Collection[models.Device], error) {
+	if mock.GetWithinBoundsFunc == nil {
+		panic("DeviceRepositoryMock.GetWithinBoundsFunc: method is nil but DeviceRepository.GetWithinBounds was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Bounds types.Bounds
+	}{
+		Ctx:    ctx,
+		Bounds: bounds,
+	}
+	mock.lockGetWithinBounds.Lock()
+	mock.calls.GetWithinBounds = append(mock.calls.GetWithinBounds, callInfo)
+	mock.lockGetWithinBounds.Unlock()
+	return mock.GetWithinBoundsFunc(ctx, bounds)
+}
+
+// GetWithinBoundsCalls gets all the calls that were made to GetWithinBounds.
+// Check the length with:
+//     len(mockedDeviceRepository.GetWithinBoundsCalls())
+func (mock *DeviceRepositoryMock) GetWithinBoundsCalls() []struct {
+	Ctx    context.Context
+	Bounds types.Bounds
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Bounds types.Bounds
+	}
+	mock.lockGetWithinBounds.RLock()
+	calls = mock.calls.GetWithinBounds
+	mock.lockGetWithinBounds.RUnlock()
 	return calls
 }
 
@@ -456,8 +499,7 @@ func (mock *DeviceRepositoryMock) Save(ctx context.Context, device models.Device
 
 // SaveCalls gets all the calls that were made to Save.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.SaveCalls())
+//     len(mockedDeviceRepository.SaveCalls())
 func (mock *DeviceRepositoryMock) SaveCalls() []struct {
 	Ctx    context.Context
 	Device models.Device
@@ -496,8 +538,7 @@ func (mock *DeviceRepositoryMock) UpdateState(ctx context.Context, deviceID stri
 
 // UpdateStateCalls gets all the calls that were made to UpdateState.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.UpdateStateCalls())
+//     len(mockedDeviceRepository.UpdateStateCalls())
 func (mock *DeviceRepositoryMock) UpdateStateCalls() []struct {
 	Ctx         context.Context
 	DeviceID    string
@@ -540,8 +581,7 @@ func (mock *DeviceRepositoryMock) UpdateStatus(ctx context.Context, deviceID str
 
 // UpdateStatusCalls gets all the calls that were made to UpdateStatus.
 // Check the length with:
-//
-//	len(mockedDeviceRepository.UpdateStatusCalls())
+//     len(mockedDeviceRepository.UpdateStatusCalls())
 func (mock *DeviceRepositoryMock) UpdateStatusCalls() []struct {
 	Ctx          context.Context
 	DeviceID     string

@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -21,35 +22,45 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-func TestCreateDeviceHandler(t *testing.T) {
-	is := is.New(t)
+func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
+	is, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
 
 	filePath := "devices.csv"
 	fieldName := "fileupload"
 	body := new(bytes.Buffer)
 
-	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SaveFunc: func(ctx context.Context, device types.Device) error {
-			return nil
-		},
-		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-			return types.Device{}, fmt.Errorf("device not found")
-		},
-	}
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
 
-	msgCtx := messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			return nil
-		},
-	}
+	part := multipart.NewWriter(body)
 
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+	w, err := part.CreateFormFile(fieldName, filePath)
+	is.NoErr(err)
 
-	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx, cfg)
+	_, err = io.Copy(w, strings.NewReader(csvMock))
+	is.NoErr(err)
+
+	part.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/devices?bounds=%5B62.387942893965395%2C17.2897328765558%3B62.3955798771803%2C17.33788389279115%5D", nil)
+	ctx := auth.WithAllowedTenants(req.Context(), []string{"default", "_default"})
+	req = req.WithContext(ctx)
+
+	req.Header.Add("Content-Type", part.FormDataContentType())
+	res := httptest.NewRecorder()
+
+	queryDevicesHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
+	is.Equal(len(deviceMgmtRepoMock.GetWithinBoundsCalls()), 1)
+}
+
+func TestCreateDeviceHandler(t *testing.T) {
+
+	is, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
+
+	filePath := "devices.csv"
+	fieldName := "fileupload"
+	body := new(bytes.Buffer)
+
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
 
 	part := multipart.NewWriter(body)
 
@@ -71,6 +82,39 @@ func TestCreateDeviceHandler(t *testing.T) {
 	createDeviceHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
 
 	is.Equal(2, len(deviceMgmtRepoMock.SaveCalls()))
+}
+
+func testSetup(t *testing.T) (*is.I, *messaging.MsgContextMock, *repository.DeviceRepositoryMock, *devicemanagement.DeviceManagementConfig) {
+	is := is.New(t)
+
+	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
+		GetFunc: func(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+		GetWithinBoundsFunc: func(ctx context.Context, bounds repositories.Bounds) (repositories.Collection[types.Device], error) {
+			return repositories.Collection[types.Device]{}, nil
+		},
+		SaveFunc: func(ctx context.Context, device types.Device) error {
+			return nil
+		},
+		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+			return types.Device{}, fmt.Errorf("device not found")
+		},
+	}
+
+	msgCtx := &messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	return is, msgCtx, deviceMgmtRepoMock, cfg
 }
 
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	types "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
@@ -383,6 +384,51 @@ func (s JsonStorage) Query(ctx context.Context, q string, tenants []string, cond
 	}
 	for _, condition := range conditions {
 		condition(args)
+	}
+
+	sb := strings.Builder{}
+	sb.WriteString("SELECT data, count(*) OVER () AS total_count FROM (")
+
+	for _, v := range s.entityConfig {
+		sb.WriteString(fmt.Sprintf("SELECT data FROM %s WHERE %s AND tenant=any(@tenant) AND deleted = FALSE\n", v.TableName, q))
+		sb.WriteString("UNION\n")
+	}
+	query := strings.TrimSuffix(sb.String(), "UNION\n")
+	query = query + ") all_tables ORDER BY (data->>@sortBy) OFFSET @offset LIMIT @limit"
+
+	rows, err := s.db.Query(ctx, query, args)
+	if err != nil {
+		return QueryResult{}, err
+	}
+	defer rows.Close()
+
+	var data [][]byte
+	var totalCount uint64
+
+	for rows.Next() {
+		var d json.RawMessage
+		err := rows.Scan(&d, &totalCount)
+		if err != nil {
+			return QueryResult{}, err
+		}
+		data = append(data, d)
+	}
+
+	return NewQueryResult(data, len(data), totalCount, args["offset"].(int), args["limit"].(int)), nil
+}
+
+func (s JsonStorage) QueryWithinBounds(ctx context.Context, bounds types.Bounds) (QueryResult, error) {
+	q := "(data->'location'->>'latitude')::float BETWEEN @minLat AND @maxLat AND (data->'location'->>'longitude')::float BETWEEN @minLon AND @maxLon"
+
+	args := pgx.NamedArgs{
+		"tenant": s.GetTenants(ctx),
+		"offset": 0,
+		"limit":  100,
+		"sortBy": "id",
+		"minLat": bounds.MinLat,
+		"minLon": bounds.MinLon,
+		"maxLat": bounds.MaxLat,
+		"maxLon": bounds.MaxLon,
 	}
 
 	sb := strings.Builder{}

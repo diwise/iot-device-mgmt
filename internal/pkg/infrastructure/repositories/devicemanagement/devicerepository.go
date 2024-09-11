@@ -50,6 +50,7 @@ type DeviceRepository interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
 	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
+	GetWithinBounds(ctx context.Context, bounds types.Bounds) (types.Collection[models.Device], error)
 
 	Save(ctx context.Context, device models.Device) error
 
@@ -95,13 +96,39 @@ func (r Repository) Get(ctx context.Context, offset, limit int, q string, sortBy
 	}, nil
 }
 
+func (r Repository) GetWithinBounds(ctx context.Context, bounds types.Bounds) (types.Collection[models.Device], error) {
+	var result jsonstore.QueryResult
+	var err error
+
+	result, err = r.storage.QueryWithinBounds(ctx, bounds)
+
+	if err != nil {
+		return types.Collection[models.Device]{}, err
+	}
+	if result.Count == 0 {
+		return types.Collection[models.Device]{}, nil
+	}
+
+	devices, err := jsonstore.MapAll[models.Device](result.Data)
+	if err != nil {
+		return types.Collection[models.Device]{}, err
+	}
+
+	return types.Collection[models.Device]{
+		Data:       devices,
+		Count:      result.Count,
+		Offset:     result.Offset,
+		Limit:      result.Limit,
+		TotalCount: result.TotalCount}, nil
+}
+
 func (r Repository) GetOnlineDevices(ctx context.Context, offset, limit int, sortBy string, tenants []string) (types.Collection[models.Device], error) {
-	return r.Get(ctx, offset,limit, "{\"deviceState\":{\"online\": true}}", sortBy, tenants)
+	return r.Get(ctx, offset, limit, "{\"deviceState\":{\"online\": true}}", sortBy, tenants)
 }
 
 func (r Repository) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
 	q := fmt.Sprintf("data ->> 'sensorID' = '%s'", sensorID)
-	
+
 	result, err := r.storage.QueryType(ctx, TypeName, q, tenants)
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
@@ -151,7 +178,7 @@ func (r Repository) GetByDeviceID(ctx context.Context, deviceID string, tenants 
 func (r Repository) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
 	q := fmt.Sprintf("{\"alarms\":[\"%s\"]}", alarmID)
 
-	result, err :=  r.Get(ctx, 0, 100, q, "", tenants)		
+	result, err := r.Get(ctx, 0, 100, q, "", tenants)
 	if err != nil {
 		if errors.Is(err, jsonstore.ErrNoRows) {
 			return models.Device{}, ErrDeviceNotFound
