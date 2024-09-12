@@ -116,7 +116,7 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			modified_on	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,	
 			deleted     BOOLEAN DEFAULT FALSE,
 			deleted_on  timestamp with time zone NULL,
-			CONSTRAINT pkey_devices_unique PRIMARY KEY (alarm_id, deleted)
+			CONSTRAINT pkey_alarms_unique PRIMARY KEY (alarm_id, deleted)
 		);
 
 	`)
