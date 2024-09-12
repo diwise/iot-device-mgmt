@@ -145,10 +145,10 @@ func (s *Storage) AddAlarm(ctx context.Context, alarm types.Alarm) error {
 
 func (s *Storage) CloseAlarm(ctx context.Context, alarmID, tenant string) error {
 	args := pgx.NamedArgs{
-		"alarm_id":    alarmID,
-		"tenant":      tenant,
+		"alarm_id": alarmID,
+		"tenant":   tenant,
 	}
-	
+
 	_, err := s.pool.Exec(ctx, `
 		UPDATE alarms
 		SET deleted = TRUE, deleted_on = CURRENT_TIMESTAMP

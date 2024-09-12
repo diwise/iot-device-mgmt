@@ -72,7 +72,7 @@ const (
 )
 
 type Alarm struct {
-	ID          string    `json:"id"`	
+	ID          string    `json:"id"`
 	AlarmType   string    `json:"alarmType"`
 	Description string    `json:"description,omitempty"`
 	ObservedAt  time.Time `json:"observedAt"`

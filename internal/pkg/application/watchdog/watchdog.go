@@ -70,7 +70,7 @@ type lastObservedWatcher struct {
 
 func (l *lastObservedWatcher) Watch(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
-	
+
 	pub := make(chan string)
 
 	for {
@@ -78,7 +78,7 @@ func (l *lastObservedWatcher) Watch(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			
+
 			go l.checkLastObserved(ctx, pub)
 		case deviceID := <-pub:
 			l.publish(ctx, deviceID)
@@ -105,7 +105,7 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, pub chan st
 
 	do := func() bool {
 		collection, err := l.devicemanagement.GetOnlineDevices(ctx, offset, limit)
-		
+
 		if err != nil {
 			return false
 		}

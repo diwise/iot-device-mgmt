@@ -135,7 +135,7 @@ func TestAddAlarm(t *testing.T) {
 	is.NoErr(err)
 }
 
-func TestQueryAlarms(t *testing.T)    {
+func TestQueryAlarms(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
 
@@ -145,11 +145,11 @@ func TestQueryAlarms(t *testing.T)    {
 
 	result, err := s.QueryAlarms(ctx, WithLimit(1))
 	is.NoErr(err)
-	is.Equal(len(result.Data), 1)	
+	is.Equal(len(result.Data), 1)
 	is.Equal(result.Count, uint64(1))
 }
 
-func TestCloseAlarm(t *testing.T)     {
+func TestCloseAlarm(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
 
@@ -159,7 +159,7 @@ func TestCloseAlarm(t *testing.T)     {
 
 	result, err := s.GetAlarm(ctx, WithAlarmID(alarm.ID))
 	is.NoErr(err)
-	
+
 	err = s.CloseAlarm(ctx, result.ID, result.Tenant)
 	is.NoErr(err)
 }
