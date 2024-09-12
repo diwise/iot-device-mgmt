@@ -16,7 +16,6 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -437,7 +436,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		_, ctx, log = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-		var collection repositories.Collection[types.Alarm]
+		var collection types.Collection[types.Alarm]
 		offset, limit := getOffsetAndLimit(r)
 
 		deviceID := chi.URLParam(r, "deviceID")

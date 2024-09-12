@@ -19,6 +19,8 @@ type Condition struct {
 	Bounds    *Box
 	sortBy    string
 	sortOrder string
+	AlarmID   string
+	RefID     string
 }
 
 type Box struct {
@@ -48,6 +50,12 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if len(c.Types) > 1 {
 		args["profiles"] = c.Types
+	}
+	if c.AlarmID != "" {
+		args["alarm_id"] = c.AlarmID
+	}
+	if c.RefID != "" {
+		args["ref_id"] = c.RefID
 	}
 
 	return args
@@ -80,6 +88,12 @@ func (c Condition) Where() string {
 	if c.Bounds != nil {
 		where += fmt.Sprintf("AND location <@ BOX '((%f,%f),(%f,%f))' ", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY)
 	}
+	if c.AlarmID != "" {
+		where += "AND id = @alarm_id "
+	}
+	if c.RefID != "" {
+		where += "AND ref_id = @ref_id "
+	}
 
 	// remove first "AND" if exists
 	if len(where) > 0 {
@@ -87,6 +101,20 @@ func (c Condition) Where() string {
 	}
 
 	return where
+}
+
+func WithAlarmID(alarmID string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.AlarmID = alarmID
+		return c
+	}
+}
+
+func WithRefID(refID string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.RefID = refID
+		return c
+	}
 }
 
 func WithSortBy(sortBy string) ConditionFunc {
