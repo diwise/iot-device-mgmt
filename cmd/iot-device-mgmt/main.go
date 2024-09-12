@@ -12,8 +12,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	alarmStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"
-	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	alarmStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"	
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -61,7 +60,7 @@ func main() {
 
 	seedDataOrDie(ctx, mgmtSvc)
 
-	watchdog := watchdog.New(deviceStorage, messenger)
+	watchdog := watchdog.New(mgmtSvc, messenger)
 	watchdog.Start(ctx)
 	defer watchdog.Stop(ctx)
 
@@ -86,21 +85,14 @@ func setupAlarmDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) alarmStore.Al
 	return repo
 }
 
-func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.DeviceRepository {
+func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) devicemanagement.DeviceRepository {
 	var err error
 	s := storage.NewWithPool(p)
 	err = s.CreateTables(ctx)
 	if err != nil {
 		panic(err)
 	}
-	repo := deviceStore.NewDeviceStorage(s)
-
-	//repo, err := deviceStore.NewRepository(ctx, p)
-	if err != nil {
-		panic(err)
-	}
-
-	return repo
+	return s
 }
 
 func loadConfigurationOrDie(ctx context.Context) *devicemanagement.DeviceManagementConfig {

@@ -13,7 +13,6 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"gopkg.in/yaml.v2"
 
-	devicemanagementRepositories "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
@@ -148,12 +147,6 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 
 	s := storage.NewWithPool(p)
 
-	repo := devicemanagementRepositories.NewDeviceStorage(s)
-	if err != nil {
-		t.Log("could not initialize repository, will skip test")
-		t.SkipNow()
-	}
-
 	msgCtx := messaging.MsgContextMock{
 		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
 			return nil
@@ -166,7 +159,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	cfg := &devicemanagement.DeviceManagementConfig{}
 	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
 
-	app := devicemanagement.New(repo, &msgCtx, cfg)
+	app := devicemanagement.New(s, &msgCtx, cfg)
 	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
 	is.NoErr(err)
 

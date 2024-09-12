@@ -14,7 +14,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+func (d service) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
 	r := csv.NewReader(reader)

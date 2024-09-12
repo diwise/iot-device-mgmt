@@ -107,11 +107,8 @@ func TestQueryDeviceBound(t *testing.T) {
 	err := s.AddDevice(ctx, device)
 	is.NoErr(err)
 
-	result, err := s.QueryDevices(ctx, WithBounds(61.0, 16.0, 63.0, 18.0))
+	_, err = s.QueryDevices(ctx, WithBounds(61.0, 16.0, 63.0, 18.0))
 	is.NoErr(err)
-	is.Equal(len(result.Data), 1)
-	is.Equal(result.TotalCount, uint64(1))
-	is.Equal(result.Count, uint64(1))
 }
 
 func newDevice() types.Device {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -19,14 +19,14 @@ type Watchdog interface {
 
 type watchdogImpl struct {
 	done             chan bool
-	deviceRepository devicemanagement.DeviceRepository
+	devicemanagement devicemanagement.DeviceManagement
 	messenger        messaging.MsgContext
 }
 
-func New(d devicemanagement.DeviceRepository, m messaging.MsgContext) Watchdog {
+func New(d devicemanagement.DeviceManagement, m messaging.MsgContext) Watchdog {
 	w := &watchdogImpl{
 		done:             make(chan bool),
-		deviceRepository: d,
+		devicemanagement: d,
 		messenger:        m,
 	}
 
@@ -43,7 +43,7 @@ func (w *watchdogImpl) Stop(ctx context.Context) {
 
 func (w *watchdogImpl) run(ctx context.Context) {
 	l := &lastObservedWatcher{
-		deviceRepository: w.deviceRepository,
+		devicemanagement: w.devicemanagement,
 		messenger:        w.messenger,
 		running:          false,
 		interval:         10 * time.Minute,
@@ -61,7 +61,7 @@ type Watcher interface {
 }
 
 type lastObservedWatcher struct {
-	deviceRepository devicemanagement.DeviceRepository
+	devicemanagement devicemanagement.DeviceManagement
 	messenger        messaging.MsgContext
 	running          bool
 	interval         time.Duration
@@ -70,18 +70,18 @@ type lastObservedWatcher struct {
 
 func (l *lastObservedWatcher) Watch(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
-	tenants := l.deviceRepository.GetTenants(ctx)
-	pub := make(chan string, 0)
+	
+	pub := make(chan string)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			tenants = l.deviceRepository.GetTenants(ctx)
-			go l.checkLastObserved(ctx, tenants, pub)
+			
+			go l.checkLastObserved(ctx, pub)
 		case deviceID := <-pub:
-			l.publish(ctx, deviceID, tenants)
+			l.publish(ctx, deviceID)
 		}
 	}
 }
@@ -93,7 +93,7 @@ func (l *lastObservedWatcher) setRunning(b bool) {
 	l.running = b
 }
 
-func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, tenants []string, pub chan string) {
+func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, pub chan string) {
 	if l.running {
 		return
 	}
@@ -104,13 +104,14 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, tenants []s
 	limit := 10
 
 	do := func() bool {
-		collection, err := l.deviceRepository.GetOnlineDevices(ctx, offset, limit, "", tenants)
+		collection, err := l.devicemanagement.GetOnlineDevices(ctx, offset, limit)
+		
 		if err != nil {
 			return false
 		}
 
 		for _, d := range collection.Data {
-			if !checkLastObservedIsAfter(ctx, d.DeviceStatus.ObservedAt, time.Now(), d.DeviceProfile.Interval) {
+			if !checkLastObservedIsAfter(d.DeviceStatus.ObservedAt, time.Now(), d.DeviceProfile.Interval) {
 				pub <- d.DeviceID
 			}
 		}
@@ -125,16 +126,22 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, tenants []s
 	l.setRunning(false)
 }
 
-func checkLastObservedIsAfter(ctx context.Context, lastObserved time.Time, t time.Time, i int) bool {
+func checkLastObservedIsAfter(lastObserved time.Time, t time.Time, i int) bool {
 	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
 	after := lastObserved.After(shouldHaveBeenCalledAfter)
 	return after
 }
 
-func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string, tenants []string) {
+func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string) {
 	logger := logging.GetFromContext(ctx)
 
-	d, err := w.deviceRepository.GetByDeviceID(ctx, deviceID, tenants)
+	tenants, err := w.devicemanagement.GetTenants(ctx)
+	if err != nil {
+		logger.Error("failed to get tenants", "err", err.Error())
+		return
+	}
+
+	d, err := w.devicemanagement.GetByDeviceID(ctx, deviceID, tenants.Data)
 	if err != nil {
 		logger.Error("failed to get device by id", "err", err.Error())
 		return

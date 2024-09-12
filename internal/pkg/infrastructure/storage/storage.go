@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/jackc/pgx/pgtype"
@@ -264,7 +263,7 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 	return device, errors.Join(errs...)
 }
 
-func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc) (repositories.Collection[types.Device], error) {
+func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
 	condition := &Condition{}
 	for _, f := range conditions {
 		f(condition)
@@ -292,14 +291,14 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 	query := fmt.Sprintf(`
 		SELECT device_id, sensor_id, active, data, profile, state, status, tags, location, tenant, count(*) OVER () AS count
 		FROM devices
-		WHERE %s AND deleted = FALSE
-		%s
+		WHERE %s AND deleted = FALSE		
 		ORDER BY %s %s		
-	`, where, offsetLimit, condition.SortBy(), condition.SortOrder())
+		%s
+	`, where, condition.SortBy(), condition.SortOrder(), offsetLimit)
 
 	rows, err := s.pool.Query(ctx, query, args)
 	if err != nil {
-		return repositories.Collection[types.Device]{}, err
+		return types.Collection[types.Device]{}, err
 	}
 
 	devices := make([]types.Device, 0)
@@ -327,10 +326,10 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 		return errors.Join(errs...)
 	})
 	if err != nil {
-		return repositories.Collection[types.Device]{}, err
+		return types.Collection[types.Device]{}, err
 	}
 
-	return repositories.Collection[types.Device]{
+	return types.Collection[types.Device]{
 		Data:       devices,
 		Count:      uint64(len(devices)),
 		Limit:      uint64(condition.Limit()),
@@ -453,14 +452,14 @@ func (s *Storage) SetActive(ctx context.Context, deviceID, tenant string, active
 	return nil
 }
 
-func (s *Storage) GetTenants(ctx context.Context) []string {
+func (s *Storage) GetTenants(ctx context.Context) ([]string, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT DISTINCT tenant
 		FROM devices
 		WHERE deleted = FALSE
 	`)
 	if err != nil {
-		return nil
+		return []string{}, err
 	}
 
 	var tenants []string
@@ -470,5 +469,5 @@ func (s *Storage) GetTenants(ctx context.Context) []string {
 		tenants = append(tenants, tenant)
 	}
 
-	return tenants
+	return tenants, nil
 }

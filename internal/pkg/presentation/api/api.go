@@ -153,12 +153,6 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		_, err = svc.Query(ctx, r.URL.Query(), allowedTenants)
-		if err != nil {
-			return
-		}
-
-
 		sensorID := r.URL.Query().Get("devEUI")
 
 		if sensorID != "" {
@@ -185,49 +179,11 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			w.Write(response.Byte())
 			return
 		} else {
-			collection := repositories.Collection[types.Device]{}
-
-			offset, limit := getOffsetAndLimit(r)
-
-			q := r.URL.Query().Get("q")
-			if q != "" {
-				q, err = url.QueryUnescape(q)
-				if err != nil {
-					requestLogger.Error("wrong query parameter", "err", err.Error())
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				if !json.Valid([]byte(q)) {
-					requestLogger.Error("query parameter is not a valid json object")
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-			}
-
-			sortBy := r.URL.Query().Get("sortBy")
-			if sortBy == "" {
-				sortBy = "name"
-			}
-
-			bounds := r.URL.Query().Get("bounds")
-			if bounds != "" {
-
-				coords := extractCoordsFromQuery(bounds)
-
-				collection, err = svc.GetWithinBounds(ctx, coords)
-				if err != nil {
-					requestLogger.Error("failed to retrieve devices within bounds", "err", err.Error())
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
-			} else {
-				collection, err = svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
-				if err != nil {
-					requestLogger.Error("unable to fetch devices", "err", err.Error())
-					w.WriteHeader(http.StatusInternalServerError)
-					return
-				}
+			collection, err := svc.Query(ctx, r.URL.Query(), allowedTenants)
+			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
+				return
 			}
 
 			meta := &meta{
@@ -273,29 +229,6 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		}
 	}
-}
-
-func extractCoordsFromQuery(bounds string) repositories.Bounds {
-	trimmed := strings.Trim(bounds, "[]")
-
-	pairs := strings.Split(trimmed, ";")
-
-	coords1 := strings.Split(pairs[0], ",")
-	coords2 := strings.Split(pairs[1], ",")
-
-	seLat, _ := strconv.ParseFloat(coords1[0], 64)
-	nwLon, _ := strconv.ParseFloat(coords1[1], 64)
-	nwLat, _ := strconv.ParseFloat(coords2[0], 64)
-	seLon, _ := strconv.ParseFloat(coords2[1], 64)
-
-	coords := repositories.Bounds{
-		MinLat: seLat,
-		MinLon: nwLon,
-		MaxLat: nwLat,
-		MaxLon: seLon,
-	}
-
-	return coords
 }
 
 func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
@@ -615,7 +548,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 			name = deviceprofileId
 		}
 
-		var profiles repositories.Collection[types.DeviceProfile]
+		var profiles types.Collection[types.DeviceProfile]
 
 		if name != "" {
 			names := []string{name}

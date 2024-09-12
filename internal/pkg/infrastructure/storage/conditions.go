@@ -2,21 +2,22 @@ package storage
 
 import (
 	"fmt"
+	"math"
 
 	"github.com/jackc/pgx/v5"
 )
 
 type Condition struct {
-	DeviceID string
-	SensorID string
-	Types    []string
-	Tenants  []string
-	offset   *int
-	limit    *int
-	Active   *bool
-	Online   *bool
-	Bounds   *Box
-	sortBy string
+	DeviceID  string
+	SensorID  string
+	Types     []string
+	Tenants   []string
+	offset    *int
+	limit     *int
+	Active    *bool
+	Online    *bool
+	Bounds    *Box
+	sortBy    string
 	sortOrder string
 }
 
@@ -101,7 +102,7 @@ func WithSortDesc(desc bool) ConditionFunc {
 			c.sortOrder = "DESC"
 		} else {
 			c.sortOrder = "ASC"
-		}		
+		}
 		return c
 	}
 }
@@ -128,10 +129,16 @@ func (c Condition) SortOrder() string {
 }
 
 func (c Condition) Offset() int {
+	if c.offset == nil {
+		return 0
+	}
 	return *c.offset
 }
 
 func (c Condition) Limit() int {
+	if c.limit == nil {
+		return math.MaxInt64
+	}
 	return *c.limit
 }
 

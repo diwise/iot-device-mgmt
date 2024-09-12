@@ -21,7 +21,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/device")
 
-func NewDeviceStatusHandler(messenger messaging.MsgContext, svc DeviceManagement) messaging.TopicMessageHandler {
+func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
 		var err error
 
