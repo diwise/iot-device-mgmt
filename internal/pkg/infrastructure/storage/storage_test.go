@@ -111,6 +111,72 @@ func TestQueryDeviceBound(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestGetWithAlarmID(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	device := newDevice()
+	device.Alarms = append(device.Alarms, uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString())
+	err := s.AddDevice(ctx, device)
+	is.NoErr(err)
+
+	result, err := s.GetDevice(ctx, WithDeviceAlarmID(device.Alarms[0]))
+	is.NoErr(err)
+
+	is.Equal(result.DeviceID, device.DeviceID)
+}
+
+func TestAddAlarm(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	alarm := newAlarm()
+	err := s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+}
+
+func TestQueryAlarms(t *testing.T)    {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	alarm := newAlarm()
+	err := s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+
+	result, err := s.QueryAlarms(ctx, WithLimit(1))
+	is.NoErr(err)
+	is.Equal(len(result.Data), 1)	
+	is.Equal(result.Count, uint64(1))
+}
+
+func TestCloseAlarm(t *testing.T)     {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	alarm := newAlarm()
+	err := s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+
+	result, err := s.GetAlarm(ctx, WithAlarmID(alarm.ID))
+	is.NoErr(err)
+	
+	err = s.CloseAlarm(ctx, result.ID, result.Tenant)
+	is.NoErr(err)
+}
+
+func newAlarm() types.Alarm {
+	alarm := types.Alarm{
+		ID:          uuid.NewString(),
+		AlarmType:   "alarm1",
+		Description: "alarm1",
+		ObservedAt:  time.Now(),
+		RefID:       uuid.NewString(),
+		Severity:    1,
+		Tenant:      "default",
+	}
+	return alarm
+}
+
 func newDevice() types.Device {
 	deviceID := uuid.NewString()
 	sensorID := uuid.NewString()

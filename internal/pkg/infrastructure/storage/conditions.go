@@ -3,24 +3,26 @@ package storage
 import (
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 )
 
 type Condition struct {
-	DeviceID  string
-	SensorID  string
-	Types     []string
-	Tenants   []string
-	offset    *int
-	limit     *int
-	Active    *bool
-	Online    *bool
-	Bounds    *Box
-	sortBy    string
-	sortOrder string
-	AlarmID   string
-	RefID     string
+	DeviceID          string
+	SensorID          string
+	DeviceWithAlarmID string
+	Types             []string
+	Tenants           []string
+	offset            *int
+	limit             *int
+	Active            *bool
+	Online            *bool
+	Bounds            *Box
+	sortBy            string
+	sortOrder         string
+	AlarmID           string
+	RefID             string
 }
 
 type Box struct {
@@ -89,18 +91,30 @@ func (c Condition) Where() string {
 		where += fmt.Sprintf("AND location <@ BOX '((%f,%f),(%f,%f))' ", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY)
 	}
 	if c.AlarmID != "" {
-		where += "AND id = @alarm_id "
+		where += "AND alarm_id = @alarm_id "
 	}
 	if c.RefID != "" {
 		where += "AND ref_id = @ref_id "
 	}
-
-	// remove first "AND" if exists
-	if len(where) > 0 {
-		where = where[3:]
+	if c.DeviceWithAlarmID != "" {
+		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
 	}
 
+	where = strings.TrimPrefix(where, "AND")
+
+	if where != "" {
+		where += "AND "
+	}
+	where += "deleted = FALSE "
+
 	return where
+}
+
+func WithDeviceAlarmID(alarmID string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.DeviceWithAlarmID = alarmID
+		return c
+	}
 }
 
 func WithAlarmID(alarmID string) ConditionFunc {

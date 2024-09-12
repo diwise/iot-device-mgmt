@@ -104,7 +104,7 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			CONSTRAINT pkey_devices_unique PRIMARY KEY (device_id, sensor_id, deleted)
 		);
 
-		CREATE TABLE alarms (
+		CREATE TABLE IF NOT EXISTS alarms (
     		alarm_id VARCHAR(255),
     		alarm_type VARCHAR(100) NOT NULL, 
     		description TEXT,                

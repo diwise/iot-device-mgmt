@@ -91,6 +91,7 @@ func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []s
 	}
 	return device, nil
 }
+
 func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
 	device, err := s.storage.GetDevice(ctx, storage.WithDeviceID(deviceID), storage.WithTenants(tenants))
 	if err != nil {
@@ -101,15 +102,26 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	}
 	return device, nil
 }
+
 func (s service) GetOnlineDevices(ctx context.Context, offset, limit int) (types.Collection[types.Device], error) {
 	return s.storage.QueryDevices(ctx, storage.WithOnline(true), storage.WithOffset(offset), storage.WithLimit(limit))
 }
+
 func (s service) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (types.Device, error) {
-	return types.Device{}, fmt.Errorf("not implemented")
+	device, err := s.storage.GetDevice(ctx, storage.WithDeviceAlarmID(alarmID), storage.WithTenants(tenants))
+	if err != nil {
+		if errors.Is(err, storage.ErrNoRows) {
+			return types.Device{}, ErrDeviceNotFound
+		}
+		return types.Device{}, err
+	}
+	return device, nil
 }
+
 func (s service) GetWithinBounds(ctx context.Context, b types.Bounds) (types.Collection[types.Device], error) {
 	return s.storage.QueryDevices(ctx, storage.WithBounds(b.MaxLat, b.MinLat, b.MaxLon, b.MinLon))
 }
+
 func (s service) Create(ctx context.Context, device types.Device) error {
 	err := s.storage.AddDevice(ctx, device)
 	if err != nil {
@@ -122,9 +134,11 @@ func (s service) Create(ctx context.Context, device types.Device) error {
 		Timestamp: time.Now().UTC(),
 	})
 }
+
 func (s service) Update(ctx context.Context, device types.Device) error {
 	return s.storage.UpdateDevice(ctx, device)
 }
+
 func (s service) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
 	if deviceStatus.ObservedAt.IsZero() {
 		deviceStatus.ObservedAt = time.Now().UTC()
@@ -141,6 +155,7 @@ func (s service) UpdateStatus(ctx context.Context, deviceID, tenant string, devi
 		Timestamp: deviceStatus.ObservedAt.UTC(),
 	})
 }
+
 func (s service) UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error {
 	if deviceState.ObservedAt.IsZero() {
 		deviceState.ObservedAt = time.Now().UTC()
@@ -158,6 +173,7 @@ func (s service) UpdateState(ctx context.Context, deviceID, tenant string, devic
 		Timestamp: deviceState.ObservedAt.UTC(),
 	})
 }
+
 func (s service) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	tenants, err := s.storage.GetTenants(ctx)
 	if err != nil {
@@ -171,6 +187,7 @@ func (s service) GetTenants(ctx context.Context) (types.Collection[string], erro
 		TotalCount: uint64(len(tenants)),
 	}, nil
 }
+
 func (s service) GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
 	var collection types.Collection[types.Lwm2mType]
 
@@ -210,6 +227,7 @@ func (s service) GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collec
 
 	return collection, nil
 }
+
 func (s service) GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
 	var collection types.Collection[types.DeviceProfile]
 
@@ -312,6 +330,7 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 		}
 
 	}
+
 	return s.storage.QueryDevices(ctx, conditions...)
 }
 

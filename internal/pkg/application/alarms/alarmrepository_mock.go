@@ -20,7 +20,7 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //
 //		// make and configure a mocked AlarmRepository
 //		mockedAlarmRepository := &AlarmRepositoryMock{
-//			AddAlarmFunc: func(ctx context.Context, alarm types.Alarm, tenant string) error {
+//			AddAlarmFunc: func(ctx context.Context, alarm types.Alarm) error {
 //				panic("mock out the AddAlarm method")
 //			},
 //			CloseAlarmFunc: func(ctx context.Context, alarmID string, tenant string) error {
@@ -40,7 +40,7 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //	}
 type AlarmRepositoryMock struct {
 	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, alarm types.Alarm, tenant string) error
+	AddAlarmFunc func(ctx context.Context, alarm types.Alarm) error
 
 	// CloseAlarmFunc mocks the CloseAlarm method.
 	CloseAlarmFunc func(ctx context.Context, alarmID string, tenant string) error
@@ -59,8 +59,6 @@ type AlarmRepositoryMock struct {
 			Ctx context.Context
 			// Alarm is the alarm argument value.
 			Alarm types.Alarm
-			// Tenant is the tenant argument value.
-			Tenant string
 		}
 		// CloseAlarm holds details about calls to the CloseAlarm method.
 		CloseAlarm []struct {
@@ -93,23 +91,21 @@ type AlarmRepositoryMock struct {
 }
 
 // AddAlarm calls AddAlarmFunc.
-func (mock *AlarmRepositoryMock) AddAlarm(ctx context.Context, alarm types.Alarm, tenant string) error {
+func (mock *AlarmRepositoryMock) AddAlarm(ctx context.Context, alarm types.Alarm) error {
 	if mock.AddAlarmFunc == nil {
 		panic("AlarmRepositoryMock.AddAlarmFunc: method is nil but AlarmRepository.AddAlarm was just called")
 	}
 	callInfo := struct {
-		Ctx    context.Context
-		Alarm  types.Alarm
-		Tenant string
+		Ctx   context.Context
+		Alarm types.Alarm
 	}{
-		Ctx:    ctx,
-		Alarm:  alarm,
-		Tenant: tenant,
+		Ctx:   ctx,
+		Alarm: alarm,
 	}
 	mock.lockAddAlarm.Lock()
 	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
 	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, alarm, tenant)
+	return mock.AddAlarmFunc(ctx, alarm)
 }
 
 // AddAlarmCalls gets all the calls that were made to AddAlarm.
@@ -117,14 +113,12 @@ func (mock *AlarmRepositoryMock) AddAlarm(ctx context.Context, alarm types.Alarm
 //
 //	len(mockedAlarmRepository.AddAlarmCalls())
 func (mock *AlarmRepositoryMock) AddAlarmCalls() []struct {
-	Ctx    context.Context
-	Alarm  types.Alarm
-	Tenant string
+	Ctx   context.Context
+	Alarm types.Alarm
 } {
 	var calls []struct {
-		Ctx    context.Context
-		Alarm  types.Alarm
-		Tenant string
+		Ctx   context.Context
+		Alarm types.Alarm
 	}
 	mock.lockAddAlarm.RLock()
 	calls = mock.calls.AddAlarm

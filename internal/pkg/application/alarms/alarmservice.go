@@ -27,7 +27,7 @@ var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 type AlarmRepository interface {
 	QueryAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
 	GetAlarm(ctx context.Context, conditions ...storage.ConditionFunc) (types.Alarm, error)
-	AddAlarm(ctx context.Context, alarm types.Alarm, tenant string) error
+	AddAlarm(ctx context.Context, alarm types.Alarm) error
 	CloseAlarm(ctx context.Context, alarmID, tenant string) error
 }
 
@@ -86,7 +86,7 @@ func (svc alarmSvc) Add(ctx context.Context, alarm types.Alarm) error {
 		alarm.ObservedAt = time.Now().UTC()
 	}
 
-	err := svc.storage.AddAlarm(ctx, alarm, alarm.Tenant)
+	err := svc.storage.AddAlarm(ctx, alarm)
 	if err != nil {
 		return err
 	}

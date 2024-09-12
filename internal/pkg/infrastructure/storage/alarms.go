@@ -16,6 +16,10 @@ func (s *Storage) QueryAlarms(ctx context.Context, conditions ...ConditionFunc) 
 		f(condition)
 	}
 
+	if condition.sortBy == "" {
+		condition.sortBy = "observed_at"
+	}
+
 	args := condition.NamedArgs()
 	where := condition.Where()
 
@@ -37,7 +41,7 @@ func (s *Storage) QueryAlarms(ctx context.Context, conditions ...ConditionFunc) 
 	query := fmt.Sprintf(`
 		SELECT alarm_id, alarm_type, description, observed_at, ref_id, severity, tenant, count(*) OVER () AS count
 		FROM alarms
-		WHERE %s AND deleted = FALSE		
+		WHERE %s 
 		ORDER BY %s %s		
 		%s
 	`, where, condition.SortBy(), condition.SortOrder(), offsetLimit)
@@ -94,7 +98,7 @@ func (s *Storage) GetAlarm(ctx context.Context, conditions ...ConditionFunc) (ty
 	query := fmt.Sprintf(`
 		SELECT alarm_id, alarm_type, description, observed_at, ref_id, severity, tenant
 		FROM alarms
-		WHERE %s AND deleted = FALSE
+		WHERE %s 
 	`, where)
 
 	err := s.pool.QueryRow(ctx, query, args).Scan(&alarm_id, &alarm_type, &description, &observed_at, &ref_id, &severity, &tenant)
@@ -117,7 +121,7 @@ func (s *Storage) GetAlarm(ctx context.Context, conditions ...ConditionFunc) (ty
 	return alarm, nil
 }
 
-func (s *Storage) AddAlarm(ctx context.Context, alarm types.Alarm, tenant string) error {
+func (s *Storage) AddAlarm(ctx context.Context, alarm types.Alarm) error {
 	args := pgx.NamedArgs{
 		"alarm_id":    alarm.ID,
 		"alarm_type":  alarm.AlarmType,
@@ -148,7 +152,7 @@ func (s *Storage) CloseAlarm(ctx context.Context, alarmID, tenant string) error 
 	_, err := s.pool.Exec(ctx, `
 		UPDATE alarms
 		SET deleted = TRUE, deleted_on = CURRENT_TIMESTAMP
-		WHERE alarm_id = @alarm_id AND tenant = @tenant
+		WHERE alarm_id = @alarm_id AND tenant = @tenant AND deleted = FALSE
 	`, args)
 	if err != nil {
 		return err

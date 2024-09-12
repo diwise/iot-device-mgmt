@@ -123,7 +123,7 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 	query := fmt.Sprintf(`
 		SELECT device_id, sensor_id, active, data, profile, state, status, tags, location, tenant
 		FROM devices
-		WHERE %s AND deleted = FALSE
+		WHERE %s 
 	`, where)
 
 	err := s.pool.QueryRow(ctx, query, args).Scan(&deviceID, &sensorID, &active, &data, &profile, &state, &status, &tags, &location, &tenant)
@@ -183,7 +183,7 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 	query := fmt.Sprintf(`
 		SELECT device_id, sensor_id, active, data, profile, state, status, tags, location, tenant, count(*) OVER () AS count
 		FROM devices
-		WHERE %s AND deleted = FALSE		
+		WHERE %s 		
 		ORDER BY %s %s		
 		%s
 	`, where, condition.SortBy(), condition.SortOrder(), offsetLimit)
