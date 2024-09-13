@@ -11,53 +11,6 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
-	data, _ := json.Marshal(device)
-	profile, _ := json.Marshal(device.DeviceProfile)
-	state, _ := json.Marshal(device.DeviceState)
-	status, _ := json.Marshal(device.DeviceStatus)
-	tags, _ := json.Marshal(device.Tags)
-
-	var m map[string]any
-	json.Unmarshal(data, &m)
-
-	delete(m, "deviceID")
-	delete(m, "sensorID")
-	delete(m, "active")
-	delete(m, "deviceProfile")
-	delete(m, "deviceState")
-	delete(m, "deviceStatus")
-	delete(m, "tenant")
-	delete(m, "tags")
-
-	data, _ = json.Marshal(m)
-
-	args := pgx.NamedArgs{
-		"device_id": device.DeviceID,
-		"sensor_id": device.SensorID,
-		"active":    device.Active,
-		"data":      string(data),
-		"profile":   string(profile),
-		"state":     string(state),
-		"status":    string(status),
-		"lat":       device.Location.Latitude,
-		"lon":       device.Location.Longitude,
-		"tags":      string(tags),
-		"tenant":    device.Tenant,
-	}
-
-	_, err := s.pool.Exec(ctx, `
-		UPDATE devices
-		SET active = @active, data = @data, profile = @profile, state = @state, status = @status, tags = @tags, location = point(@lon,@lat), tenant = @tenant, modified_on = CURRENT_TIMESTAMP
-		WHERE device_id = @device_id AND deleted = FALSE
-	`, args)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	data, _ := json.Marshal(device)
 	profile, _ := json.Marshal(device.DeviceProfile)
@@ -104,7 +57,52 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	return nil
 }
 
-type ConditionFunc func(*Condition) *Condition
+func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
+	data, _ := json.Marshal(device)
+	profile, _ := json.Marshal(device.DeviceProfile)
+	state, _ := json.Marshal(device.DeviceState)
+	status, _ := json.Marshal(device.DeviceStatus)
+	tags, _ := json.Marshal(device.Tags)
+
+	var m map[string]any
+	json.Unmarshal(data, &m)
+
+	delete(m, "deviceID")
+	delete(m, "sensorID")
+	delete(m, "active")
+	delete(m, "deviceProfile")
+	delete(m, "deviceState")
+	delete(m, "deviceStatus")
+	delete(m, "tenant")
+	delete(m, "tags")
+
+	data, _ = json.Marshal(m)
+
+	args := pgx.NamedArgs{
+		"device_id": device.DeviceID,
+		"sensor_id": device.SensorID,
+		"active":    device.Active,
+		"data":      string(data),
+		"profile":   string(profile),
+		"state":     string(state),
+		"status":    string(status),
+		"lat":       device.Location.Latitude,
+		"lon":       device.Location.Longitude,
+		"tags":      string(tags),
+		"tenant":    device.Tenant,
+	}
+
+	_, err := s.pool.Exec(ctx, `
+		UPDATE devices
+		SET active = @active, data = @data, profile = @profile, state = @state, status = @status, tags = @tags, location = point(@lon,@lat), tenant = @tenant, modified_on = CURRENT_TIMESTAMP
+		WHERE device_id = @device_id AND deleted = FALSE
+	`, args)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (types.Device, error) {
 	condition := &Condition{}

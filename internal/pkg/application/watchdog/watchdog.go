@@ -131,7 +131,7 @@ func checkLastObservedIsAfter(lastObserved time.Time, t time.Time, i int) bool {
 
 	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
 	after := lastObserved.After(shouldHaveBeenCalledAfter)
-	
+
 	return after
 }
 

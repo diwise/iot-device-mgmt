@@ -8,13 +8,15 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+type ConditionFunc func(*Condition) *Condition
+
 type Condition struct {
 	DeviceID          string
 	SensorID          string
 	DeviceWithAlarmID string
 	Types             []string
 	Tenants           []string
-	ProfileName		  []string
+	ProfileName       []string
 	offset            *int
 	limit             *int
 	Active            *bool
