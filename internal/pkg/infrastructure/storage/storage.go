@@ -66,6 +66,7 @@ var (
 	ErrNoID          = errors.New("data contains no id")
 	ErrMissingTenant = errors.New("missing tenant information")
 	ErrAlreadyExist  = errors.New("device already exists")
+	ErrDeleted       = errors.New("deleted")
 )
 
 type Storage struct {

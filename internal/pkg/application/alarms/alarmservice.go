@@ -2,6 +2,7 @@ package alarms
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -99,8 +100,11 @@ func (svc alarmSvc) Add(ctx context.Context, alarm types.Alarm) error {
 }
 
 func (svc alarmSvc) Close(ctx context.Context, alarmID string, tenants []string) error {
-	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants))
+	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants), storage.WithDeleted())
 	if err != nil {
+		if errors.Is(err, storage.ErrDeleted) {
+			return nil
+		}
 		return err
 	}
 

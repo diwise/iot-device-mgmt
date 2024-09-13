@@ -181,6 +181,24 @@ func TestCloseAlarm(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestCloseAlarmAgain(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	alarm := newAlarm()
+	err := s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+
+	result, err := s.GetAlarm(ctx, WithAlarmID(alarm.ID))
+	is.NoErr(err)
+
+	err = s.CloseAlarm(ctx, result.ID, result.Tenant)
+	is.NoErr(err)
+
+	err = s.CloseAlarm(ctx, result.ID, result.Tenant)
+	is.NoErr(err)
+}
+
 func newAlarm() types.Alarm {
 	alarm := types.Alarm{
 		ID:          uuid.NewString(),

@@ -26,6 +26,7 @@ type Condition struct {
 	sortOrder         string
 	AlarmID           string
 	RefID             string
+	IncludeDeleted    bool
 }
 
 type Box struct {
@@ -111,11 +112,13 @@ func (c Condition) Where() string {
 
 	where = strings.TrimPrefix(where, "AND")
 
-	if where != "" {
-		where += "AND "
+	if !c.IncludeDeleted {
+		if where != "" {
+			where += "AND "
+		}
+		where += "deleted = FALSE "
 	}
-	where += "deleted = FALSE "
-
+	
 	return where
 }
 
@@ -272,6 +275,13 @@ func WithOnline(online bool) ConditionFunc {
 func WithBounds(north, south, east, west float64) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.Bounds = &Box{MinX: west, MaxX: east, MinY: south, MaxY: north}
+		return c
+	}
+}
+
+func WithDeleted() ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.IncludeDeleted = true
 		return c
 	}
 }

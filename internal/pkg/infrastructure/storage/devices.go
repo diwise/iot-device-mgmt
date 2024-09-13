@@ -149,19 +149,27 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 	var location pgtype.Point
 	var active bool
 	var data, profile, state, status, tags json.RawMessage
+	var deleted bool
 
-	query := fmt.Sprintf(`
-		SELECT device_id, sensor_id, active, data, profile, state, status, tags, location, tenant
-		FROM devices
-		WHERE %s 
-	`, where)
+	query := `
+		SELECT device_id, sensor_id, active, data, profile, state, status, tags, location, tenant, deleted
+		FROM devices		
+	`
 
-	err := s.pool.QueryRow(ctx, query, args).Scan(&deviceID, &sensorID, &active, &data, &profile, &state, &status, &tags, &location, &tenant)
+	if len(where) > 0 {
+		query = fmt.Sprintf("%s WHERE %s ORDER BY device_id ASC, deleted_on DESC", query, where)
+	}
+
+	err := s.pool.QueryRow(ctx, query, args).Scan(&deviceID, &sensorID, &active, &data, &profile, &state, &status, &tags, &location, &tenant, &deleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Device{}, ErrNoRows
 		}
 		return types.Device{}, err
+	}
+
+	if deleted {
+		return types.Device{}, ErrDeleted
 	}
 
 	var errs []error

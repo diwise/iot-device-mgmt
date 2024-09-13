@@ -94,19 +94,27 @@ func (s *Storage) GetAlarm(ctx context.Context, conditions ...ConditionFunc) (ty
 	var alarm_id, alarm_type, description, ref_id, tenant string
 	var observed_at time.Time
 	var severity int
+	var deleted bool
 
-	query := fmt.Sprintf(`
-		SELECT alarm_id, alarm_type, description, observed_at, ref_id, severity, tenant
-		FROM alarms
-		WHERE %s 
-	`, where)
+	query := `
+		SELECT alarm_id, alarm_type, description, observed_at, ref_id, severity, tenant, deleted
+		FROM alarms		
+	`
 
-	err := s.pool.QueryRow(ctx, query, args).Scan(&alarm_id, &alarm_type, &description, &observed_at, &ref_id, &severity, &tenant)
+	if len(where) > 0 {
+		query = fmt.Sprintf("%s WHERE %s ORDER BY alarm_id ASC, deleted_on DESC", query, where)
+	}
+
+	err := s.pool.QueryRow(ctx, query, args).Scan(&alarm_id, &alarm_type, &description, &observed_at, &ref_id, &severity, &tenant, &deleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Alarm{}, ErrNoRows
 		}
 		return types.Alarm{}, err
+	}
+
+	if deleted {
+		return types.Alarm{}, ErrDeleted
 	}
 
 	var alarm types.Alarm
