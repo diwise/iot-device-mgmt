@@ -118,7 +118,7 @@ func (c Condition) Where() string {
 		}
 		where += "deleted = FALSE "
 	}
-	
+
 	return where
 }
 

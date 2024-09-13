@@ -3,13 +3,14 @@ package devicemanagement
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"slices"
 	"strings"
 	"time"
 
 	"log/slog"
 
-	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/senml"
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -69,7 +70,7 @@ func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 		if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
 			state.ObservedAt = observedAt
 			state.Online = true
-			state.State = models.DeviceStateOK
+			state.State = types.DeviceStateOK
 			err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
 			if err != nil {
 				log.Error("could not update state", "err", err.Error())
@@ -137,7 +138,7 @@ func NewMessageAcceptedHandler(svc DeviceManagement) messaging.TopicMessageHandl
 			ts = time.Now().UTC()
 		}
 
-		status := models.DeviceStatus{
+		status := types.DeviceStatus{
 			BatteryLevel: int(batteryLevel),
 			ObservedAt:   ts.UTC(),
 		}
@@ -164,9 +165,9 @@ func NewAlarmCreatedHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
 
 		a := struct {
-			Alarm     models.Alarm `json:"alarm"`
-			Tenant    string       `json:"tenant"`
-			Timestamp time.Time    `json:"timestamp"`
+			Alarm     types.Alarm `json:"alarm"`
+			Tenant    string      `json:"tenant"`
+			Timestamp time.Time   `json:"timestamp"`
 		}{}
 
 		err = json.Unmarshal(itm.Body(), &a)
@@ -188,7 +189,7 @@ func NewAlarmCreatedHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 
 		device.Alarms = append(device.Alarms, a.Alarm.ID)
 		if a.Timestamp.After(device.DeviceState.ObservedAt) {
-			device.DeviceState.State = models.DeviceStateWarning
+			device.DeviceState.State = types.DeviceStateWarning
 			device.DeviceState.ObservedAt = a.Timestamp
 		}
 
@@ -222,6 +223,9 @@ func NewAlarmClosedHandler(svc DeviceManagement) messaging.TopicMessageHandler {
 
 		device, err := svc.GetWithAlarmID(ctx, a.ID, []string{a.Tenant})
 		if err != nil {
+			if errors.Is(err, ErrDeviceNotFound) {
+				return
+			}
 			log.Error("could not get device by alarm id", "alarm_id", a.ID, "err", err.Error())
 			return
 		}
@@ -231,13 +235,13 @@ func NewAlarmClosedHandler(svc DeviceManagement) messaging.TopicMessageHandler {
 		})
 
 		if len(device.Alarms) == 0 {
-			device.DeviceState.State = models.DeviceStateOK
+			device.DeviceState.State = types.DeviceStateOK
 			device.DeviceState.ObservedAt = a.Timestamp
 		}
 
 		err = svc.Update(ctx, device)
 		if err != nil {
-			log.Error("could not update device")
+			log.Error("could not update device", "err", err.Error())
 			return
 		}
 	}

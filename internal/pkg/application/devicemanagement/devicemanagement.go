@@ -114,6 +114,7 @@ func (s service) GetWithAlarmID(ctx context.Context, alarmID string, tenants []s
 		if errors.Is(err, storage.ErrNoRows) {
 			return types.Device{}, ErrDeviceNotFound
 		}
+
 		return types.Device{}, err
 	}
 	return device, nil
