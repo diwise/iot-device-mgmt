@@ -16,7 +16,6 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -159,12 +158,12 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			ctx = logging.NewContextWithLogger(ctx, requestLogger, slog.String("sensor_id", sensorID))
 
 			device, err := svc.GetBySensorID(ctx, sensorID, allowedTenants)
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
-				requestLogger.Debug("device not found", "sensor_id", sensorID)
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
 			if err != nil {
+				if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
 				requestLogger.Error("could not fetch data", "sensor_id", sensorID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -179,33 +178,10 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			w.Write(response.Byte())
 			return
 		} else {
-			offset, limit := getOffsetAndLimit(r)
-
-			q := r.URL.Query().Get("q")
-			if q != "" {
-				q, err = url.QueryUnescape(q)
-				if err != nil {
-					requestLogger.Error("wrong query parameter", "err", err.Error())
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-
-				if !json.Valid([]byte(q)) {
-					requestLogger.Error("query parameter is not an valid json object")
-					w.WriteHeader(http.StatusBadRequest)
-					return
-				}
-			}
-
-			sortBy := r.URL.Query().Get("sortBy")
-			if sortBy == "" {
-				sortBy = "name"
-			}
-
-			collection, err := svc.Get(ctx, offset, limit, q, sortBy, allowedTenants)
+			collection, err := svc.Query(ctx, r.URL.Query(), allowedTenants)
 			if err != nil {
-				requestLogger.Error("unable to fetch devices", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
+				w.Write([]byte(err.Error()))
 				return
 			}
 
@@ -269,12 +245,12 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		device, err := svc.GetByDeviceID(ctx, deviceID, allowedTenants)
-		if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
-			requestLogger.Debug("device not found", slog.String("device_id", deviceID))
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
 		if err != nil {
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
 			requestLogger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -283,8 +259,6 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 		response := ApiResponse{
 			Data: device,
 		}
-
-		requestLogger.Debug("returning information about device", slog.String("device_id", device.DeviceID))
 
 		w.Header().Add("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
@@ -345,6 +319,11 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 			err = svc.Create(ctx, d)
 			if err != nil {
+				if errors.Is(err, devicemanagement.ErrDeviceAlreadyExist) {
+					w.WriteHeader(http.StatusConflict)
+					return
+				}
+
 				requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
@@ -460,7 +439,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		_, ctx, log = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-		var collection repositories.Collection[types.Alarm]
+		var collection types.Collection[types.Alarm]
 		offset, limit := getOffsetAndLimit(r)
 
 		deviceID := chi.URLParam(r, "deviceID")
@@ -473,13 +452,13 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 				return
 			}
 		} else {
+			collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 		}
 
-		collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 		meta := &meta{
 			TotalRecords: collection.TotalCount,
 			Offset:       &collection.Offset,
@@ -511,6 +490,11 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		alarmID := chi.URLParam(r, "alarmID")
+		if alarmID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		alarm, err := svc.GetByID(ctx, alarmID, allowedTenants)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
@@ -539,9 +523,14 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		alarmID := chi.URLParam(r, "alarmID")
+		if alarmID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		alarm, err := svc.GetByID(ctx, alarmID, allowedTenants)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
@@ -571,7 +560,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 			name = deviceprofileId
 		}
 
-		var profiles repositories.Collection[types.DeviceProfile]
+		var profiles types.Collection[types.DeviceProfile]
 
 		if name != "" {
 			names := []string{name}

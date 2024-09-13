@@ -13,8 +13,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"gopkg.in/yaml.v2"
 
-	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
@@ -32,7 +31,7 @@ func TestThatHealthEndpointReturns204NoContent(t *testing.T) {
 	server := httptest.NewServer(r)
 	defer server.Close()
 
-	resp, _ := testRequest(is, server, http.MethodGet, "/health", noToken, nil)
+	resp, _ := testRequest(server, http.MethodGet, "/health", noToken, nil)
 
 	is.Equal(resp.StatusCode, http.StatusNoContent)
 }
@@ -43,7 +42,7 @@ func TestThatGetUnknownDeviceReturns404(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"default"})
-	resp, _ := testRequest(is, server, http.MethodGet, "/api/v0/devices/nosuchdevice", token, nil)
+	resp, _ := testRequest(server, http.MethodGet, "/api/v0/devices/nosuchdevice", token, nil)
 
 	is.Equal(resp.StatusCode, http.StatusNotFound)
 }
@@ -54,7 +53,7 @@ func TestThatGetKnownDeviceByEUIReturns200(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"default"})
-	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
+	resp, body := testRequest(server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
 	d := struct {
 		Data struct {
@@ -73,7 +72,7 @@ func TestThatGetKnownDeviceReturns200(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"default"})
-	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
+	resp, body := testRequest(server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	d := struct {
 		Data struct {
@@ -93,7 +92,7 @@ func TestThatGetKnownDeviceMarshalToType(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"default"})
-	resp, body := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
+	resp, body := testRequest(server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	d := struct {
 		Data types.Device
@@ -111,7 +110,7 @@ func TestThatGetKnownDeviceByEUIFromNonAllowedTenantReturns404(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"wrongtenant"})
-	resp, _ := testRequest(is, server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
+	resp, _ := testRequest(server, http.MethodGet, "/api/v0/devices?devEUI=a81758fffe06bfa3", token, nil)
 
 	is.Equal(resp.StatusCode, http.StatusNotFound)
 }
@@ -122,7 +121,7 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 	defer server.Close()
 
 	token := createJWTWithTenants([]string{"wrongtenant"})
-	resp, _ := testRequest(is, server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
+	resp, _ := testRequest(server, http.MethodGet, "/api/v0/devices/intern-a81758fffe06bfa3", token, nil)
 
 	is.Equal(resp.StatusCode, http.StatusNotFound)
 }
@@ -131,7 +130,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	is := is.New(t)
 	ctx := context.Background()
 
-	config := jsonstore.NewConfig(
+	config := storage.NewConfig(
 		"localhost",
 		"postgres",
 		"password",
@@ -140,17 +139,13 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 		"disable",
 	)
 
-	p, err := jsonstore.NewPool(ctx, config)
+	p, err := storage.NewPool(ctx, config)
 	if err != nil {
 		t.Log("could not connect to postgres, will skip test")
 		t.SkipNow()
 	}
 
-	repo, err := deviceStore.NewRepository(ctx, p)
-	if err != nil {
-		t.Log("could not initialize repository, will skip test")
-		t.SkipNow()
-	}
+	s := storage.NewWithPool(p)
 
 	msgCtx := messaging.MsgContextMock{
 		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
@@ -164,7 +159,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	cfg := &devicemanagement.DeviceManagementConfig{}
 	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
 
-	app := devicemanagement.New(repo, &msgCtx, cfg)
+	app := devicemanagement.New(s, &msgCtx, cfg)
 	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
 	is.NoErr(err)
 
@@ -176,7 +171,7 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	return router, is
 }
 
-func testRequest(is *is.I, ts *httptest.Server, method, path string, token string, body io.Reader) (*http.Response, string) {
+func testRequest(ts *httptest.Server, method, path string, token string, body io.Reader) (*http.Response, string) {
 	req, _ := http.NewRequest(method, ts.URL+path, body)
 
 	if len(token) > 0 {

@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
@@ -13,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	repository "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
@@ -21,35 +20,30 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
+	_, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
+
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/v0/devices?bounds=%5B62.387942893965395%2C17.2897328765558%3B62.3955798771803%2C17.33788389279115%5D", nil)
+	ctx := auth.WithAllowedTenants(req.Context(), []string{"default", "_default"})
+	req = req.WithContext(ctx)
+
+	req.Header.Add("Content-Type", "application/json")
+	res := httptest.NewRecorder()
+
+	queryDevicesHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
+}
+
 func TestCreateDeviceHandler(t *testing.T) {
-	is := is.New(t)
+
+	is, msgCtx, deviceMgmtRepoMock, cfg := testSetup(t)
 
 	filePath := "devices.csv"
 	fieldName := "fileupload"
 	body := new(bytes.Buffer)
 
-	deviceMgmtRepoMock := &repository.DeviceRepositoryMock{
-		SaveFunc: func(ctx context.Context, device types.Device) error {
-			return nil
-		},
-		GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-			return types.Device{}, fmt.Errorf("device not found")
-		},
-	}
-
-	msgCtx := messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
-			return nil
-		},
-	}
-
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
-
-	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, &msgCtx, cfg)
+	deviceMgmt := devicemanagement.New(deviceMgmtRepoMock, msgCtx, cfg)
 
 	part := multipart.NewWriter(body)
 
@@ -70,7 +64,40 @@ func TestCreateDeviceHandler(t *testing.T) {
 
 	createDeviceHandler(slog.New(slog.NewTextHandler(io.Discard, nil)), deviceMgmt).ServeHTTP(res, req)
 
-	is.Equal(2, len(deviceMgmtRepoMock.SaveCalls()))
+	is.Equal(2, len(deviceMgmtRepoMock.UpdateDeviceCalls()))
+}
+
+func testSetup(t *testing.T) (*is.I, *messaging.MsgContextMock, *devicemanagement.DeviceRepositoryMock, *devicemanagement.DeviceManagementConfig) {
+	is := is.New(t)
+
+	deviceMgmtRepoMock := &devicemanagement.DeviceRepositoryMock{
+		QueryDevicesFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+			return types.Collection[types.Device]{}, nil
+		},
+		GetDeviceFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Device, error) {
+			return types.Device{}, nil
+		},
+		UpdateDeviceFunc: func(ctx context.Context, device types.Device) error {
+			return nil
+		},
+		AddDeviceFunc: func(ctx context.Context, device types.Device) error {
+			return nil
+		},
+	}
+
+	msgCtx := &messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+			return nil
+		},
+	}
+
+	cfg := &devicemanagement.DeviceManagementConfig{}
+	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+
+	return is, msgCtx, deviceMgmtRepoMock, cfg
 }
 
 const csvMock string = `devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source

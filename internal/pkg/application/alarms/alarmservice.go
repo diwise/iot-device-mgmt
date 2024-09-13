@@ -2,31 +2,42 @@ package alarms
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
-	alarmStorage "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"
-	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
+
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
 )
 
 //go:generate moq -rm -out alarmservice_mock.go . AlarmService
 type AlarmService interface {
-	Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Alarm], error)
-	GetByID(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error)
-	GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (repositories.Collection[models.Alarm], error)
-	Add(ctx context.Context, alarm models.Alarm) error
+	Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
+	GetByID(ctx context.Context, alarmID string, tenants []string) (types.Alarm, error)
+	GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
+	Add(ctx context.Context, alarm types.Alarm) error
 	Close(ctx context.Context, alarmID string, tenants []string) error
 }
 
+var ErrAlarmNotFound = fmt.Errorf("alarm not found")
+
+//go:generate moq -rm -out alarmrepository_mock.go . AlarmRepository
+type AlarmRepository interface {
+	QueryAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
+	GetAlarm(ctx context.Context, conditions ...storage.ConditionFunc) (types.Alarm, error)
+	AddAlarm(ctx context.Context, alarm types.Alarm) error
+	CloseAlarm(ctx context.Context, alarmID, tenant string) error
+}
+
 type alarmSvc struct {
-	storage   alarmStorage.AlarmRepository
+	storage   AlarmRepository
 	messenger messaging.MsgContext
 }
 
-func New(d alarmStorage.AlarmRepository, m messaging.MsgContext) AlarmService {
+func New(d AlarmRepository, m messaging.MsgContext) AlarmService {
 	svc := &alarmSvc{
 		storage:   d,
 		messenger: m,
@@ -38,33 +49,34 @@ func New(d alarmStorage.AlarmRepository, m messaging.MsgContext) AlarmService {
 	return svc
 }
 
-func (svc alarmSvc) Get(ctx context.Context, offset, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
-	alarms, err := svc.storage.GetAll(ctx, offset, limit, tenants)
+func (svc alarmSvc) Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Alarm], error) {
+	alarms, err := svc.storage.QueryAlarms(ctx, storage.WithOffset(offset), storage.WithLimit(limit), storage.WithTenants(tenants))
 	if err != nil {
-		return repositories.Collection[models.Alarm]{}, err
+		return types.Collection[types.Alarm]{}, err
 	}
 
 	return alarms, nil
 }
 
-func (svc alarmSvc) GetByID(ctx context.Context, alarmID string, tenants []string) (models.Alarm, error) {
-	alarm, err := svc.storage.GetByID(ctx, alarmID, tenants)
+func (svc alarmSvc) GetByID(ctx context.Context, alarmID string, tenants []string) (types.Alarm, error) {
+	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants))
 	if err != nil {
-		return models.Alarm{}, err
+		return types.Alarm{}, err
 	}
 
 	return alarm, nil
 }
 
-func (svc alarmSvc) GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (repositories.Collection[models.Alarm], error) {
-	alarms, err := svc.storage.GetByRefID(ctx, refID, offset, limit, tenants)
+func (svc alarmSvc) GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (types.Collection[types.Alarm], error) {
+	alarms, err := svc.storage.QueryAlarms(ctx, storage.WithRefID(refID), storage.WithTenants(tenants))
 	if err != nil {
-		return repositories.Collection[models.Alarm]{}, err
+		return types.Collection[types.Alarm]{}, err
 	}
+
 	return alarms, nil
 }
 
-func (svc alarmSvc) Add(ctx context.Context, alarm models.Alarm) error {
+func (svc alarmSvc) Add(ctx context.Context, alarm types.Alarm) error {
 	if alarm.RefID == "" {
 		return fmt.Errorf("no refID is set on alarm")
 	}
@@ -75,9 +87,7 @@ func (svc alarmSvc) Add(ctx context.Context, alarm models.Alarm) error {
 		alarm.ObservedAt = time.Now().UTC()
 	}
 
-	alarm.Type = "Alarm"
-
-	err := svc.storage.Add(ctx, alarm, alarm.Tenant)
+	err := svc.storage.AddAlarm(ctx, alarm)
 	if err != nil {
 		return err
 	}
@@ -90,12 +100,15 @@ func (svc alarmSvc) Add(ctx context.Context, alarm models.Alarm) error {
 }
 
 func (svc alarmSvc) Close(ctx context.Context, alarmID string, tenants []string) error {
-	alarm, err := svc.storage.GetByID(ctx, alarmID, tenants)
+	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants), storage.WithDeleted())
 	if err != nil {
+		if errors.Is(err, storage.ErrDeleted) {
+			return nil
+		}
 		return err
 	}
 
-	err = svc.storage.Close(ctx, alarmID, alarm.Tenant)
+	err = svc.storage.CloseAlarm(ctx, alarmID, alarm.Tenant)
 	if err != nil {
 		return err
 	}

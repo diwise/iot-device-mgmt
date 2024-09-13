@@ -2,94 +2,348 @@ package devicemanagement
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
-	"log/slog"
-
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories"
-	deviceStorage "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
+var ErrDeviceNotFound = fmt.Errorf("device not found")
+var ErrDeviceAlreadyExist = fmt.Errorf("device already exists")
+var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
+
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
-
 type DeviceManagement interface {
-	Get(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[models.Device], error)
-	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error)
-	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error)
-	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error)
+	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
+	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
+	GetOnlineDevices(ctx context.Context, offset, limit int) (types.Collection[types.Device], error)
+	GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (types.Device, error)
+	GetWithinBounds(ctx context.Context, bounds types.Bounds) (types.Collection[types.Device], error)
 
-	Create(ctx context.Context, device models.Device) error
-	Update(ctx context.Context, device models.Device) error
+	Create(ctx context.Context, device types.Device) error
+	Update(ctx context.Context, device types.Device) error
 	Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 
-	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error
-	UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error
+	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error
+	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 
 	Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
-	GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error)
-	GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error)
+	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
+	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
+	GetTenants(ctx context.Context) (types.Collection[string], error)
+
+	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
 }
 
-type svc struct {
-	storage   deviceStorage.DeviceRepository
-	messenger messaging.MsgContext
+type DeviceManagementConfig struct {
+	DeviceProfiles []types.DeviceProfile `yaml:"deviceprofiles"`
+	Types          []types.Lwm2mType     `yaml:"types"`
+}
+
+//go:generate moq -rm -out devicerepository_mock.go . DeviceRepository
+type DeviceRepository interface {
+	GetDevice(ctx context.Context, conditions ...storage.ConditionFunc) (types.Device, error)
+	QueryDevices(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error)
+	AddDevice(ctx context.Context, device types.Device) error
+	UpdateDevice(ctx context.Context, device types.Device) error
+	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error
+	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
+	GetTenants(ctx context.Context) ([]string, error)
+}
+
+type service struct {
+	storage   DeviceRepository
 	config    *DeviceManagementConfig
+	messenger messaging.MsgContext
 }
 
-func New(d deviceStorage.DeviceRepository, m messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
-	dm := svc{
-		storage:   d,
-		messenger: m,
+func New(storage DeviceRepository, messenger messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
+	s := service{
+		storage:   storage,
+		messenger: messenger,
 		config:    config,
 	}
 
-	dm.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", NewAlarmCreatedHandler(dm))
-	dm.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", NewAlarmClosedHandler(dm))
+	s.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(s))
+	s.messenger.RegisterTopicMessageHandler("alarms.alarmCreated", NewAlarmCreatedHandler(s))
+	s.messenger.RegisterTopicMessageHandler("alarms.alarmClosed", NewAlarmClosedHandler(s))
+	s.messenger.RegisterTopicMessageHandler("message.accepted", NewMessageAcceptedHandler(s))
 
-	return dm
+	return s
 }
 
-func (d svc) Create(ctx context.Context, device models.Device) error {
-	err := d.storage.Save(ctx, device)
+func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
+	device, err := s.storage.GetDevice(ctx, storage.WithSensorID(sensorID), storage.WithTenants(tenants))
 	if err != nil {
+		if errors.Is(err, storage.ErrNoRows) {
+			return types.Device{}, ErrDeviceNotFound
+		}
+		return types.Device{}, err
+	}
+	return device, nil
+}
+
+func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+	device, err := s.storage.GetDevice(ctx, storage.WithDeviceID(deviceID), storage.WithTenants(tenants))
+	if err != nil {
+		if errors.Is(err, storage.ErrNoRows) {
+			return types.Device{}, ErrDeviceNotFound
+		}
+		return types.Device{}, err
+	}
+	return device, nil
+}
+
+func (s service) GetOnlineDevices(ctx context.Context, offset, limit int) (types.Collection[types.Device], error) {
+	return s.storage.QueryDevices(ctx, storage.WithOnline(true), storage.WithOffset(offset), storage.WithLimit(limit))
+}
+
+func (s service) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (types.Device, error) {
+	device, err := s.storage.GetDevice(ctx, storage.WithDeviceAlarmID(alarmID), storage.WithTenants(tenants))
+	if err != nil {
+		if errors.Is(err, storage.ErrNoRows) {
+			return types.Device{}, ErrDeviceNotFound
+		}
+
+		return types.Device{}, err
+	}
+	return device, nil
+}
+
+func (s service) GetWithinBounds(ctx context.Context, b types.Bounds) (types.Collection[types.Device], error) {
+	return s.storage.QueryDevices(ctx, storage.WithBounds(b.MaxLat, b.MinLat, b.MaxLon, b.MinLon))
+}
+
+func (s service) Create(ctx context.Context, device types.Device) error {
+	err := s.storage.AddDevice(ctx, device)
+	if err != nil {
+		if errors.Is(err, storage.ErrAlreadyExist) {
+			return ErrDeviceAlreadyExist
+		}
 		return err
 	}
 
-	return d.messenger.PublishOnTopic(ctx, &models.DeviceCreated{
+	return s.messenger.PublishOnTopic(ctx, &types.DeviceCreated{
 		DeviceID:  device.DeviceID,
 		Tenant:    device.Tenant,
 		Timestamp: time.Now().UTC(),
 	})
 }
 
-func (d svc) Update(ctx context.Context, device models.Device) error {
-	_, err := d.storage.GetByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
-	if err != nil {
-		return err
-	}
-
-	err = d.storage.Save(ctx, device)
-	if err != nil {
-		return err
-	}
-
-	return nil
+func (s service) Update(ctx context.Context, device types.Device) error {
+	return s.storage.UpdateDevice(ctx, device)
 }
 
-func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+func (s service) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
+	if deviceStatus.ObservedAt.IsZero() {
+		deviceStatus.ObservedAt = time.Now().UTC()
+	}
+
+	err := s.storage.UpdateStatus(ctx, deviceID, tenant, deviceStatus)
+	if err != nil {
+		return err
+	}
+
+	return s.messenger.PublishOnTopic(ctx, &types.DeviceStatusUpdated{
+		DeviceID:  deviceID,
+		Tenant:    tenant,
+		Timestamp: deviceStatus.ObservedAt.UTC(),
+	})
+}
+
+func (s service) UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error {
+	if deviceState.ObservedAt.IsZero() {
+		deviceState.ObservedAt = time.Now().UTC()
+	}
+
+	err := s.storage.UpdateState(ctx, deviceID, tenant, deviceState)
+	if err != nil {
+		return err
+	}
+
+	return s.messenger.PublishOnTopic(ctx, &types.DeviceStateUpdated{
+		DeviceID:  deviceID,
+		Tenant:    tenant,
+		State:     deviceState.State,
+		Timestamp: deviceState.ObservedAt.UTC(),
+	})
+}
+
+func (s service) GetTenants(ctx context.Context) (types.Collection[string], error) {
+	tenants, err := s.storage.GetTenants(ctx)
+	if err != nil {
+		return types.Collection[string]{}, err
+	}
+	return types.Collection[string]{
+		Data:       tenants,
+		Count:      uint64(len(tenants)),
+		Offset:     0,
+		Limit:      uint64(len(tenants)),
+		TotalCount: uint64(len(tenants)),
+	}, nil
+}
+
+func (s service) GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+	var collection types.Collection[types.Lwm2mType]
+
+	if len(urn) > 0 && urn[0] != "" {
+		lwm2mTypes := []types.Lwm2mType{}
+
+		for _, u := range urn {
+			id := slices.IndexFunc(s.config.Types, func(p types.Lwm2mType) bool {
+				return u == p.Urn
+			})
+			if id > -1 {
+				lwm2mTypes = append(lwm2mTypes, s.config.Types[id])
+			}
+		}
+
+		if len(lwm2mTypes) > 0 {
+			collection = types.Collection[types.Lwm2mType]{
+				Data:       lwm2mTypes,
+				Count:      uint64(len(lwm2mTypes)),
+				Offset:     0,
+				Limit:      uint64(len(lwm2mTypes)),
+				TotalCount: uint64(len(lwm2mTypes)),
+			}
+			return collection, nil
+		}
+
+		return types.Collection[types.Lwm2mType]{}, ErrDeviceProfileNotFound
+	}
+
+	collection = types.Collection[types.Lwm2mType]{
+		Data:       s.config.Types,
+		Count:      uint64(len(s.config.Types)),
+		Offset:     0,
+		Limit:      uint64(len(s.config.Types)),
+		TotalCount: uint64(len(s.config.Types)),
+	}
+
+	return collection, nil
+}
+
+func (s service) GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
+	var collection types.Collection[types.DeviceProfile]
+
+	if len(name) > 0 && name[0] != "" {
+		profiles := []types.DeviceProfile{}
+
+		for _, n := range name {
+			id := slices.IndexFunc(s.config.DeviceProfiles, func(p types.DeviceProfile) bool {
+				return n == p.Name
+			})
+			if id > -1 {
+				profiles = append(profiles, s.config.DeviceProfiles[id])
+			}
+		}
+
+		if len(profiles) > 0 {
+			collection = types.Collection[types.DeviceProfile]{
+				Data:       profiles,
+				Count:      uint64(len(profiles)),
+				Offset:     0,
+				Limit:      uint64(len(profiles)),
+				TotalCount: uint64(len(profiles)),
+			}
+			return collection, nil
+		}
+
+		return types.Collection[types.DeviceProfile]{}, ErrDeviceProfileNotFound
+	}
+
+	collection = types.Collection[types.DeviceProfile]{
+		Data:       s.config.DeviceProfiles,
+		Count:      uint64(len(s.config.DeviceProfiles)),
+		Offset:     0,
+		Limit:      uint64(len(s.config.DeviceProfiles)),
+		TotalCount: uint64(len(s.config.DeviceProfiles)),
+	}
+
+	return collection, nil
+}
+
+func extractCoordsFromQuery(bounds string) types.Bounds {
+	trimmed := strings.Trim(bounds, "[]")
+
+	pairs := strings.Split(trimmed, ";")
+
+	coords1 := strings.Split(pairs[0], ",")
+	coords2 := strings.Split(pairs[1], ",")
+
+	seLat, _ := strconv.ParseFloat(coords1[0], 64)
+	nwLon, _ := strconv.ParseFloat(coords1[1], 64)
+	nwLat, _ := strconv.ParseFloat(coords2[0], 64)
+	seLon, _ := strconv.ParseFloat(coords2[1], 64)
+
+	coords := types.Bounds{
+		MinLat: seLat,
+		MinLon: nwLon,
+		MaxLat: nwLat,
+		MaxLon: seLon,
+	}
+
+	return coords
+}
+
+func (s service) Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
+	conditions := make([]storage.ConditionFunc, 0)
+
+	conditions = append(conditions, storage.WithTenants(tenants))
+
+	for k, v := range params {
+		switch strings.ToLower(k) {
+		case "deveui":
+			conditions = append(conditions, storage.WithSensorID(v[0]))
+		case "device_id":
+			conditions = append(conditions, storage.WithDeviceID(v[0]))
+		case "sensor_id":
+			conditions = append(conditions, storage.WithSensorID(v[0]))
+		case "type":
+			conditions = append(conditions, storage.WithTypes(v))
+		case "types":
+			conditions = append(conditions, storage.WithTypes(v))
+		case "active":
+			active, _ := strconv.ParseBool(v[0])
+			conditions = append(conditions, storage.WithActive(active))
+		case "online":
+			online, _ := strconv.ParseBool(v[0])
+			conditions = append(conditions, storage.WithOnline(online))
+		case "limit":
+			limit, _ := strconv.Atoi(v[0])
+			conditions = append(conditions, storage.WithLimit(limit))
+		case "offset":
+			offset, _ := strconv.Atoi(v[0])
+			conditions = append(conditions, storage.WithOffset(offset))
+		case "sortby":
+			conditions = append(conditions, storage.WithSortBy(v[0]))
+		case "sortorder":
+			conditions = append(conditions, storage.WithSortDesc(strings.EqualFold(v[0], "desc")))
+		case "bounds":
+			coords := extractCoordsFromQuery(v[0])
+			conditions = append(conditions, storage.WithBounds(coords.MaxLat, coords.MinLat, coords.MaxLon, coords.MinLon))
+		case "profilename":
+			conditions = append(conditions, storage.WithProfileName(v))
+		}
+	}
+
+	return s.storage.QueryDevices(ctx, conditions...)
+}
+
+func (s service) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
-	device, err := d.storage.GetByDeviceID(ctx, deviceID, tenants)
+	device, err := s.storage.GetDevice(ctx, storage.WithDeviceID(deviceID), storage.WithTenants(tenants))
 	if err != nil {
 		return err
 	}
@@ -121,11 +375,11 @@ func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, 
 					}
 				}
 			}
-			if types, err := d.GetLwm2mTypes(ctx, typs...); err == nil {
+			if types, err := s.GetLwm2mTypes(ctx, typs...); err == nil {
 				device.Lwm2mTypes = types.Data
 			}
 		case "deviceProfile":
-			if deviceProfile, err := d.GetDeviceProfiles(ctx, v.(string)); err == nil {
+			if deviceProfile, err := s.GetDeviceProfiles(ctx, v.(string)); err == nil {
 				if deviceProfile.Count == 1 {
 					device.DeviceProfile = deviceProfile.Data[0]
 				}
@@ -135,207 +389,5 @@ func (d svc) Merge(ctx context.Context, deviceID string, fields map[string]any, 
 		}
 	}
 
-	return d.storage.Save(ctx, device)
-}
-
-func (d svc) Get(ctx context.Context, offset, limit int, q, sortBy string, tenants []string) (repositories.Collection[models.Device], error) {
-	return d.storage.Get(ctx, offset, limit, q, sortBy, tenants)
-}
-
-var ErrDeviceNotFound = fmt.Errorf("device not found")
-
-func (d svc) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (models.Device, error) {
-	device, err := d.storage.GetBySensorID(ctx, sensorID, tenants)
-	if err != nil {
-		if errors.Is(err, deviceStorage.ErrDeviceNotFound) {
-			return models.Device{}, ErrDeviceNotFound
-		}
-		return models.Device{}, err
-	}
-	return device, nil
-}
-
-func (d svc) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (models.Device, error) {
-	device, err := d.storage.GetWithAlarmID(ctx, alarmID, tenants)
-	if err != nil {
-		if errors.Is(err, deviceStorage.ErrDeviceNotFound) {
-			return models.Device{}, ErrDeviceNotFound
-		}
-		return models.Device{}, err
-	}
-	return device, nil
-}
-
-func (d svc) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (models.Device, error) {
-	device, err := d.storage.GetByDeviceID(ctx, deviceID, tenants)
-	if err != nil {
-		if errors.Is(err, deviceStorage.ErrDeviceNotFound) {
-			return models.Device{}, ErrDeviceNotFound
-		}
-		return models.Device{}, err
-	}
-	return device, nil
-}
-
-func (d svc) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus models.DeviceStatus) error {
-	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceStatus"))
-	ctx = logging.NewContextWithLogger(ctx, logger)
-
-	if deviceStatus.ObservedAt.IsZero() {
-		logger.Debug("lastObserved is zero, set to Now")
-		deviceStatus.ObservedAt = time.Now()
-	}
-
-	err := d.storage.UpdateStatus(ctx, deviceID, tenant, deviceStatus)
-	if err != nil {
-		return err
-	}
-
-	device, err := d.storage.GetByDeviceID(ctx, deviceID, []string{tenant})
-	if err != nil {
-		return err
-	}
-
-	return d.messenger.PublishOnTopic(ctx, &models.DeviceStatusUpdated{
-		DeviceID:  device.DeviceID,
-		Tenant:    device.Tenant,
-		Timestamp: deviceStatus.ObservedAt.UTC(),
-	})
-}
-
-func (d svc) UpdateState(ctx context.Context, deviceID, tenant string, deviceState models.DeviceState) error {
-	logger := logging.GetFromContext(ctx).With(slog.String("func", "UpdateDeviceState"))
-	ctx = logging.NewContextWithLogger(ctx, logger)
-
-	device, err := d.storage.GetByDeviceID(ctx, deviceID, []string{tenant})
-	if err != nil {
-		return err
-	}
-
-	if deviceState.ObservedAt.IsZero() {
-		logger.Debug("observedAt is zero, set to Now")
-		deviceState.ObservedAt = time.Now().UTC()
-	}
-
-	err = d.storage.UpdateState(ctx, deviceID, tenant, deviceState)
-	if err != nil {
-		return err
-	}
-
-	return d.messenger.PublishOnTopic(ctx, &models.DeviceStateUpdated{
-		DeviceID:  device.DeviceID,
-		Tenant:    device.Tenant,
-		State:     deviceState.State,
-		Timestamp: deviceState.ObservedAt,
-	})
-}
-
-var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
-
-func (d svc) GetDeviceProfiles(ctx context.Context, name ...string) (repositories.Collection[models.DeviceProfile], error) {
-	var collection repositories.Collection[models.DeviceProfile]
-
-	if len(name) > 0 && name[0] != "" {
-		profiles := []models.DeviceProfile{}
-
-		for _, n := range name {
-			id := slices.IndexFunc(d.config.DeviceProfiles, func(p models.DeviceProfile) bool {
-				return n == p.Name
-			})
-			if id > -1 {
-				profiles = append(profiles, d.config.DeviceProfiles[id])
-			}
-		}
-
-		if len(profiles) > 0 {
-			collection = repositories.Collection[models.DeviceProfile]{
-				Data:       profiles,
-				Count:      uint64(len(profiles)),
-				Offset:     0,
-				Limit:      uint64(len(profiles)),
-				TotalCount: uint64(len(profiles)),
-			}
-			return collection, nil
-		}
-
-		return repositories.Collection[models.DeviceProfile]{}, ErrDeviceProfileNotFound
-	}
-
-	collection = repositories.Collection[models.DeviceProfile]{
-		Data:       d.config.DeviceProfiles,
-		Count:      uint64(len(d.config.DeviceProfiles)),
-		Offset:     0,
-		Limit:      uint64(len(d.config.DeviceProfiles)),
-		TotalCount: uint64(len(d.config.DeviceProfiles)),
-	}
-
-	return collection, nil
-
-}
-
-func (d svc) GetLwm2mTypes(ctx context.Context, urn ...string) (repositories.Collection[models.Lwm2mType], error) {
-	var collection repositories.Collection[models.Lwm2mType]
-
-	if len(urn) > 0 && urn[0] != "" {
-		types := []models.Lwm2mType{}
-
-		for _, u := range urn {
-			id := slices.IndexFunc(d.config.Types, func(p models.Lwm2mType) bool {
-				return u == p.Urn
-			})
-			if id > -1 {
-				types = append(types, d.config.Types[id])
-			}
-		}
-
-		if len(types) > 0 {
-			collection = repositories.Collection[models.Lwm2mType]{
-				Data:       types,
-				Count:      uint64(len(types)),
-				Offset:     0,
-				Limit:      uint64(len(types)),
-				TotalCount: uint64(len(types)),
-			}
-			return collection, nil
-		}
-
-		return repositories.Collection[models.Lwm2mType]{}, ErrDeviceProfileNotFound
-	}
-
-	collection = repositories.Collection[models.Lwm2mType]{
-		Data:       d.config.Types,
-		Count:      uint64(len(d.config.Types)),
-		Offset:     0,
-		Limit:      uint64(len(d.config.Types)),
-		TotalCount: uint64(len(d.config.Types)),
-	}
-
-	return collection, nil
-}
-
-func MapOne[T any](v any) (T, error) {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return *new(T), err
-	}
-	to := new(T)
-	err = json.Unmarshal(b, to)
-	if err != nil {
-		return *new(T), err
-	}
-	return *to, nil
-}
-
-func MapAll[T any](arr []any) ([]T, error) {
-	result := *new([]T)
-
-	for _, v := range arr {
-		to, err := MapOne[T](v)
-		if err != nil {
-			return *new([]T), err
-		}
-		result = append(result, to)
-	}
-
-	return result, nil
+	return s.storage.UpdateDevice(ctx, device)
 }

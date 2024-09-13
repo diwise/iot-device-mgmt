@@ -12,10 +12,8 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	alarmStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/alarms"
-	deviceStore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/devicemanagement"
-	jsonstore "github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/repositories/jsonstorage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -23,7 +21,6 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/go-chi/chi/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gopkg.in/yaml.v2"
 )
 
@@ -45,23 +42,17 @@ func main() {
 	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
 	flag.Parse()
 
-	p, err := jsonstore.NewPool(ctx, jsonstore.LoadConfiguration(ctx))
-	if err != nil {
-		panic(err)
-	}
-
-	deviceStorage := setupDeviceDatabaseOrDie(ctx, p)
-	alarmStorage := setupAlarmDatabaseOrDie(ctx, p)
+	storage := setupStorageOrDie(ctx)
 
 	messenger := setupMessagingOrDie(ctx, serviceName)
 	messenger.Start()
 
-	mgmtSvc := devicemanagement.New(deviceStorage, messenger, loadConfigurationOrDie(ctx))
-	alarmSvc := alarms.New(alarmStorage, messenger)
+	mgmtSvc := devicemanagement.New(storage, messenger, loadConfigurationOrDie(ctx))
+	alarmSvc := alarms.New(storage, messenger)
 
 	seedDataOrDie(ctx, mgmtSvc)
 
-	watchdog := watchdog.New(deviceStorage, messenger)
+	watchdog := watchdog.New(mgmtSvc, messenger)
 	watchdog.Start(ctx)
 	defer watchdog.Stop(ctx)
 
@@ -78,23 +69,21 @@ func main() {
 	}
 }
 
-func setupAlarmDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) alarmStore.AlarmRepository {
-	repo, err := alarmStore.NewRepository(ctx, p)
-	if err != nil {
-		panic(err)
-	}
-	return repo
-}
-
-func setupDeviceDatabaseOrDie(ctx context.Context, p *pgxpool.Pool) deviceStore.DeviceRepository {
+func setupStorageOrDie(ctx context.Context) *storage.Storage {
 	var err error
 
-	repo, err := deviceStore.NewRepository(ctx, p)
+	p, err := storage.NewPool(ctx, storage.LoadConfiguration(ctx))
 	if err != nil {
 		panic(err)
 	}
 
-	return repo
+	s := storage.NewWithPool(p)
+	err = s.CreateTables(ctx)
+	if err != nil {
+		panic(err)
+	}
+
+	return s
 }
 
 func loadConfigurationOrDie(ctx context.Context) *devicemanagement.DeviceManagementConfig {

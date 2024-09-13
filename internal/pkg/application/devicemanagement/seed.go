@@ -10,11 +10,11 @@ import (
 	"strconv"
 	"strings"
 
-	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+func (d service) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
 	r := csv.NewReader(reader)
@@ -32,12 +32,12 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)))
 
-	deviceProfiles := make(map[string]models.DeviceProfile)
+	deviceProfiles := make(map[string]types.DeviceProfile)
 	for _, dp := range d.config.DeviceProfiles {
 		deviceProfiles[dp.Name] = dp
 	}
 
-	lwm2mTypes := make(map[string]models.Lwm2mType)
+	lwm2mTypes := make(map[string]types.Lwm2mType)
 	for _, l := range d.config.Types {
 		if l.Urn != "" {
 			lwm2mTypes[l.Urn] = l
@@ -61,7 +61,7 @@ func (d svc) Seed(ctx context.Context, reader io.Reader, tenants []string) error
 			device.DeviceProfile.Interval = interval
 
 			deviceLwm2mTypes := device.Lwm2mTypes
-			device.Lwm2mTypes = []models.Lwm2mType{}
+			device.Lwm2mTypes = []types.Lwm2mType{}
 			for _, l := range deviceLwm2mTypes {
 				if t, ok := lwm2mTypes[l.Urn]; ok {
 					device.Lwm2mTypes = append(device.Lwm2mTypes, t)
@@ -128,39 +128,39 @@ type deviceRecord struct {
 	source      string
 }
 
-func (dr deviceRecord) mapToDevice() (models.Device, models.DeviceProfile) {
-	strArrToLwm2m := func(str []string) []models.Lwm2mType {
-		lw := []models.Lwm2mType{}
+func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
+	strArrToLwm2m := func(str []string) []types.Lwm2mType {
+		lw := []types.Lwm2mType{}
 		for _, s := range str {
-			lw = append(lw, models.Lwm2mType{Urn: s})
+			lw = append(lw, types.Lwm2mType{Urn: s})
 		}
 		return lw
 	}
 
-	device := models.Device{
+	device := types.Device{
 		Active:      dr.active,
 		SensorID:    dr.devEUI,
 		DeviceID:    dr.internalID,
 		Tenant:      dr.tenant,
 		Name:        dr.name,
 		Description: dr.description,
-		Location: models.Location{
+		Location: types.Location{
 			Latitude:  dr.lat,
 			Longitude: dr.lon,
 		},
 		Environment: dr.where,
 		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
-		DeviceProfile: models.DeviceProfile{
+		DeviceProfile: types.DeviceProfile{
 			Name:     dr.sensorType,
 			Interval: dr.interval,
 		},
-		DeviceStatus: models.DeviceStatus{
+		DeviceStatus: types.DeviceStatus{
 			BatteryLevel: -1,
 		},
-		DeviceState: models.DeviceState{
+		DeviceState: types.DeviceState{
 			Online: false,
-			State:  models.DeviceStateUnknown,
+			State:  types.DeviceStateUnknown,
 		},
 	}
 

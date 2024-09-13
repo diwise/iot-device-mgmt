@@ -78,7 +78,6 @@ func NewDeviceNotObservedHandler(messenger messaging.MsgContext, svc AlarmServic
 		if addNew {
 			err := svc.Add(ctx, types.Alarm{
 				ID:          uuid.NewString(),
-				Type:        "Alarm",
 				AlarmType:   AlarmDeviceNotObserved,
 				Description: fmt.Sprintf("ingen kommunikation registerad"),
 				ObservedAt:  msg.ObservedAt,
@@ -157,7 +156,6 @@ func NewDeviceStatusHandler(messenger messaging.MsgContext, svc AlarmService) me
 				}
 				err = svc.Add(ctx, types.Alarm{
 					ID:          uuid.NewString(),
-					Type:        "Alarm",
 					AlarmType:   m,
 					Description: "",
 					ObservedAt:  ts,
