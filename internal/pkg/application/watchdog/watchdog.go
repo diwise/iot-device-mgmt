@@ -78,7 +78,6 @@ func (l *lastObservedWatcher) Watch(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-
 			go l.checkLastObserved(ctx, pub)
 		case deviceID := <-pub:
 			l.publish(ctx, deviceID)
@@ -127,8 +126,12 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, pub chan st
 }
 
 func checkLastObservedIsAfter(lastObserved time.Time, t time.Time, i int) bool {
+	lastObserved = lastObserved.UTC()
+	t = t.UTC()
+
 	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
 	after := lastObserved.After(shouldHaveBeenCalledAfter)
+	
 	return after
 }
 
@@ -137,22 +140,22 @@ func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string) {
 
 	tenants, err := w.devicemanagement.GetTenants(ctx)
 	if err != nil {
-		logger.Error("failed to get tenants", "err", err.Error())
+		logger.Error("failed to publish DeviceNotObserved, could not fetch tenants", "err", err.Error())
 		return
 	}
 
 	d, err := w.devicemanagement.GetByDeviceID(ctx, deviceID, tenants.Data)
 	if err != nil {
-		logger.Error("failed to get device by id", "err", err.Error())
+		logger.Error("failed to publish DeviceNotObserved, could not fetch device", "device_id", deviceID, "err", err.Error())
 		return
 	}
 
 	err = w.messenger.PublishOnTopic(ctx, &DeviceNotObserved{
-		DeviceID:   deviceID,
+		DeviceID:   d.DeviceID,
 		Tenant:     d.Tenant,
 		ObservedAt: time.Now().UTC(),
 	})
 	if err != nil {
-		logger.Error("failed to publish last observed", "err", err.Error())
+		logger.Error("failed to publish DeviceNotObserved", "err", err.Error())
 	}
 }
