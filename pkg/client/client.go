@@ -100,6 +100,8 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 	return dmc, nil
 }
 
+var ErrDeviceExist = errors.New("device already exists")
+
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "create-device")
@@ -143,6 +145,9 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	}
 
 	if resp.StatusCode != http.StatusCreated {
+		if resp.StatusCode == http.StatusConflict {
+			return ErrDeviceExist
+		}
 		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
 		return err
 	}
