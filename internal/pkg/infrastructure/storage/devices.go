@@ -21,6 +21,16 @@ func isDuplicateKeyErr(err error) bool {
 }
 
 func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
+	if device.DeviceID == "" {
+		return ErrNoID
+	}
+	if device.SensorID == "" {
+		return ErrNoID
+	}
+	if device.Tenant == "" {
+		return ErrMissingTenant
+	}
+
 	data, _ := json.Marshal(device)
 	profile, _ := json.Marshal(device.DeviceProfile)
 	state, _ := json.Marshal(device.DeviceState)
@@ -70,6 +80,16 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 }
 
 func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
+	if device.DeviceID == "" {
+		return ErrNoID
+	}
+	if device.SensorID == "" {
+		return ErrNoID
+	}
+	if device.Tenant == "" {
+		return ErrMissingTenant
+	}
+
 	data, _ := json.Marshal(device)
 	profile, _ := json.Marshal(device.DeviceProfile)
 	state, _ := json.Marshal(device.DeviceState)

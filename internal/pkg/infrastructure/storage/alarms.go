@@ -122,6 +122,18 @@ func (s *Storage) GetAlarm(ctx context.Context, conditions ...ConditionFunc) (ty
 }
 
 func (s *Storage) AddAlarm(ctx context.Context, alarm types.Alarm) error {
+	if alarm.ID == "" {
+		return ErrNoID
+	}
+
+	if alarm.RefID == "" {
+		return ErrNoID
+	}
+
+	if alarm.Tenant == "" {
+		return ErrMissingTenant
+	}
+
 	args := pgx.NamedArgs{
 		"alarm_id":    alarm.ID,
 		"alarm_type":  alarm.AlarmType,
