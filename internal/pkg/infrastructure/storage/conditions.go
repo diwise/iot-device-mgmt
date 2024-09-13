@@ -14,6 +14,7 @@ type Condition struct {
 	DeviceWithAlarmID string
 	Types             []string
 	Tenants           []string
+	ProfileName		  []string
 	offset            *int
 	limit             *int
 	Active            *bool
@@ -53,6 +54,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	if len(c.Types) > 1 {
 		args["profiles"] = c.Types
 	}
+	if len(c.ProfileName) > 0 {
+		args["profile_name"] = c.ProfileName
+	}
 	if c.AlarmID != "" {
 		args["alarm_id"] = c.AlarmID
 	}
@@ -87,6 +91,9 @@ func (c Condition) Where() string {
 	if len(c.Types) > 1 {
 		where += "AND profile->>'decoder' = ANY(@profiles) "
 	}
+	if len(c.ProfileName) > 0 {
+		where += "AND profile->>'name' = ANY(@profile_name) "
+	}
 	if c.Bounds != nil {
 		where += fmt.Sprintf("AND location <@ BOX '((%f,%f),(%f,%f))' ", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY)
 	}
@@ -108,6 +115,13 @@ func (c Condition) Where() string {
 	where += "deleted = FALSE "
 
 	return where
+}
+
+func WithProfileName(profileName []string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.ProfileName = profileName
+		return c
+	}
 }
 
 func WithDeviceAlarmID(alarmID string) ConditionFunc {

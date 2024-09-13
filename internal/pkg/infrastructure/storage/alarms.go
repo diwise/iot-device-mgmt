@@ -135,6 +135,7 @@ func (s *Storage) AddAlarm(ctx context.Context, alarm types.Alarm) error {
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO alarms (alarm_id, alarm_type, description, observed_at, ref_id, severity, tenant)
 		VALUES (@alarm_id, @alarm_type, @description, @observed_at, @ref_id, @severity, @tenant)
+		ON CONFLICT (alarm_id, deleted) DO UPDATE SET observed_at = EXCLUDED.observed_at, severity = EXCLUDED.severity
 	`, args)
 	if err != nil {
 		return err

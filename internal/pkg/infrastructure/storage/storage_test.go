@@ -135,6 +135,23 @@ func TestAddAlarm(t *testing.T) {
 	is.NoErr(err)
 }
 
+func TestUpdateAlarm(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+
+	now := time.Now()
+	alarm := newAlarm()
+
+	alarm.Severity = 1
+	alarm.ObservedAt = now.Add(-time.Hour)
+	err := s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+
+	alarm.Severity = 2
+	alarm.ObservedAt = now.Add(1 * time.Hour)
+	err = s.AddAlarm(ctx, alarm)
+	is.NoErr(err)
+}
 func TestQueryAlarms(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
