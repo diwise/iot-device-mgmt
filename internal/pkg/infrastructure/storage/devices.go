@@ -9,7 +9,16 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/jackc/pgx/pgtype"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+func isDuplicateKeyErr(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == "23505" // duplicate key value violates unique constraint
+	}
+	return false
+}
 
 func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	data, _ := json.Marshal(device)
@@ -51,6 +60,9 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 		VALUES (@device_id, @sensor_id, @active, @data, @profile, @state, @status, @tags, point(@lon,@lat), @tenant)
 	`, args)
 	if err != nil {
+		if isDuplicateKeyErr(err) {
+			return ErrAlreadyExist
+		}
 		return err
 	}
 

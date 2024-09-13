@@ -18,6 +18,7 @@ import (
 )
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")
+var ErrDeviceAlreadyExist = fmt.Errorf("device already exists")
 var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
@@ -125,6 +126,9 @@ func (s service) GetWithinBounds(ctx context.Context, b types.Bounds) (types.Col
 func (s service) Create(ctx context.Context, device types.Device) error {
 	err := s.storage.AddDevice(ctx, device)
 	if err != nil {
+		if errors.Is(err, storage.ErrAlreadyExist) {
+			return ErrDeviceAlreadyExist
+		}
 		return err
 	}
 

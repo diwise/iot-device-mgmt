@@ -321,6 +321,11 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 			err = svc.Create(ctx, d)
 			if err != nil {
+				if errors.Is(err, devicemanagement.ErrDeviceAlreadyExist) {					
+					w.WriteHeader(http.StatusConflict)
+					return
+				}
+
 				requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
