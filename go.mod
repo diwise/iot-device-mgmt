@@ -8,7 +8,7 @@ require (
 	github.com/diwise/messaging-golang v0.0.0-20240506092815-fc973e9e4a4f
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/matryer/is v1.4.1
-	github.com/riandyrn/otelchi v0.9.0
+	github.com/riandyrn/otelchi v0.10.0
 	github.com/rs/cors v1.11.1
 	go.opentelemetry.io/otel v1.30.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.30.0 // indirect
@@ -52,7 +52,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/prometheus/client_golang v1.20.3 // indirect
+	github.com/prometheus/client_golang v1.20.4 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.59.1 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
