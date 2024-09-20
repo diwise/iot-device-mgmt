@@ -334,6 +334,8 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 			conditions = append(conditions, storage.WithBounds(coords.MaxLat, coords.MinLat, coords.MaxLon, coords.MinLon))
 		case "profilename":
 			conditions = append(conditions, storage.WithProfileName(v))
+		case "urn":
+			conditions = append(conditions, storage.WithUrn(v[0]))
 		}
 	}
 

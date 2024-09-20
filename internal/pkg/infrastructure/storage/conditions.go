@@ -27,6 +27,7 @@ type Condition struct {
 	AlarmID           string
 	RefID             string
 	IncludeDeleted    bool
+	Urn               string
 }
 
 type Box struct {
@@ -65,6 +66,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.RefID != "" {
 		args["ref_id"] = c.RefID
+	}
+	if c.Urn != "" {
+		args["urn"] = c.Urn
 	}
 
 	return args
@@ -109,6 +113,9 @@ func (c Condition) Where() string {
 	if c.DeviceWithAlarmID != "" {
 		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
 	}
+	if c.Urn != "" {
+		where += "EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = @urn) "
+	}
 
 	where = strings.TrimPrefix(where, "AND")
 
@@ -120,6 +127,13 @@ func (c Condition) Where() string {
 	}
 
 	return where
+}
+
+func WithUrn(urn string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.Urn = urn
+		return c
+	}
 }
 
 func WithProfileName(profileName []string) ConditionFunc {
