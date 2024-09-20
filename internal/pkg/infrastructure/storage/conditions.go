@@ -177,7 +177,7 @@ func WithTypes(types []string) ConditionFunc {
 
 func (c Condition) SortBy() string {
 	if c.sortBy == "" {
-		c.sortBy = "device_id"
+		c.sortBy = "data-->>'name'"
 	}
 	return c.sortBy
 }
