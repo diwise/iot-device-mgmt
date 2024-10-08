@@ -335,7 +335,7 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 		case "profilename":
 			conditions = append(conditions, storage.WithProfileName(v))
 		case "urn":
-			conditions = append(conditions, storage.WithUrn(v[0]))
+			conditions = append(conditions, storage.WithUrn(v))
 		}
 	}
 
