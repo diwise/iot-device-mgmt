@@ -16,6 +16,7 @@ import (
 //go:generate moq -rm -out alarmservice_mock.go . AlarmService
 type AlarmService interface {
 	Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
+	Info(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.InformationItem], error)
 	GetByID(ctx context.Context, alarmID string, tenants []string) (types.Alarm, error)
 	GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
 	Add(ctx context.Context, alarm types.Alarm) error
@@ -26,6 +27,7 @@ var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 
 //go:generate moq -rm -out alarmrepository_mock.go . AlarmRepository
 type AlarmRepository interface {
+	QueryInformation(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.InformationItem], error)
 	QueryAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
 	GetAlarm(ctx context.Context, conditions ...storage.ConditionFunc) (types.Alarm, error)
 	AddAlarm(ctx context.Context, alarm types.Alarm) error
@@ -53,6 +55,15 @@ func (svc alarmSvc) Get(ctx context.Context, offset, limit int, tenants []string
 	alarms, err := svc.storage.QueryAlarms(ctx, storage.WithOffset(offset), storage.WithLimit(limit), storage.WithTenants(tenants))
 	if err != nil {
 		return types.Collection[types.Alarm]{}, err
+	}
+
+	return alarms, nil
+}
+
+func (svc alarmSvc) Info(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.InformationItem], error) {
+	alarms, err := svc.storage.QueryInformation(ctx, storage.WithOffset(offset), storage.WithLimit(limit), storage.WithTenants(tenants))
+	if err != nil {
+		return types.Collection[types.InformationItem]{}, err
 	}
 
 	return alarms, nil

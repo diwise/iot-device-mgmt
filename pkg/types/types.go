@@ -81,6 +81,12 @@ type Alarm struct {
 	Tenant      string    `json:"tenant"`
 }
 
+type InformationItem struct {
+	DeviceID   string    `json:"deviceID"`
+	ObservedAt time.Time `json:"observedAt"`
+	Types      []string  `json:"types"`
+}
+
 type Collection[T any] struct {
 	Data       []T
 	Count      uint64

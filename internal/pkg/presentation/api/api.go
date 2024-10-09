@@ -53,7 +53,7 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
 			})
 
-			r.Route("/alarms", func(r chi.Router) {
+			r.Route("/alarms", func(r chi.Router) {				
 				r.Get("/", getAlarmsHandler(log, alarmSvc))
 				r.Get("/{alarmID}", getAlarmDetailsHandler(log, alarmSvc))
 				r.Patch("/{alarmID}/close", closeAlarmHandler(log, alarmSvc))
@@ -452,6 +452,33 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 				return
 			}
 		} else {
+			asInfo := r.URL.Query().Get("info") == "true"
+			if asInfo {
+				info, err := svc.Info(ctx, offset, limit, allowedTenants)
+				if err != nil {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+				meta := &meta{
+					TotalRecords: info.TotalCount,
+					Offset:       &info.Offset,
+					Limit:        &info.Limit,
+					Count:        info.Count,
+				}
+		
+				response := ApiResponse{
+					Meta:  meta,
+					Data:  info.Data,
+					Links: createLinks(r.URL, meta),
+				}
+				w.Header().Add("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				w.Write(response.Byte())
+				
+				return
+			}
+
+
 			collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
