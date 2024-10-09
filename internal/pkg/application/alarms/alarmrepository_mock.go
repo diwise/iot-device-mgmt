@@ -32,6 +32,9 @@ var _ AlarmRepository = &AlarmRepositoryMock{}
 //			QueryAlarmsFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
 //				panic("mock out the QueryAlarms method")
 //			},
+//			QueryInformationFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.InformationItem], error) {
+//				panic("mock out the QueryInformation method")
+//			},
 //		}
 //
 //		// use mockedAlarmRepository in code that requires AlarmRepository
@@ -50,6 +53,9 @@ type AlarmRepositoryMock struct {
 
 	// QueryAlarmsFunc mocks the QueryAlarms method.
 	QueryAlarmsFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
+
+	// QueryInformationFunc mocks the QueryInformation method.
+	QueryInformationFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.InformationItem], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -83,11 +89,19 @@ type AlarmRepositoryMock struct {
 			// Conditions is the conditions argument value.
 			Conditions []storage.ConditionFunc
 		}
+		// QueryInformation holds details about calls to the QueryInformation method.
+		QueryInformation []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Conditions is the conditions argument value.
+			Conditions []storage.ConditionFunc
+		}
 	}
-	lockAddAlarm    sync.RWMutex
-	lockCloseAlarm  sync.RWMutex
-	lockGetAlarm    sync.RWMutex
-	lockQueryAlarms sync.RWMutex
+	lockAddAlarm         sync.RWMutex
+	lockCloseAlarm       sync.RWMutex
+	lockGetAlarm         sync.RWMutex
+	lockQueryAlarms      sync.RWMutex
+	lockQueryInformation sync.RWMutex
 }
 
 // AddAlarm calls AddAlarmFunc.
@@ -235,5 +249,41 @@ func (mock *AlarmRepositoryMock) QueryAlarmsCalls() []struct {
 	mock.lockQueryAlarms.RLock()
 	calls = mock.calls.QueryAlarms
 	mock.lockQueryAlarms.RUnlock()
+	return calls
+}
+
+// QueryInformation calls QueryInformationFunc.
+func (mock *AlarmRepositoryMock) QueryInformation(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.InformationItem], error) {
+	if mock.QueryInformationFunc == nil {
+		panic("AlarmRepositoryMock.QueryInformationFunc: method is nil but AlarmRepository.QueryInformation was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Conditions []storage.ConditionFunc
+	}{
+		Ctx:        ctx,
+		Conditions: conditions,
+	}
+	mock.lockQueryInformation.Lock()
+	mock.calls.QueryInformation = append(mock.calls.QueryInformation, callInfo)
+	mock.lockQueryInformation.Unlock()
+	return mock.QueryInformationFunc(ctx, conditions...)
+}
+
+// QueryInformationCalls gets all the calls that were made to QueryInformation.
+// Check the length with:
+//
+//	len(mockedAlarmRepository.QueryInformationCalls())
+func (mock *AlarmRepositoryMock) QueryInformationCalls() []struct {
+	Ctx        context.Context
+	Conditions []storage.ConditionFunc
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Conditions []storage.ConditionFunc
+	}
+	mock.lockQueryInformation.RLock()
+	calls = mock.calls.QueryInformation
+	mock.lockQueryInformation.RUnlock()
 	return calls
 }

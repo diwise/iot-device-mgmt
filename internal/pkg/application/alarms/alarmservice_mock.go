@@ -34,6 +34,9 @@ var _ AlarmService = &AlarmServiceMock{}
 //			GetByRefIDFunc: func(ctx context.Context, refID string, offset int, limit int, tenants []string) (types.Collection[types.Alarm], error) {
 //				panic("mock out the GetByRefID method")
 //			},
+//			InfoFunc: func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.InformationItem], error) {
+//				panic("mock out the Info method")
+//			},
 //		}
 //
 //		// use mockedAlarmService in code that requires AlarmService
@@ -55,6 +58,9 @@ type AlarmServiceMock struct {
 
 	// GetByRefIDFunc mocks the GetByRefID method.
 	GetByRefIDFunc func(ctx context.Context, refID string, offset int, limit int, tenants []string) (types.Collection[types.Alarm], error)
+
+	// InfoFunc mocks the Info method.
+	InfoFunc func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.InformationItem], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -107,12 +113,24 @@ type AlarmServiceMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
+		// Info holds details about calls to the Info method.
+		Info []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Offset is the offset argument value.
+			Offset int
+			// Limit is the limit argument value.
+			Limit int
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
 	}
 	lockAdd        sync.RWMutex
 	lockClose      sync.RWMutex
 	lockGet        sync.RWMutex
 	lockGetByID    sync.RWMutex
 	lockGetByRefID sync.RWMutex
+	lockInfo       sync.RWMutex
 }
 
 // Add calls AddFunc.
@@ -320,5 +338,49 @@ func (mock *AlarmServiceMock) GetByRefIDCalls() []struct {
 	mock.lockGetByRefID.RLock()
 	calls = mock.calls.GetByRefID
 	mock.lockGetByRefID.RUnlock()
+	return calls
+}
+
+// Info calls InfoFunc.
+func (mock *AlarmServiceMock) Info(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.InformationItem], error) {
+	if mock.InfoFunc == nil {
+		panic("AlarmServiceMock.InfoFunc: method is nil but AlarmService.Info was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Offset  int
+		Limit   int
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Offset:  offset,
+		Limit:   limit,
+		Tenants: tenants,
+	}
+	mock.lockInfo.Lock()
+	mock.calls.Info = append(mock.calls.Info, callInfo)
+	mock.lockInfo.Unlock()
+	return mock.InfoFunc(ctx, offset, limit, tenants)
+}
+
+// InfoCalls gets all the calls that were made to Info.
+// Check the length with:
+//
+//	len(mockedAlarmService.InfoCalls())
+func (mock *AlarmServiceMock) InfoCalls() []struct {
+	Ctx     context.Context
+	Offset  int
+	Limit   int
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Offset  int
+		Limit   int
+		Tenants []string
+	}
+	mock.lockInfo.RLock()
+	calls = mock.calls.Info
+	mock.lockInfo.RUnlock()
 	return calls
 }

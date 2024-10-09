@@ -4,11 +4,98 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/jackc/pgx/v5"
 )
+
+func (s *Storage) QueryInformation(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.InformationItem], error) {
+	condition := &Condition{}
+	for _, f := range conditions {
+		f(condition)
+	}
+
+	if condition.sortBy == "" {
+		condition.sortBy = "latest"
+		condition.sortOrder = "DESC"
+	}
+
+	args := condition.NamedArgs()
+	where := condition.Where()
+
+	var offsetLimit string
+
+	if condition.offset != nil {
+		offsetLimit += fmt.Sprintf("OFFSET %d ", condition.Offset())
+	}
+
+	if condition.limit != nil {
+		offsetLimit += fmt.Sprintf("LIMIT %d ", condition.Limit())
+	}
+
+	var ref_id string
+	var alarm_types []string
+	var observed_at time.Time
+	var count int64
+
+	query := fmt.Sprintf(`
+		SELECT ref_id, array_agg(alarm_type) as alarm_types, max(observed_at) as latest, count(*) OVER () AS count
+		FROM alarms
+		WHERE %s
+		GROUP BY ref_id
+		ORDER BY %s %s
+		%s;
+	`, where, condition.SortBy(), condition.SortOrder(), offsetLimit)
+
+	rows, err := s.pool.Query(ctx, query, args)
+	if err != nil {
+		return types.Collection[types.InformationItem]{}, err
+	}
+
+	alarms := make([]types.InformationItem, 0)
+
+	unique := func(arr []string) []string {
+		if len(arr) <= 1 {
+			return arr
+		}
+		unique := make(map[string]bool)
+		result := []string{}
+		for _, item := range arr {
+			if _, ok := unique[item]; !ok {
+				unique[item] = true
+				result = append(result, item)
+			}
+		}
+		slices.Sort(result)
+		return result
+	}
+
+	_, err = pgx.ForEachRow(rows, []any{&ref_id, &alarm_types, &observed_at, &count}, func() error {
+		alarm := types.InformationItem{}
+
+		alarm.DeviceID = ref_id
+		alarm.Types = unique(alarm_types)
+		alarm.ObservedAt = observed_at
+
+		alarms = append(alarms, alarm)
+
+		return nil
+	})
+	if err != nil {
+		return types.Collection[types.InformationItem]{}, err
+	}
+
+	return types.Collection[types.InformationItem]{
+		Data:       alarms,
+		Count:      uint64(len(alarms)),
+		Limit:      uint64(condition.Limit()),
+		Offset:     uint64(condition.Offset()),
+		TotalCount: uint64(count),
+	}, nil
+
+}
 
 func (s *Storage) QueryAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error) {
 	condition := &Condition{}
