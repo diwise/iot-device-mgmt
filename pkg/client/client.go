@@ -102,6 +102,11 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 
 var ErrDeviceExist = errors.New("device already exists")
 
+func drainAndCloseResponseBody(r *http.Response) {
+	defer r.Body.Close()
+	defer io.Copy(io.Discard, r.Body)
+}
+
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "create-device")
@@ -137,7 +142,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		err = fmt.Errorf("failed to create device: %w", err)
 		return err
 	}
-	defer resp.Body.Close()
+	defer drainAndCloseResponseBody(resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
@@ -287,7 +292,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndCloseResponseBody(resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
@@ -417,7 +422,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 		err = fmt.Errorf("failed to retrieve information for device: %w", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer drainAndCloseResponseBody(resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
