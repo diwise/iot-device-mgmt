@@ -104,7 +104,7 @@ var ErrDeviceExist = errors.New("device already exists")
 
 func drainAndCloseResponseBody(r *http.Response) {
 	defer r.Body.Close()
-	defer io.Copy(io.Discard, r.Body)
+	io.Copy(io.Discard, r.Body)
 }
 
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
@@ -156,6 +156,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
 		return err
 	}
+
 	return nil
 }
 
