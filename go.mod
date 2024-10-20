@@ -1,8 +1,6 @@
 module github.com/diwise/iot-device-mgmt
 
-go 1.22.0
-
-toolchain go1.23.2
+go 1.23
 
 require (
 	github.com/diwise/messaging-golang v0.0.0-20240506092815-fc973e9e4a4f
@@ -48,9 +46,7 @@ require (
 	github.com/lestrrat-go/iter v1.0.2 // indirect
 	github.com/lestrrat-go/jwx/v2 v2.0.21 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.20.4 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
@@ -82,7 +78,6 @@ require (
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.22.0 // indirect
-	github.com/jackc/pgx v3.6.2+incompatible
 	go.opentelemetry.io/otel/trace v1.30.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/net v0.30.0 // indirect
