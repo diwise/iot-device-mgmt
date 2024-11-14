@@ -53,7 +53,7 @@ func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, 
 				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
 			})
 
-			r.Route("/alarms", func(r chi.Router) {				
+			r.Route("/alarms", func(r chi.Router) {
 				r.Get("/", getAlarmsHandler(log, alarmSvc))
 				r.Get("/{alarmID}", getAlarmDetailsHandler(log, alarmSvc))
 				r.Patch("/{alarmID}/close", closeAlarmHandler(log, alarmSvc))
@@ -173,9 +173,10 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				Data: device,
 			}
 
-			w.Header().Add("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(response.Byte())
+
 			return
 		} else {
 			collection, err := svc.Query(ctx, r.URL.Query(), allowedTenants)
@@ -210,9 +211,23 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 					return
 				}
 
-				w.Header().Add("Content-Type", "application/geo+json")
+				w.Header().Set("Content-Type", "application/geo+json")
 				w.WriteHeader(http.StatusOK)
 				w.Write(b)
+
+				return
+			}
+
+			if wantsTextCSV(r) {
+				w.Header().Set("Content-Type", "text/csv")
+
+				err := writeCsvWithDevices(w, collection.Data)
+				if err != nil {
+					w.WriteHeader(http.StatusInternalServerError)
+					return
+				}
+
+				w.WriteHeader(http.StatusOK)
 				return
 			}
 
@@ -222,7 +237,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				Links: links,
 			}
 
-			w.Header().Add("Content-Type", "application/json")
+			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			w.Write(response.Byte())
 			return
@@ -465,7 +480,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 					Limit:        &info.Limit,
 					Count:        info.Count,
 				}
-		
+
 				response := ApiResponse{
 					Meta:  meta,
 					Data:  info.Data,
@@ -474,10 +489,9 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 				w.Header().Add("Content-Type", "application/json")
 				w.WriteHeader(http.StatusOK)
 				w.Write(response.Byte())
-				
+
 				return
 			}
-
 
 			collection, err = svc.Get(ctx, offset, limit, allowedTenants)
 			if err != nil {
@@ -706,4 +720,9 @@ func isApplicationJson(r *http.Request) bool {
 func wantsGeoJSON(r *http.Request) bool {
 	contentType := r.Header.Get("Accept")
 	return strings.Contains(contentType, "application/geo+json")
+}
+
+func wantsTextCSV(r *http.Request) bool {
+	contentType := r.Header.Get("Accept")
+	return strings.Contains(contentType, "text/csv")
 }
