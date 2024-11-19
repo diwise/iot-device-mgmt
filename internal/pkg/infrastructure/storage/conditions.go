@@ -114,7 +114,7 @@ func (c Condition) Where() string {
 		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
 	}
 	if len(c.Urn) > 0{
-		where += "AND EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = ANY(@urn)) "
+		where += "AND data->>'types' IS NOT NULL AND EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = ANY(@urn)) "
 	}
 
 	where = strings.TrimPrefix(where, "AND")
