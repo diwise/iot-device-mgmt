@@ -2,6 +2,9 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"strings"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
@@ -234,4 +237,47 @@ func CreateGeoJSONPropertyFromMultiPolygon(coordinates [][][][]float64) *GeoJSON
 	}
 
 	return p
+}
+
+func writeCsvWithDevices(w io.Writer, devices []types.Device) error {
+	header := []string{"devEUI", "internalID", "lat", "lon", "where", "types", "sensorType", "name", "description", "active", "tenant", "interval", "source"}
+	rows := [][]string{header}
+
+	types := func(d types.Device) string {
+		urn := []string{}
+
+		for _, t := range d.Lwm2mTypes {
+			urn = append(urn, t.Urn)
+		}
+
+		return strings.Join(urn, ",")
+	}
+
+	for _, d := range devices {
+		row := []string{
+			d.SensorID,
+			d.DeviceID,
+			fmt.Sprintf("%f", d.Location.Latitude),
+			fmt.Sprintf("%f", d.Location.Longitude),
+			d.Environment,
+			types(d),
+			d.DeviceProfile.Decoder,
+			d.Name,
+			d.Description,
+			fmt.Sprintf("%t", d.Active),
+			d.Tenant,
+			fmt.Sprintf("%d", d.DeviceProfile.Interval),
+			d.Source,
+		}
+		rows = append(rows, row)
+	}
+
+	for _, row := range rows {
+		_, err := fmt.Fprintln(w, strings.Join(row, ";"))
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
