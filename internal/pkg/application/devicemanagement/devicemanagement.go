@@ -338,8 +338,9 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 			conditions = append(conditions, storage.WithUrn(v))
 		case "search":
 			conditions = append(conditions, storage.WithSearch(v[0]))
-		default:
-
+		case "lastseen":
+			lastSeen, _ := time.Parse(time.RFC3339, v[0])
+			conditions = append(conditions, storage.WithLastSeen(lastSeen))		
 		}
 	}
 

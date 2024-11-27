@@ -5,6 +5,7 @@ import (
 	"math"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -30,6 +31,7 @@ type Condition struct {
 	IncludeDeleted    bool
 	Urn               []string
 	Search            string
+	LastSeen          time.Time
 }
 
 type Box struct {
@@ -71,6 +73,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if len(c.Urn) > 0 {
 		args["urn"] = c.Urn
+	}
+	if !c.LastSeen.IsZero() {
+		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
 	}
 
 	return args
@@ -120,6 +125,9 @@ func (c Condition) Where() string {
 	}
 	if c.Search != "" {
 		where += fmt.Sprintf("AND (data->>'name' ILIKE '%%%s%%' OR sensor_id ILIKE '%%%s%%') ", c.Search, c.Search)
+	}
+	if !c.LastSeen.IsZero() {
+		where += "AND status->>'observedAt' >= @last_seen "
 	}
 
 	where = strings.TrimPrefix(where, "AND")
@@ -311,6 +319,13 @@ func WithBounds(north, south, east, west float64) ConditionFunc {
 func WithDeleted() ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.IncludeDeleted = true
+		return c
+	}
+}
+
+func WithLastSeen(ts time.Time) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.LastSeen = ts
 		return c
 	}
 }
