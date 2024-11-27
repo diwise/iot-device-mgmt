@@ -3,6 +3,7 @@ package storage
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -28,6 +29,7 @@ type Condition struct {
 	RefID             string
 	IncludeDeleted    bool
 	Urn               []string
+	Search            string
 }
 
 type Box struct {
@@ -113,8 +115,11 @@ func (c Condition) Where() string {
 	if c.DeviceWithAlarmID != "" {
 		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
 	}
-	if len(c.Urn) > 0{
+	if len(c.Urn) > 0 {
 		where += "AND data->>'types' IS NOT NULL AND EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = ANY(@urn)) "
+	}
+	if c.Search != "" {
+		where += fmt.Sprintf("AND (data->>'name' ILIKE '%%%s%%' OR sensor_id ILIKE '%%%s%%') ", c.Search, c.Search)
 	}
 
 	where = strings.TrimPrefix(where, "AND")
@@ -132,6 +137,16 @@ func (c Condition) Where() string {
 func WithUrn(urn []string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.Urn = urn
+		return c
+	}
+}
+
+var re = regexp.MustCompile(`[^a-zA-Z0-9 _,;().]+|[%]`)
+
+func WithSearch(s string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		s = re.ReplaceAllString(s, "")
+		c.Search = strings.TrimSpace(s)
 		return c
 	}
 }
