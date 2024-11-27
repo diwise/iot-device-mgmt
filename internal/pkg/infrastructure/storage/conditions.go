@@ -149,7 +149,7 @@ func WithUrn(urn []string) ConditionFunc {
 	}
 }
 
-var re = regexp.MustCompile(`[^a-zA-Z0-9 _,;().]+|[%]`)
+var re = regexp.MustCompile(`[^a-zA-ZåäöÅÄÖ0-9 _,;().]+|[%]`)
 
 func WithSearch(s string) ConditionFunc {
 	return func(c *Condition) *Condition {
