@@ -3,7 +3,9 @@ package storage
 import (
 	"fmt"
 	"math"
+	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -28,6 +30,8 @@ type Condition struct {
 	RefID             string
 	IncludeDeleted    bool
 	Urn               []string
+	Search            string
+	LastSeen          time.Time
 }
 
 type Box struct {
@@ -69,6 +73,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if len(c.Urn) > 0 {
 		args["urn"] = c.Urn
+	}
+	if !c.LastSeen.IsZero() {
+		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
 	}
 
 	return args
@@ -113,8 +120,14 @@ func (c Condition) Where() string {
 	if c.DeviceWithAlarmID != "" {
 		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
 	}
-	if len(c.Urn) > 0{
+	if len(c.Urn) > 0 {
 		where += "AND data->>'types' IS NOT NULL AND EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = ANY(@urn)) "
+	}
+	if c.Search != "" {
+		where += fmt.Sprintf("AND (data->>'name' ILIKE '%%%s%%' OR sensor_id ILIKE '%%%s%%') ", c.Search, c.Search)
+	}
+	if !c.LastSeen.IsZero() {
+		where += "AND status->>'observedAt' >= @last_seen "
 	}
 
 	where = strings.TrimPrefix(where, "AND")
@@ -132,6 +145,16 @@ func (c Condition) Where() string {
 func WithUrn(urn []string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.Urn = urn
+		return c
+	}
+}
+
+var re = regexp.MustCompile(`[^a-zA-Z0-9 _,;().]+|[%]`)
+
+func WithSearch(s string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		s = re.ReplaceAllString(s, "")
+		c.Search = strings.TrimSpace(s)
 		return c
 	}
 }
@@ -296,6 +319,13 @@ func WithBounds(north, south, east, west float64) ConditionFunc {
 func WithDeleted() ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.IncludeDeleted = true
+		return c
+	}
+}
+
+func WithLastSeen(ts time.Time) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.LastSeen = ts
 		return c
 	}
 }
