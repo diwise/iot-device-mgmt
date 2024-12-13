@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -194,6 +195,8 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 }
 
 func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
+	log := logging.GetFromContext(ctx)
+	
 	condition := &Condition{}
 	for _, f := range conditions {
 		f(condition)
@@ -225,6 +228,8 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 		ORDER BY %s %s		
 		%s
 	`, where, condition.SortBy(), condition.SortOrder(), offsetLimit)
+
+	log.Debug("query devices", "sql", query, "args", args)
 
 	rows, err := s.pool.Query(ctx, query, args)
 	if err != nil {
