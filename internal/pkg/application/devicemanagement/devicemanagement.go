@@ -339,8 +339,18 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 		case "search":
 			conditions = append(conditions, storage.WithSearch(v[0]))
 		case "lastseen":
-			lastSeen, _ := time.Parse(time.RFC3339, v[0])
-			conditions = append(conditions, storage.WithLastSeen(lastSeen))		
+			var lastSeen time.Time
+			var err error
+			
+			if strings.HasSuffix(v[0], "Z") {
+				lastSeen, err = time.Parse(time.RFC3339, v[0])
+			} else {
+				lastSeen, err = time.Parse("2006-01-02T15:04:05", v[0])
+			}
+
+			if err == nil {
+				conditions = append(conditions, storage.WithLastSeen(lastSeen))
+			}
 		}
 	}
 
@@ -391,6 +401,8 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 					device.DeviceProfile = deviceProfile.Data[0]
 				}
 			}
+		case "environment":
+			device.Environment = v.(string)
 		default:
 			log.Debug("MERGE: key not found", slog.String("key", k), slog.Any("value", v))
 		}
