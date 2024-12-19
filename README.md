@@ -46,7 +46,7 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 "RABBITMQ_PASS": "bitnami"
 "RABBITMQ_DISABLED": "false"
 "SERVICE_PORT": "<8080>",
-"POSTGRES_HOST": "url to postgreSql database"
+"POSTGRES_HOST": "url to postgresql database"
 ```
 ## CLI flags
  - `devices` - A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)
