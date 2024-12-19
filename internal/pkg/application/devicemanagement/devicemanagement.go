@@ -297,6 +297,8 @@ func extractCoordsFromQuery(bounds string) types.Bounds {
 }
 
 func (s service) Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
+	log := logging.GetFromContext(ctx)
+
 	conditions := make([]storage.ConditionFunc, 0)
 
 	conditions = append(conditions, storage.WithTenants(tenants))
@@ -339,17 +341,24 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 		case "search":
 			conditions = append(conditions, storage.WithSearch(v[0]))
 		case "lastseen":
-			var lastSeen time.Time
-			var err error
-			
-			if strings.HasSuffix(v[0], "Z") {
-				lastSeen, err = time.Parse(time.RFC3339, v[0])
-			} else {
-				lastSeen, err = time.Parse("2006-01-02T15:04:05", v[0])
-			}
+			log.Debug("last seen", "value", v[0])
 
-			if err == nil {
-				conditions = append(conditions, storage.WithLastSeen(lastSeen))
+			switch len(v[0]) {
+			case len("2006-01-02T15:04"):
+				t, err := time.Parse("2006-01-02T15:04", v[0])
+				if err == nil {
+					conditions = append(conditions, storage.WithLastSeen(t))
+				}
+			case len("2006-01-02T15:04:05"):
+				t, err := time.Parse("2006-01-02T15:04:05", v[0])
+				if err == nil {
+					conditions = append(conditions, storage.WithLastSeen(t))
+				}
+			case len("2006-01-02T15:04Z"):
+				t, err := time.Parse("2006-01-02T15:04Z", v[0])
+				if err == nil {
+					conditions = append(conditions, storage.WithLastSeen(t))
+				}
 			}
 		}
 	}
