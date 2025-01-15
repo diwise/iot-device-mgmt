@@ -199,8 +199,8 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 	}
 
 	dr := deviceRecord{
-		devEUI:      strings.ToLower(r[0]),
-		internalID:  strings.ToLower(r[1]),
+		devEUI:      strings.TrimSpace(r[0]),
+		internalID:  strings.TrimSpace(r[1]),
 		lat:         strTof64(r[2]),
 		lon:         strTof64(r[3]),
 		where:       r[4],
