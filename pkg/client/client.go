@@ -55,6 +55,7 @@ type lookupResult struct {
 type devManagementClient struct {
 	url               string
 	clientCredentials *clientcredentials.Config
+	insecureURL       bool
 
 	cacheByInternalID map[string]lookupResult
 	knownDevEUI       map[string]devEUIState
@@ -93,6 +94,7 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 	dmc := &devManagementClient{
 		url:               devMgmtUrl,
 		clientCredentials: oauthConfig,
+		insecureURL:       oauthInsecureURL,
 
 		cacheByInternalID: make(map[string]lookupResult, 100),
 		knownDevEUI:       make(map[string]devEUIState, 100),
@@ -116,6 +118,18 @@ func drainAndCloseResponseBody(r *http.Response) {
 	io.Copy(io.Discard, r.Body)
 }
 
+func (dmc *devManagementClient) refreshToken(ctx context.Context) (*oauth2.Token, error) {
+	if dmc.insecureURL {
+		ctx = context.WithValue(ctx, oauth2.HTTPClient,
+			&http.Client{Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}},
+		)
+	}
+
+	return dmc.clientCredentials.Token(ctx)
+}
+
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "create-device")
@@ -137,7 +151,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	req.Header.Add("Content-Type", "application/json")
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return err
@@ -288,7 +302,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	}
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return nil, err
@@ -418,7 +432,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	}
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return nil, err
