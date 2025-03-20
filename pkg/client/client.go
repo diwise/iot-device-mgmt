@@ -3,6 +3,7 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
@@ -65,11 +67,18 @@ type devManagementClient struct {
 
 var tracer = otel.Tracer("device-mgmt-client")
 
-func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
+func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL bool, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
 	oauthConfig := &clientcredentials.Config{
 		ClientID:     oauthClientID,
 		ClientSecret: oauthClientSecret,
 		TokenURL:     oauthTokenURL,
+	}
+
+	if oauthInsecureURL {
+		tr := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		}
+		ctx = context.WithValue(ctx, oauth2.HTTPClient, &http.Client{Transport: tr})
 	}
 
 	token, err := oauthConfig.Token(ctx)

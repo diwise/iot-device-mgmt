@@ -45,7 +45,7 @@ func TestCreateUnknownDevice(t *testing.T) {
 
 	ctx := context.Background()
 
-	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", "", "")
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
 	is.NoErr(err)
 
 	device := types.Device{
@@ -80,7 +80,7 @@ func TestMe(t *testing.T) {
 
 	ctx := context.Background()
 
-	c, err := New(ctx, s.URL(), s.URL()+"/token", "", "")
+	c, err := New(ctx, s.URL(), s.URL()+"/token", false, "", "")
 	is.NoErr(err)
 
 	c.Close(ctx)
