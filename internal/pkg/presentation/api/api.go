@@ -144,7 +144,6 @@ func queryTenantsHandler() http.HandlerFunc {
 func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
@@ -248,7 +247,6 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "get-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -284,7 +282,6 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "create-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -357,7 +354,6 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "update-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -406,7 +402,6 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "patch-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -447,7 +442,6 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -522,7 +516,6 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "get-alarm")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -555,7 +548,6 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "close-alarm")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -588,7 +580,6 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "query-deviceprofiles")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -657,7 +648,6 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		defer r.Body.Close()
 
 		ctx, span := tracer.Start(r.Context(), "query-lwm2mtypes")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
