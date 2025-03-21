@@ -140,9 +140,13 @@ func (dmc *devManagementClient) dumpRequestResponseIfNon200AndDebugEnabled(ctx c
 	}
 }
 
-func (dmc *devManagementClient) refreshToken(ctx context.Context) (*oauth2.Token, error) {
+func (dmc *devManagementClient) refreshToken(ctx context.Context) (token *oauth2.Token, err error) {
+	ctx, span := tracer.Start(ctx, "refresh-token")
+	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
 	ctx = context.WithValue(ctx, oauth2.HTTPClient, dmc.httpClient)
-	return dmc.clientCredentials.Token(ctx)
+	token, err = dmc.clientCredentials.Token(ctx)
+	return
 }
 
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
