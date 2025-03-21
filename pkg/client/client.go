@@ -82,7 +82,10 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 	if oauthInsecureURL {
 		trans, ok := httpTransport.(*http.Transport)
 		if ok {
-			trans.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+			if trans.TLSClientConfig == nil {
+				trans.TLSClientConfig = &tls.Config{}
+			}
+			trans.TLSClientConfig.InsecureSkipVerify = true
 		}
 	}
 
@@ -133,7 +136,7 @@ func (dmc *devManagementClient) dumpRequestResponseIfNon200AndDebugEnabled(ctx c
 		respbytes, _ := httputil.DumpResponse(resp, false)
 
 		log := logging.GetFromContext(ctx)
-		log.Debug("request failed", "request", string(reqbytes), "response", respbytes)
+		log.Debug("request failed", "request", string(reqbytes), "response", string(respbytes))
 	}
 }
 
