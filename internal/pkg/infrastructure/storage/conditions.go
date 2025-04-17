@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -17,6 +18,7 @@ type Condition struct {
 	SensorID          string
 	DeviceWithAlarmID string
 	Types             []string
+	Tenant            string
 	Tenants           []string
 	ProfileName       []string
 	offset            *int
@@ -52,6 +54,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.Tenants != nil {
 		args["tenants"] = c.Tenants
+	}
+	if c.Tenant != "" {
+		args["tenant"] = c.Tenant
 	}
 	if c.Active != nil {
 		args["active"] = *c.Active
@@ -90,9 +95,13 @@ func (c Condition) Where() string {
 	if c.SensorID != "" {
 		where += "AND sensor_id = @sensor_id "
 	}
-	if len(c.Tenants) > 0 {
+
+	if len(c.Tenant) > 0 && len(c.Tenants) > 0 && slices.Contains(c.Tenants, c.Tenant) {
+		where += "AND tenant = @tenant "
+	} else if len(c.Tenants) > 0 {
 		where += "AND tenant = ANY(@tenants) "
 	}
+
 	if c.Active != nil {
 		where += "AND active = @active "
 	}
@@ -268,29 +277,30 @@ func WithSensorID(sensorID string) ConditionFunc {
 	}
 }
 
-func WithTenant(tenant string) ConditionFunc {
-	unique := func(s []string) []string {
-		keys := make(map[string]bool)
-		list := []string{}
-		for _, entry := range s {
-			if _, value := keys[entry]; !value {
-				keys[entry] = true
-				list = append(list, entry)
-			}
+func unique(s []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range s {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
 		}
-		return list
 	}
+	return list
+}
 
+func WithTenant(tenant string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.Tenants = append(c.Tenants, tenant)
 		c.Tenants = unique(c.Tenants)
+		c.Tenant = tenant
 		return c
 	}
 }
 
 func WithTenants(tenants []string) ConditionFunc {
 	return func(c *Condition) *Condition {
-		c.Tenants = tenants
+		c.Tenants = unique(tenants)
 		return c
 	}
 }

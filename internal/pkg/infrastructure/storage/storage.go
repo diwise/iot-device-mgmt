@@ -121,6 +121,9 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			CONSTRAINT pkey_alarms_unique PRIMARY KEY (alarm_id, deleted)
 		);
 
+		CREATE INDEX IF NOT EXISTS devices_name_idx ON devices ((data ->> 'name'));
+		CREATE INDEX IF NOT EXISTS devices_tenant_deleted_idx ON devices (tenant) WHERE NOT deleted;
+
 	`)
 	if err != nil {
 		return err
