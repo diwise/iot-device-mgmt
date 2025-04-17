@@ -3,20 +3,24 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/clientcredentials"
 )
 
@@ -53,11 +57,13 @@ type lookupResult struct {
 type devManagementClient struct {
 	url               string
 	clientCredentials *clientcredentials.Config
+	insecureURL       bool
 
 	cacheByInternalID map[string]lookupResult
 	knownDevEUI       map[string]devEUIState
 	queue             chan (func())
 	httpClient        http.Client
+	debugClient       bool
 
 	keepRunning *atomic.Bool
 	wg          sync.WaitGroup
@@ -65,12 +71,29 @@ type devManagementClient struct {
 
 var tracer = otel.Tracer("device-mgmt-client")
 
-func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
+func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL bool, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
 	oauthConfig := &clientcredentials.Config{
 		ClientID:     oauthClientID,
 		ClientSecret: oauthClientSecret,
 		TokenURL:     oauthTokenURL,
 	}
+
+	httpTransport := http.DefaultTransport
+	if oauthInsecureURL {
+		trans, ok := httpTransport.(*http.Transport)
+		if ok {
+			if trans.TLSClientConfig == nil {
+				trans.TLSClientConfig = &tls.Config{}
+			}
+			trans.TLSClientConfig.InsecureSkipVerify = true
+		}
+	}
+
+	httpClient := &http.Client{
+		Transport: otelhttp.NewTransport(httpTransport),
+	}
+
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 
 	token, err := oauthConfig.Token(ctx)
 	if err != nil {
@@ -84,15 +107,15 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL, oauthClientID, oauthCli
 	dmc := &devManagementClient{
 		url:               devMgmtUrl,
 		clientCredentials: oauthConfig,
+		insecureURL:       oauthInsecureURL,
 
 		cacheByInternalID: make(map[string]lookupResult, 100),
 		knownDevEUI:       make(map[string]devEUIState, 100),
 		queue:             make(chan func()),
 		keepRunning:       &atomic.Bool{},
 
-		httpClient: http.Client{
-			Transport: otelhttp.NewTransport(http.DefaultTransport),
-		},
+		httpClient:  *httpClient,
+		debugClient: env.GetVariableOrDefault(ctx, "DEVMGMT_CLIENT_DEBUG", "false") == "true",
 	}
 
 	go dmc.run(ctx)
@@ -105,6 +128,25 @@ var ErrDeviceExist = errors.New("device already exists")
 func drainAndCloseResponseBody(r *http.Response) {
 	defer r.Body.Close()
 	io.Copy(io.Discard, r.Body)
+}
+
+func (dmc *devManagementClient) dumpRequestResponseIfNon200AndDebugEnabled(ctx context.Context, req *http.Request, resp *http.Response) {
+	if dmc.debugClient && (resp.StatusCode >= http.StatusBadRequest && resp.StatusCode != http.StatusNotFound) {
+		reqbytes, _ := httputil.DumpRequest(req, false)
+		respbytes, _ := httputil.DumpResponse(resp, false)
+
+		log := logging.GetFromContext(ctx)
+		log.Debug("request failed", "request", string(reqbytes), "response", string(respbytes))
+	}
+}
+
+func (dmc *devManagementClient) refreshToken(ctx context.Context) (token *oauth2.Token, err error) {
+	ctx, span := tracer.Start(ctx, "refresh-token")
+	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+	ctx = context.WithValue(ctx, oauth2.HTTPClient, dmc.httpClient)
+	token, err = dmc.clientCredentials.Token(ctx)
+	return
 }
 
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
@@ -128,7 +170,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	req.Header.Add("Content-Type", "application/json")
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return err
@@ -143,6 +185,8 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		return err
 	}
 	defer drainAndCloseResponseBody(resp)
+
+	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
@@ -279,7 +323,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	}
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return nil, err
@@ -294,6 +338,8 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 		return nil, err
 	}
 	defer drainAndCloseResponseBody(resp)
+
+	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
@@ -409,7 +455,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	}
 
 	if dmc.clientCredentials != nil {
-		token, err := dmc.clientCredentials.Token(ctx)
+		token, err := dmc.refreshToken(ctx)
 		if err != nil {
 			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
 			return nil, err
@@ -424,6 +470,8 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 		return nil, err
 	}
 	defer drainAndCloseResponseBody(resp)
+
+	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		err = fmt.Errorf("request failed, not authorized")
