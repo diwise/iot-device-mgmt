@@ -30,53 +30,53 @@ func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
 
-		deviceStatus := struct {
-			DeviceID  string `json:"deviceID"`
-			Tenant    string `json:"tenant,omitempty"`
-			Timestamp string `json:"timestamp"`
-		}{}
+		log.Debug("received device status", "body", string(itm.Body()))
 
-		err = json.Unmarshal(itm.Body(), &deviceStatus)
+		m := types.StatusMessage{}
+		err = json.Unmarshal(itm.Body(), &m)
 		if err != nil {
 			log.Error("failed to unmarshal message", "err", err.Error())
 			return
 		}
 
-		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", deviceStatus.DeviceID), slog.String("tenant", deviceStatus.Tenant))
+		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", m.DeviceID), slog.String("tenant", m.Tenant))
 
-		observedAt, err := time.Parse(time.RFC3339, deviceStatus.Timestamp)
+		// observedAt := m.Timestamp
+
+		err = svc.AddDeviceStatus(ctx, m)
 		if err != nil {
-			log.Error("no valid timestamp", "err", err.Error())
+			log.Error("could not add device status", "err", err.Error())
 			return
 		}
-
-		device, err := svc.GetByDeviceID(ctx, deviceStatus.DeviceID, []string{deviceStatus.Tenant})
-		if err != nil {
-			log.Error("could not fetch device", "err", err.Error())
-			return
-		}
-
-		status := device.DeviceStatus
-		if observedAt.After(status.ObservedAt) || status.ObservedAt.IsZero() {
-			status.ObservedAt = observedAt
-			err := svc.UpdateStatus(ctx, device.DeviceID, device.Tenant, status)
+		/*
+			device, err := svc.GetByDeviceID(ctx, m.DeviceID, []string{m.Tenant})
 			if err != nil {
-				log.Error("could not update status", "err", err.Error())
+				log.Error("could not fetch device", "err", err.Error())
 				return
 			}
-		}
 
-		state := device.DeviceState
-		if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
-			state.ObservedAt = observedAt
-			state.Online = true
-			state.State = types.DeviceStateOK
-			err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
-			if err != nil {
-				log.Error("could not update state", "err", err.Error())
-				return
+			status := device.DeviceStatus
+			if observedAt.After(status.ObservedAt) || status.ObservedAt.IsZero() {
+				status.ObservedAt = observedAt
+				err := svc.UpdateStatus(ctx, device.DeviceID, device.Tenant, status)
+				if err != nil {
+					log.Error("could not update status", "err", err.Error())
+					return
+				}
 			}
-		}
+
+			state := device.DeviceState
+			if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
+				state.ObservedAt = observedAt
+				state.Online = true
+				state.State = types.DeviceStateOK
+				err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
+				if err != nil {
+					log.Error("could not update state", "err", err.Error())
+					return
+				}
+			}
+		*/
 	}
 }
 

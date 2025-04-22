@@ -106,14 +106,27 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			CONSTRAINT pkey_devices_unique PRIMARY KEY (device_id, sensor_id, deleted)
 		);
 
+		CREATE TABLE IF NOT EXISTS device_status (
+			time 			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			device_id		TEXT 	NOT NULL,
+			battery_level 	NUMERIC NULL,
+			rssi 			NUMERIC NULL,
+			snr 			NUMERIC NULL,
+			fq 				NUMERIC NULL,
+			sf 				NUMERIC NULL,
+			dr 				NUMERIC NULL,
+			created_on  	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT pkey_device_status PRIMARY KEY (time, device_id)
+		);
+
 		CREATE TABLE IF NOT EXISTS alarms (
-    		alarm_id VARCHAR(255),
-    		alarm_type VARCHAR(100) NOT NULL, 
+    		alarm_id 	VARCHAR(255),
+    		alarm_type 	VARCHAR(100) NOT NULL, 
     		description TEXT,                
     		observed_at timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    		ref_id VARCHAR(255) NOT NULL,    
-    		severity INT NOT NULL,          
-    		tenant VARCHAR(255) NOT NULL  ,  
+    		ref_id 		VARCHAR(255) NOT NULL,    
+    		severity 	INT NOT NULL,          
+    		tenant 		VARCHAR(255) NOT NULL  ,  
 			created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,			
 			modified_on	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,	
 			deleted     BOOLEAN DEFAULT FALSE,

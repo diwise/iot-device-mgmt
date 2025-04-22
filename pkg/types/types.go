@@ -48,8 +48,13 @@ type Lwm2mType struct {
 }
 
 type DeviceStatus struct {
-	BatteryLevel int       `json:"batteryLevel"`
-	ObservedAt   time.Time `json:"observedAt"`
+	BatteryLevel    int       `json:"batteryLevel"`
+	RSSI            *float64  `json:"rssi,omitempty"`
+	LoRaSNR         *float64  `json:"loRaSNR,omitempty"`
+	Frequency       *int64    `json:"frequency,omitempty"`
+	SpreadingFactor *float64  `json:"spreadingFactor,omitempty"`
+	DR              *int      `json:"dr,omitempty"`
+	ObservedAt      time.Time `json:"observedAt"`
 }
 
 const (
@@ -100,4 +105,22 @@ type Bounds struct {
 	MaxLon float64
 	MinLat float64
 	MaxLat float64
+}
+
+type StatusMessage struct {
+	DeviceID string `json:"deviceID"`
+
+	BatteryLevel *float64 `json:"batteryLevel,omitempty"`
+
+	Code     *string  `json:"statusCode,omitempty"`
+	Messages []string `json:"statusMessages,omitempty"`
+
+	RSSI            *float64 `json:"rssi,omitempty"`
+	LoRaSNR         *float64 `json:"loRaSNR,omitempty"`
+	Frequency       *int64   `json:"frequency,omitempty"`
+	SpreadingFactor *float64 `json:"spreadingFactor,omitempty"`
+	DR              *int     `json:"dr,omitempty"`
+
+	Tenant    string    `json:"tenant"`
+	Timestamp time.Time `json:"timestamp"`
 }

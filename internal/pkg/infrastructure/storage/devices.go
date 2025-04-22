@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -67,8 +68,8 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO devices (device_id, sensor_id, active, data, profile, state, status, tags, location, tenant)
-		VALUES (@device_id, @sensor_id, @active, @data, @profile, @state, @status, @tags, point(@lon,@lat), @tenant)
+		INSERT INTO devices (device_id, sensor_id, active, data, profile,status, state, tags, location, tenant)
+		VALUES (@device_id, @sensor_id, @active, @data, @profile,@status, @state, @tags, point(@lon,@lat), @tenant)
 	`, args)
 	if err != nil {
 		if isDuplicateKeyErr(err) {
@@ -78,6 +79,89 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	}
 
 	return nil
+}
+
+func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+	args := pgx.NamedArgs{
+		"time":          status.Timestamp,
+		"device_id":     status.DeviceID,
+		"battery_level": status.BatteryLevel,
+		"rssi":          status.RSSI,
+		"snr":           status.LoRaSNR,
+		"fq":            status.Frequency,
+		"sf":            status.SpreadingFactor,
+		"dr":            status.DR,
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	device, err := getDeviceTx(ctx, tx, WithDeviceID(status.DeviceID))
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO device_status (time, device_id, battery_level, rssi, snr, fq, sf, dr)
+		VALUES (@time, @device_id, @battery_level, @rssi, @snr, @fq, @sf, @dr);`, args)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `DELETE FROM device_status WHERE device_id=@device_id AND time < NOW() - INTERVAL '3 weeks'`, args)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	ds := device.DeviceStatus
+	if status.BatteryLevel != nil {
+		b := *status.BatteryLevel
+		ds.BatteryLevel = int(b)
+	}
+
+	if status.RSSI != nil {
+		ds.RSSI = status.RSSI
+	}
+
+	if status.LoRaSNR != nil {
+		ds.LoRaSNR = status.LoRaSNR
+	}
+
+	if status.Frequency != nil {
+		ds.Frequency = status.Frequency
+	}
+
+	if status.SpreadingFactor != nil {
+		ds.SpreadingFactor = status.SpreadingFactor
+	}
+
+	if status.DR != nil {
+		ds.DR = status.DR
+	}
+
+	var ts time.Time
+	if status.Timestamp.IsZero() {
+		ts = time.Now()
+	} else {
+		ts = status.Timestamp
+	}
+
+	if ts.After(device.DeviceStatus.ObservedAt) {
+		ds.ObservedAt = ts
+	}
+
+	err = updateDeviceStatusTx(ctx, tx, device.DeviceID, device.Tenant, ds)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
@@ -137,7 +221,7 @@ func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
 	return nil
 }
 
-func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (types.Device, error) {
+func getDeviceTx(ctx context.Context, tx pgx.Tx, conditions ...ConditionFunc) (types.Device, error) {
 	condition := &Condition{}
 	for _, f := range conditions {
 		f(condition)
@@ -161,7 +245,7 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 		query = fmt.Sprintf("%s WHERE %s ORDER BY device_id ASC, deleted_on DESC", query, where)
 	}
 
-	err := s.pool.QueryRow(ctx, query, args).Scan(&deviceID, &sensorID, &active, &data, &profile, &state, &status, &tags, &location, &tenant, &deleted)
+	err := tx.QueryRow(ctx, query, args).Scan(&deviceID, &sensorID, &active, &data, &profile, &state, &status, &tags, &location, &tenant, &deleted)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Device{}, ErrNoRows
@@ -194,9 +278,35 @@ func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (t
 	return device, errors.Join(errs...)
 }
 
+func (s *Storage) GetDevice(ctx context.Context, conditions ...ConditionFunc) (types.Device, error) {
+	log := logging.GetFromContext(ctx)
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		log.Error("failed to begin transaction", "err", err)
+		tx.Rollback(ctx)
+		return types.Device{}, err
+	}
+
+	d, err := getDeviceTx(ctx, tx, conditions...)
+	if err != nil {
+		log.Error("failed to get device", "err", err)
+		tx.Rollback(ctx)
+		return types.Device{}, err
+	}
+
+	err = tx.Commit(ctx)
+	if err != nil {
+		log.Error("failed to commit transaction", "err", err)
+		return types.Device{}, err
+	}
+
+	return d, nil
+}
+
 func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
-	
+
 	condition := &Condition{}
 	for _, f := range conditions {
 		f(condition)
@@ -273,10 +383,13 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 	}, nil
 }
 
-func (s *Storage) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
+func updateDeviceStatusTx(ctx context.Context, tx pgx.Tx, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
+	log := logging.GetFromContext(ctx)
+	log.Debug("update device status", "deviceID", deviceID, "tenant", tenant, "status", deviceStatus)
+
 	status, _ := json.Marshal(deviceStatus)
 
-	_, err := s.pool.Exec(ctx, `
+	_, err := tx.Exec(ctx, `
 		UPDATE devices
 		SET status = @status
 		WHERE device_id = @device_id AND tenant = @tenant AND deleted = FALSE
@@ -290,6 +403,21 @@ func (s *Storage) UpdateStatus(ctx context.Context, deviceID, tenant string, dev
 	}
 
 	return nil
+}
+
+func (s *Storage) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	err = updateDeviceStatusTx(ctx, tx, deviceID, tenant, deviceStatus)
+	if err != nil {
+		tx.Rollback(ctx)
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *Storage) UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error {

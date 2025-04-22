@@ -43,6 +43,8 @@ type DeviceManagement interface {
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
 	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
+
+	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
 }
 
 type DeviceManagementConfig struct {
@@ -59,6 +61,8 @@ type DeviceRepository interface {
 	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 	GetTenants(ctx context.Context) ([]string, error)
+
+	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
 }
 
 type service struct {
@@ -80,6 +84,10 @@ func New(storage DeviceRepository, messenger messaging.MsgContext, config *Devic
 	s.messenger.RegisterTopicMessageHandler("message.accepted", NewMessageAcceptedHandler(s))
 
 	return s
+}
+
+func (s service) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+	return s.storage.AddDeviceStatus(ctx, status)
 }
 
 func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {

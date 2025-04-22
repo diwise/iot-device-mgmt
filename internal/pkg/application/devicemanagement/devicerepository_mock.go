@@ -6,7 +6,7 @@ package devicemanagement
 import (
 	"context"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
-	models "github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
 
@@ -20,25 +20,28 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //
 //		// make and configure a mocked DeviceRepository
 //		mockedDeviceRepository := &DeviceRepositoryMock{
-//			AddDeviceFunc: func(ctx context.Context, device models.Device) error {
+//			AddDeviceFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the AddDevice method")
 //			},
-//			GetDeviceFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (models.Device, error) {
+//			AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
+//				panic("mock out the AddDeviceStatus method")
+//			},
+//			GetDeviceFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Device, error) {
 //				panic("mock out the GetDevice method")
 //			},
 //			GetTenantsFunc: func(ctx context.Context) ([]string, error) {
 //				panic("mock out the GetTenants method")
 //			},
-//			QueryDevicesFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (models.Collection[models.Device], error) {
+//			QueryDevicesFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
 //				panic("mock out the QueryDevices method")
 //			},
-//			UpdateDeviceFunc: func(ctx context.Context, device models.Device) error {
+//			UpdateDeviceFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the UpdateDevice method")
 //			},
-//			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+//			UpdateStateFunc: func(ctx context.Context, deviceID string, tenant string, deviceState types.DeviceState) error {
 //				panic("mock out the UpdateState method")
 //			},
-//			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+//			UpdateStatusFunc: func(ctx context.Context, deviceID string, tenant string, deviceStatus types.DeviceStatus) error {
 //				panic("mock out the UpdateStatus method")
 //			},
 //		}
@@ -49,25 +52,28 @@ var _ DeviceRepository = &DeviceRepositoryMock{}
 //	}
 type DeviceRepositoryMock struct {
 	// AddDeviceFunc mocks the AddDevice method.
-	AddDeviceFunc func(ctx context.Context, device models.Device) error
+	AddDeviceFunc func(ctx context.Context, device types.Device) error
+
+	// AddDeviceStatusFunc mocks the AddDeviceStatus method.
+	AddDeviceStatusFunc func(ctx context.Context, status types.StatusMessage) error
 
 	// GetDeviceFunc mocks the GetDevice method.
-	GetDeviceFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (models.Device, error)
+	GetDeviceFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Device, error)
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) ([]string, error)
 
 	// QueryDevicesFunc mocks the QueryDevices method.
-	QueryDevicesFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (models.Collection[models.Device], error)
+	QueryDevicesFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error)
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
-	UpdateDeviceFunc func(ctx context.Context, device models.Device) error
+	UpdateDeviceFunc func(ctx context.Context, device types.Device) error
 
 	// UpdateStateFunc mocks the UpdateState method.
-	UpdateStateFunc func(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error
+	UpdateStateFunc func(ctx context.Context, deviceID string, tenant string, deviceState types.DeviceState) error
 
 	// UpdateStatusFunc mocks the UpdateStatus method.
-	UpdateStatusFunc func(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error
+	UpdateStatusFunc func(ctx context.Context, deviceID string, tenant string, deviceStatus types.DeviceStatus) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -76,7 +82,14 @@ type DeviceRepositoryMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Device is the device argument value.
-			Device models.Device
+			Device types.Device
+		}
+		// AddDeviceStatus holds details about calls to the AddDeviceStatus method.
+		AddDeviceStatus []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Status is the status argument value.
+			Status types.StatusMessage
 		}
 		// GetDevice holds details about calls to the GetDevice method.
 		GetDevice []struct {
@@ -102,7 +115,7 @@ type DeviceRepositoryMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Device is the device argument value.
-			Device models.Device
+			Device types.Device
 		}
 		// UpdateState holds details about calls to the UpdateState method.
 		UpdateState []struct {
@@ -113,7 +126,7 @@ type DeviceRepositoryMock struct {
 			// Tenant is the tenant argument value.
 			Tenant string
 			// DeviceState is the deviceState argument value.
-			DeviceState models.DeviceState
+			DeviceState types.DeviceState
 		}
 		// UpdateStatus holds details about calls to the UpdateStatus method.
 		UpdateStatus []struct {
@@ -124,26 +137,27 @@ type DeviceRepositoryMock struct {
 			// Tenant is the tenant argument value.
 			Tenant string
 			// DeviceStatus is the deviceStatus argument value.
-			DeviceStatus models.DeviceStatus
+			DeviceStatus types.DeviceStatus
 		}
 	}
-	lockAddDevice    sync.RWMutex
-	lockGetDevice    sync.RWMutex
-	lockGetTenants   sync.RWMutex
-	lockQueryDevices sync.RWMutex
-	lockUpdateDevice sync.RWMutex
-	lockUpdateState  sync.RWMutex
-	lockUpdateStatus sync.RWMutex
+	lockAddDevice       sync.RWMutex
+	lockAddDeviceStatus sync.RWMutex
+	lockGetDevice       sync.RWMutex
+	lockGetTenants      sync.RWMutex
+	lockQueryDevices    sync.RWMutex
+	lockUpdateDevice    sync.RWMutex
+	lockUpdateState     sync.RWMutex
+	lockUpdateStatus    sync.RWMutex
 }
 
 // AddDevice calls AddDeviceFunc.
-func (mock *DeviceRepositoryMock) AddDevice(ctx context.Context, device models.Device) error {
+func (mock *DeviceRepositoryMock) AddDevice(ctx context.Context, device types.Device) error {
 	if mock.AddDeviceFunc == nil {
 		panic("DeviceRepositoryMock.AddDeviceFunc: method is nil but DeviceRepository.AddDevice was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
-		Device models.Device
+		Device types.Device
 	}{
 		Ctx:    ctx,
 		Device: device,
@@ -160,11 +174,11 @@ func (mock *DeviceRepositoryMock) AddDevice(ctx context.Context, device models.D
 //	len(mockedDeviceRepository.AddDeviceCalls())
 func (mock *DeviceRepositoryMock) AddDeviceCalls() []struct {
 	Ctx    context.Context
-	Device models.Device
+	Device types.Device
 } {
 	var calls []struct {
 		Ctx    context.Context
-		Device models.Device
+		Device types.Device
 	}
 	mock.lockAddDevice.RLock()
 	calls = mock.calls.AddDevice
@@ -172,8 +186,44 @@ func (mock *DeviceRepositoryMock) AddDeviceCalls() []struct {
 	return calls
 }
 
+// AddDeviceStatus calls AddDeviceStatusFunc.
+func (mock *DeviceRepositoryMock) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+	if mock.AddDeviceStatusFunc == nil {
+		panic("DeviceRepositoryMock.AddDeviceStatusFunc: method is nil but DeviceRepository.AddDeviceStatus was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Status types.StatusMessage
+	}{
+		Ctx:    ctx,
+		Status: status,
+	}
+	mock.lockAddDeviceStatus.Lock()
+	mock.calls.AddDeviceStatus = append(mock.calls.AddDeviceStatus, callInfo)
+	mock.lockAddDeviceStatus.Unlock()
+	return mock.AddDeviceStatusFunc(ctx, status)
+}
+
+// AddDeviceStatusCalls gets all the calls that were made to AddDeviceStatus.
+// Check the length with:
+//
+//	len(mockedDeviceRepository.AddDeviceStatusCalls())
+func (mock *DeviceRepositoryMock) AddDeviceStatusCalls() []struct {
+	Ctx    context.Context
+	Status types.StatusMessage
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Status types.StatusMessage
+	}
+	mock.lockAddDeviceStatus.RLock()
+	calls = mock.calls.AddDeviceStatus
+	mock.lockAddDeviceStatus.RUnlock()
+	return calls
+}
+
 // GetDevice calls GetDeviceFunc.
-func (mock *DeviceRepositoryMock) GetDevice(ctx context.Context, conditions ...storage.ConditionFunc) (models.Device, error) {
+func (mock *DeviceRepositoryMock) GetDevice(ctx context.Context, conditions ...storage.ConditionFunc) (types.Device, error) {
 	if mock.GetDeviceFunc == nil {
 		panic("DeviceRepositoryMock.GetDeviceFunc: method is nil but DeviceRepository.GetDevice was just called")
 	}
@@ -241,7 +291,7 @@ func (mock *DeviceRepositoryMock) GetTenantsCalls() []struct {
 }
 
 // QueryDevices calls QueryDevicesFunc.
-func (mock *DeviceRepositoryMock) QueryDevices(ctx context.Context, conditions ...storage.ConditionFunc) (models.Collection[models.Device], error) {
+func (mock *DeviceRepositoryMock) QueryDevices(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
 	if mock.QueryDevicesFunc == nil {
 		panic("DeviceRepositoryMock.QueryDevicesFunc: method is nil but DeviceRepository.QueryDevices was just called")
 	}
@@ -277,13 +327,13 @@ func (mock *DeviceRepositoryMock) QueryDevicesCalls() []struct {
 }
 
 // UpdateDevice calls UpdateDeviceFunc.
-func (mock *DeviceRepositoryMock) UpdateDevice(ctx context.Context, device models.Device) error {
+func (mock *DeviceRepositoryMock) UpdateDevice(ctx context.Context, device types.Device) error {
 	if mock.UpdateDeviceFunc == nil {
 		panic("DeviceRepositoryMock.UpdateDeviceFunc: method is nil but DeviceRepository.UpdateDevice was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
-		Device models.Device
+		Device types.Device
 	}{
 		Ctx:    ctx,
 		Device: device,
@@ -300,11 +350,11 @@ func (mock *DeviceRepositoryMock) UpdateDevice(ctx context.Context, device model
 //	len(mockedDeviceRepository.UpdateDeviceCalls())
 func (mock *DeviceRepositoryMock) UpdateDeviceCalls() []struct {
 	Ctx    context.Context
-	Device models.Device
+	Device types.Device
 } {
 	var calls []struct {
 		Ctx    context.Context
-		Device models.Device
+		Device types.Device
 	}
 	mock.lockUpdateDevice.RLock()
 	calls = mock.calls.UpdateDevice
@@ -313,7 +363,7 @@ func (mock *DeviceRepositoryMock) UpdateDeviceCalls() []struct {
 }
 
 // UpdateState calls UpdateStateFunc.
-func (mock *DeviceRepositoryMock) UpdateState(ctx context.Context, deviceID string, tenant string, deviceState models.DeviceState) error {
+func (mock *DeviceRepositoryMock) UpdateState(ctx context.Context, deviceID string, tenant string, deviceState types.DeviceState) error {
 	if mock.UpdateStateFunc == nil {
 		panic("DeviceRepositoryMock.UpdateStateFunc: method is nil but DeviceRepository.UpdateState was just called")
 	}
@@ -321,7 +371,7 @@ func (mock *DeviceRepositoryMock) UpdateState(ctx context.Context, deviceID stri
 		Ctx         context.Context
 		DeviceID    string
 		Tenant      string
-		DeviceState models.DeviceState
+		DeviceState types.DeviceState
 	}{
 		Ctx:         ctx,
 		DeviceID:    deviceID,
@@ -342,13 +392,13 @@ func (mock *DeviceRepositoryMock) UpdateStateCalls() []struct {
 	Ctx         context.Context
 	DeviceID    string
 	Tenant      string
-	DeviceState models.DeviceState
+	DeviceState types.DeviceState
 } {
 	var calls []struct {
 		Ctx         context.Context
 		DeviceID    string
 		Tenant      string
-		DeviceState models.DeviceState
+		DeviceState types.DeviceState
 	}
 	mock.lockUpdateState.RLock()
 	calls = mock.calls.UpdateState
@@ -357,7 +407,7 @@ func (mock *DeviceRepositoryMock) UpdateStateCalls() []struct {
 }
 
 // UpdateStatus calls UpdateStatusFunc.
-func (mock *DeviceRepositoryMock) UpdateStatus(ctx context.Context, deviceID string, tenant string, deviceStatus models.DeviceStatus) error {
+func (mock *DeviceRepositoryMock) UpdateStatus(ctx context.Context, deviceID string, tenant string, deviceStatus types.DeviceStatus) error {
 	if mock.UpdateStatusFunc == nil {
 		panic("DeviceRepositoryMock.UpdateStatusFunc: method is nil but DeviceRepository.UpdateStatus was just called")
 	}
@@ -365,7 +415,7 @@ func (mock *DeviceRepositoryMock) UpdateStatus(ctx context.Context, deviceID str
 		Ctx          context.Context
 		DeviceID     string
 		Tenant       string
-		DeviceStatus models.DeviceStatus
+		DeviceStatus types.DeviceStatus
 	}{
 		Ctx:          ctx,
 		DeviceID:     deviceID,
@@ -386,13 +436,13 @@ func (mock *DeviceRepositoryMock) UpdateStatusCalls() []struct {
 	Ctx          context.Context
 	DeviceID     string
 	Tenant       string
-	DeviceStatus models.DeviceStatus
+	DeviceStatus types.DeviceStatus
 } {
 	var calls []struct {
 		Ctx          context.Context
 		DeviceID     string
 		Tenant       string
-		DeviceStatus models.DeviceStatus
+		DeviceStatus types.DeviceStatus
 	}
 	mock.lockUpdateStatus.RLock()
 	calls = mock.calls.UpdateStatus
