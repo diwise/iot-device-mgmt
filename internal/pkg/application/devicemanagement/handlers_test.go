@@ -87,13 +87,10 @@ func TestDeviceStatusHandler(t *testing.T) {
 }
 
 func statusMessage(s types.StatusMessage) messaging.IncomingTopicMessage {
-	b, _ := json.Marshal(s)
-
-	msg := &messaging.IncomingTopicMessageMock{
+	return &messaging.IncomingTopicMessageMock{
 		BodyFunc: func() []byte {
+			b, _ := json.Marshal(s)
 			return b
 		},
 	}
-
-	return msg
 }

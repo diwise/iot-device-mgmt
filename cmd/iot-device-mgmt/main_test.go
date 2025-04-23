@@ -7,19 +7,17 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"gopkg.in/yaml.v2"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/jwtauth/v5"
 	"github.com/matryer/is"
 )
@@ -126,7 +124,7 @@ func TestThatGetKnownDeviceFromNonAllowedTenantReturns404(t *testing.T) {
 	is.Equal(resp.StatusCode, http.StatusNotFound)
 }
 
-func setupTest(t *testing.T) (*chi.Mux, *is.I) {
+func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	is := is.New(t)
 	ctx := context.Background()
 
@@ -159,16 +157,15 @@ func setupTest(t *testing.T) (*chi.Mux, *is.I) {
 	cfg := &devicemanagement.DeviceManagementConfig{}
 	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
 
-	app := devicemanagement.New(s, &msgCtx, cfg)
-	err = app.Seed(context.Background(), bytes.NewBuffer([]byte(csvMock)), []string{"default"})
+	app := devicemanagement.New(s, &msgCtx, io.NopCloser(strings.NewReader(configYaml)))
+	err = app.Seed(context.Background(), io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
-	router := router.New("testService")
-
 	policies := bytes.NewBufferString(opaModule)
-	api.RegisterHandlers(context.Background(), router, policies, app, &alarms.AlarmServiceMock{})
+	mux := http.NewServeMux()
+	api.RegisterHandlers(ctx, mux, policies, app, nil)
 
-	return router, is
+	return mux, is
 }
 
 func testRequest(ts *httptest.Server, method, path string, token string, body io.Reader) (*http.Response, string) {

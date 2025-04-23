@@ -8,8 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"log/slog"
-
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"github.com/open-policy-agent/opa/rego"
 	"go.opentelemetry.io/otel"
@@ -21,10 +20,9 @@ type tenantsContextKey struct {
 
 var allowedTenantsCtxKey = &tenantsContextKey{"allowed-tenants"}
 
-var tracer = otel.Tracer("iot-device-mgmt/authz")
+var tracer = otel.Tracer("iot-agent/authz")
 
-func NewAuthenticator(ctx context.Context, logger *slog.Logger, policies io.Reader) (func(http.Handler) http.Handler, error) {
-
+func NewAuthenticator(ctx context.Context, policies io.Reader) (func(http.Handler) http.Handler, error) {
 	module, err := io.ReadAll(policies)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
@@ -38,6 +36,8 @@ func NewAuthenticator(ctx context.Context, logger *slog.Logger, policies io.Read
 	if err != nil {
 		return nil, err
 	}
+
+	logger := logging.GetFromContext(ctx)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,9 +132,4 @@ func GetAllowedTenantsFromContext(ctx context.Context) []string {
 	}
 
 	return tenants
-}
-
-func WithAllowedTenants(ctx context.Context, tenants []string) context.Context {
-	ctx = context.WithValue(ctx, allowedTenantsCtxKey, tenants)
-	return ctx
 }

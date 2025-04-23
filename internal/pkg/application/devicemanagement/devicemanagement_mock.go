@@ -20,9 +20,6 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
-//				panic("mock out the AddDeviceStatus method")
-//			},
 //			CreateFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the Create method")
 //			},
@@ -50,13 +47,16 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetWithinBoundsFunc: func(ctx context.Context, bounds types.Bounds) (types.Collection[types.Device], error) {
 //				panic("mock out the GetWithinBounds method")
 //			},
+//			HandleStatusMessageFunc: func(ctx context.Context, status types.StatusMessage) error {
+//				panic("mock out the HandleStatusMessage method")
+//			},
 //			MergeFunc: func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 //				panic("mock out the Merge method")
 //			},
 //			QueryFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
 //			},
-//			SeedFunc: func(ctx context.Context, reader io.Reader, tenants []string) error {
+//			SeedFunc: func(ctx context.Context, reader io.ReadCloser, tenants []string) error {
 //				panic("mock out the Seed method")
 //			},
 //			UpdateFunc: func(ctx context.Context, device types.Device) error {
@@ -75,9 +75,6 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
-	// AddDeviceStatusFunc mocks the AddDeviceStatus method.
-	AddDeviceStatusFunc func(ctx context.Context, status types.StatusMessage) error
-
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, device types.Device) error
 
@@ -105,6 +102,9 @@ type DeviceManagementMock struct {
 	// GetWithinBoundsFunc mocks the GetWithinBounds method.
 	GetWithinBoundsFunc func(ctx context.Context, bounds types.Bounds) (types.Collection[types.Device], error)
 
+	// HandleStatusMessageFunc mocks the HandleStatusMessage method.
+	HandleStatusMessageFunc func(ctx context.Context, status types.StatusMessage) error
+
 	// MergeFunc mocks the Merge method.
 	MergeFunc func(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 
@@ -112,7 +112,7 @@ type DeviceManagementMock struct {
 	QueryFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
 
 	// SeedFunc mocks the Seed method.
-	SeedFunc func(ctx context.Context, reader io.Reader, tenants []string) error
+	SeedFunc func(ctx context.Context, reader io.ReadCloser, tenants []string) error
 
 	// UpdateFunc mocks the Update method.
 	UpdateFunc func(ctx context.Context, device types.Device) error
@@ -125,13 +125,6 @@ type DeviceManagementMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddDeviceStatus holds details about calls to the AddDeviceStatus method.
-		AddDeviceStatus []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// Status is the status argument value.
-			Status types.StatusMessage
-		}
 		// Create holds details about calls to the Create method.
 		Create []struct {
 			// Ctx is the ctx argument value.
@@ -201,6 +194,13 @@ type DeviceManagementMock struct {
 			// Bounds is the bounds argument value.
 			Bounds types.Bounds
 		}
+		// HandleStatusMessage holds details about calls to the HandleStatusMessage method.
+		HandleStatusMessage []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Status is the status argument value.
+			Status types.StatusMessage
+		}
 		// Merge holds details about calls to the Merge method.
 		Merge []struct {
 			// Ctx is the ctx argument value.
@@ -226,7 +226,7 @@ type DeviceManagementMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Reader is the reader argument value.
-			Reader io.Reader
+			Reader io.ReadCloser
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -260,58 +260,22 @@ type DeviceManagementMock struct {
 			DeviceStatus types.DeviceStatus
 		}
 	}
-	lockAddDeviceStatus   sync.RWMutex
-	lockCreate            sync.RWMutex
-	lockGetByDeviceID     sync.RWMutex
-	lockGetBySensorID     sync.RWMutex
-	lockGetDeviceProfiles sync.RWMutex
-	lockGetLwm2mTypes     sync.RWMutex
-	lockGetOnlineDevices  sync.RWMutex
-	lockGetTenants        sync.RWMutex
-	lockGetWithAlarmID    sync.RWMutex
-	lockGetWithinBounds   sync.RWMutex
-	lockMerge             sync.RWMutex
-	lockQuery             sync.RWMutex
-	lockSeed              sync.RWMutex
-	lockUpdate            sync.RWMutex
-	lockUpdateState       sync.RWMutex
-	lockUpdateStatus      sync.RWMutex
-}
-
-// AddDeviceStatus calls AddDeviceStatusFunc.
-func (mock *DeviceManagementMock) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
-	if mock.AddDeviceStatusFunc == nil {
-		panic("DeviceManagementMock.AddDeviceStatusFunc: method is nil but DeviceManagement.AddDeviceStatus was just called")
-	}
-	callInfo := struct {
-		Ctx    context.Context
-		Status types.StatusMessage
-	}{
-		Ctx:    ctx,
-		Status: status,
-	}
-	mock.lockAddDeviceStatus.Lock()
-	mock.calls.AddDeviceStatus = append(mock.calls.AddDeviceStatus, callInfo)
-	mock.lockAddDeviceStatus.Unlock()
-	return mock.AddDeviceStatusFunc(ctx, status)
-}
-
-// AddDeviceStatusCalls gets all the calls that were made to AddDeviceStatus.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.AddDeviceStatusCalls())
-func (mock *DeviceManagementMock) AddDeviceStatusCalls() []struct {
-	Ctx    context.Context
-	Status types.StatusMessage
-} {
-	var calls []struct {
-		Ctx    context.Context
-		Status types.StatusMessage
-	}
-	mock.lockAddDeviceStatus.RLock()
-	calls = mock.calls.AddDeviceStatus
-	mock.lockAddDeviceStatus.RUnlock()
-	return calls
+	lockCreate              sync.RWMutex
+	lockGetByDeviceID       sync.RWMutex
+	lockGetBySensorID       sync.RWMutex
+	lockGetDeviceProfiles   sync.RWMutex
+	lockGetLwm2mTypes       sync.RWMutex
+	lockGetOnlineDevices    sync.RWMutex
+	lockGetTenants          sync.RWMutex
+	lockGetWithAlarmID      sync.RWMutex
+	lockGetWithinBounds     sync.RWMutex
+	lockHandleStatusMessage sync.RWMutex
+	lockMerge               sync.RWMutex
+	lockQuery               sync.RWMutex
+	lockSeed                sync.RWMutex
+	lockUpdate              sync.RWMutex
+	lockUpdateState         sync.RWMutex
+	lockUpdateStatus        sync.RWMutex
 }
 
 // Create calls CreateFunc.
@@ -650,6 +614,42 @@ func (mock *DeviceManagementMock) GetWithinBoundsCalls() []struct {
 	return calls
 }
 
+// HandleStatusMessage calls HandleStatusMessageFunc.
+func (mock *DeviceManagementMock) HandleStatusMessage(ctx context.Context, status types.StatusMessage) error {
+	if mock.HandleStatusMessageFunc == nil {
+		panic("DeviceManagementMock.HandleStatusMessageFunc: method is nil but DeviceManagement.HandleStatusMessage was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Status types.StatusMessage
+	}{
+		Ctx:    ctx,
+		Status: status,
+	}
+	mock.lockHandleStatusMessage.Lock()
+	mock.calls.HandleStatusMessage = append(mock.calls.HandleStatusMessage, callInfo)
+	mock.lockHandleStatusMessage.Unlock()
+	return mock.HandleStatusMessageFunc(ctx, status)
+}
+
+// HandleStatusMessageCalls gets all the calls that were made to HandleStatusMessage.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.HandleStatusMessageCalls())
+func (mock *DeviceManagementMock) HandleStatusMessageCalls() []struct {
+	Ctx    context.Context
+	Status types.StatusMessage
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Status types.StatusMessage
+	}
+	mock.lockHandleStatusMessage.RLock()
+	calls = mock.calls.HandleStatusMessage
+	mock.lockHandleStatusMessage.RUnlock()
+	return calls
+}
+
 // Merge calls MergeFunc.
 func (mock *DeviceManagementMock) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	if mock.MergeFunc == nil {
@@ -735,13 +735,13 @@ func (mock *DeviceManagementMock) QueryCalls() []struct {
 }
 
 // Seed calls SeedFunc.
-func (mock *DeviceManagementMock) Seed(ctx context.Context, reader io.Reader, tenants []string) error {
+func (mock *DeviceManagementMock) Seed(ctx context.Context, reader io.ReadCloser, tenants []string) error {
 	if mock.SeedFunc == nil {
 		panic("DeviceManagementMock.SeedFunc: method is nil but DeviceManagement.Seed was just called")
 	}
 	callInfo := struct {
 		Ctx     context.Context
-		Reader  io.Reader
+		Reader  io.ReadCloser
 		Tenants []string
 	}{
 		Ctx:     ctx,
@@ -760,12 +760,12 @@ func (mock *DeviceManagementMock) Seed(ctx context.Context, reader io.Reader, te
 //	len(mockedDeviceManagement.SeedCalls())
 func (mock *DeviceManagementMock) SeedCalls() []struct {
 	Ctx     context.Context
-	Reader  io.Reader
+	Reader  io.ReadCloser
 	Tenants []string
 } {
 	var calls []struct {
 		Ctx     context.Context
-		Reader  io.Reader
+		Reader  io.ReadCloser
 		Tenants []string
 	}
 	mock.lockSeed.RLock()

@@ -15,6 +15,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"gopkg.in/yaml.v2"
 )
 
 var ErrDeviceNotFound = fmt.Errorf("device not found")
@@ -36,7 +37,7 @@ type DeviceManagement interface {
 	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 
-	Seed(ctx context.Context, reader io.Reader, tenants []string) error
+	Seed(ctx context.Context, reader io.ReadCloser, tenants []string) error
 
 	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
 	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
@@ -44,7 +45,7 @@ type DeviceManagement interface {
 
 	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
 
-	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
+	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
 }
 
 type DeviceManagementConfig struct {
@@ -71,11 +72,24 @@ type service struct {
 	messenger messaging.MsgContext
 }
 
-func New(storage DeviceRepository, messenger messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
+func New(storage DeviceRepository, messenger messaging.MsgContext, config io.ReadCloser) DeviceManagement {
+	defer config.Close()
+
+	b, err := io.ReadAll(config)
+	if err != nil {
+		panic(err)
+	}
+
+	cfg := &DeviceManagementConfig{}
+	err = yaml.Unmarshal(b, cfg)
+	if err != nil {
+		panic(err)
+	}
+
 	s := service{
 		storage:   storage,
 		messenger: messenger,
-		config:    config,
+		config:    cfg,
 	}
 
 	s.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(s))
@@ -86,7 +100,7 @@ func New(storage DeviceRepository, messenger messaging.MsgContext, config *Devic
 	return s
 }
 
-func (s service) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+func (s service) HandleStatusMessage(ctx context.Context, status types.StatusMessage) error {
 	return s.storage.AddDeviceStatus(ctx, status)
 }
 

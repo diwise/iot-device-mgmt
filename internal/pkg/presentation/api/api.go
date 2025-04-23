@@ -27,48 +27,52 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, router *chi.Mux, policies io.Reader, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) (*chi.Mux, error) {
-	router.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	})
+func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService) error {
+	const apiPrefix string = "/api/v0"
+	const devicesPrefix string = apiPrefix + "/devices"
+	const alarmsPrefix string = apiPrefix + "/alarms"
+	const adminPrefix string = apiPrefix + "/admin"
 
 	log := logging.GetFromContext(ctx)
 
-	// Handle valid / invalid tokens.
-	authenticator, err := auth.NewAuthenticator(ctx, log, policies)
+	authenticator, err := auth.NewAuthenticator(ctx, policies)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create api authenticator: %w", err)
+		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
 
-	router.Route("/api/v0", func(r chi.Router) {
-		r.Group(func(r chi.Router) {
-			r.Use(authenticator)
+	devicesMux := http.NewServeMux()
+	devicesMux.HandleFunc("GET /", queryDevicesHandler(log, dm))
+	devicesMux.HandleFunc("GET /{deviceID}", getDeviceDetails(log, dm))
+	devicesMux.HandleFunc("GET /{deviceID}/alarms", getAlarmsHandler(log, alarm))
+	devicesMux.HandleFunc("POST /", createDeviceHandler(log, dm))
+	devicesMux.HandleFunc("PUT /{deviceID}", updateDeviceHandler(log, dm))
+	devicesMux.HandleFunc("PATCH /{deviceID}", patchDeviceHandler(log, dm))
+	devicesGroup := http.StripPrefix(devicesPrefix, devicesMux)
 
-			r.Route("/devices", func(r chi.Router) {
-				r.Get("/", queryDevicesHandler(log, svc))
-				r.Get("/{deviceID}", getDeviceDetails(log, svc))
-				r.Get("/{deviceID}/alarms", getAlarmsHandler(log, alarmSvc))
-				r.Post("/", createDeviceHandler(log, svc))
-				r.Put("/{deviceID}", updateDeviceHandler(log, svc))
-				r.Patch("/{deviceID}", patchDeviceHandler(log, svc))
-			})
+	rootMux.Handle("GET "+devicesPrefix+"/", authenticator(devicesGroup))
+	rootMux.Handle("POST "+devicesPrefix+"/", authenticator(devicesGroup))
+	rootMux.Handle("PUT "+devicesPrefix+"/", authenticator(devicesGroup))
+	rootMux.Handle("PATCH "+devicesPrefix+"/", authenticator(devicesGroup))
 
-			r.Route("/alarms", func(r chi.Router) {
-				r.Get("/", getAlarmsHandler(log, alarmSvc))
-				r.Get("/{alarmID}", getAlarmDetailsHandler(log, alarmSvc))
-				r.Patch("/{alarmID}/close", closeAlarmHandler(log, alarmSvc))
-			})
+	alarmsMux := http.NewServeMux()
+	alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
+	alarmsMux.HandleFunc("GET /{alarmID}", getAlarmDetailsHandler(log, alarm))
+	alarmsMux.HandleFunc("PATCH /{alarmID}/close", closeAlarmHandler(log, alarm))
+	alarmsGroup := http.StripPrefix(alarmsPrefix, alarmsMux)
 
-			r.Route("/admin", func(r chi.Router) {
-				r.Get("/deviceprofiles", queryDeviceProfilesHandler(log, svc))
-				r.Get("/deviceprofiles/{deviceprofileid}", queryDeviceProfilesHandler(log, svc))
-				r.Get("/lwm2mtypes", queryLwm2mTypesHandler(log, svc))
-				r.Get("/tenants", queryTenantsHandler())
-			})
-		})
-	})
+	rootMux.Handle("GET "+alarmsPrefix+"/", authenticator(alarmsGroup))
+	rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
 
-	return router, nil
+	adminMux := http.NewServeMux()
+	adminMux.HandleFunc("GET /deviceprofiles", queryDeviceProfilesHandler(log, dm))
+	adminMux.HandleFunc("GET /deviceprofiles/{deviceprofileid}", queryDeviceProfilesHandler(log, dm))
+	adminMux.HandleFunc("GET /lwm2mtypes", queryLwm2mTypesHandler(log, dm))
+	adminMux.HandleFunc("GET /tenants", queryTenantsHandler())
+	adminGroup := http.StripPrefix(adminPrefix, adminMux)
+
+	rootMux.Handle("GET "+adminPrefix+"/", authenticator(adminGroup))
+
+	return nil
 }
 
 func createLinks(u *url.URL, m *meta) *links {

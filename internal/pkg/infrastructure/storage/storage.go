@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -30,17 +29,6 @@ func NewConfig(host, user, password, port, dbname, sslmode string) Config {
 		port:     port,
 		dbname:   dbname,
 		sslmode:  sslmode,
-	}
-}
-
-func LoadConfiguration(ctx context.Context) Config {
-	return Config{
-		host:     env.GetVariableOrDefault(ctx, "POSTGRES_HOST", ""),
-		user:     env.GetVariableOrDefault(ctx, "POSTGRES_USER", ""),
-		password: env.GetVariableOrDefault(ctx, "POSTGRES_PASSWORD", ""),
-		port:     env.GetVariableOrDefault(ctx, "POSTGRES_PORT", "5432"),
-		dbname:   env.GetVariableOrDefault(ctx, "POSTGRES_DBNAME", "diwise"),
-		sslmode:  env.GetVariableOrDefault(ctx, "POSTGRES_SSLMODE", "disable"),
 	}
 }
 
@@ -106,6 +94,38 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			CONSTRAINT pkey_devices_unique PRIMARY KEY (device_id, sensor_id, deleted)
 		);
 
+
+
+		CREATE TABLE IF NOT EXISTS device_profiles (
+			device_profile_id	TEXT NOT NULL,
+			name 				TEXT NULL,
+			decoder 			TEXT NOT NULL,			
+			description			TEXT NULL,
+			interval 			NUMERIC NOT NULL DEFAULT 3600,
+			created_on  		timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		);
+
+		CREATE TABLE IF NOT EXISTS device_profiles_types (
+			device_profile_type_id	TEXT NOT NULL,
+			name 					TEXT NULL,
+			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT pkey_device_profiles_types PRIMARY KEY (device_profile_type_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS device_profiles_device_profiles_types (
+			device_profile_id 		TEXT NOT NULL,
+			device_profile_type_id	TEXT NOT NULL,			
+			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT pkey_device_profiles_device_profiles_types PRIMARY KEY (device_profile_id, device_profile_type_id)
+		);
+
+		CREATE TABLE IF NOT EXISTS device_device_profile_types (
+			device_id 				TEXT NOT NULL,
+			device_profile_type_id	TEXT NOT NULL,			
+			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			CONSTRAINT pkey_device_device_profile_types PRIMARY KEY (device_id, device_profile_type_id)
+		);
+
 		CREATE TABLE IF NOT EXISTS device_status (
 			time 			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			device_id		TEXT 	NOT NULL,
@@ -118,6 +138,15 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			created_on  	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			CONSTRAINT pkey_device_status PRIMARY KEY (time, device_id)
 		);
+
+		CREATE TABLE IF NOT EXISTS device_alarms (
+			device_id		TEXT NOT NULL,
+			type			TEXT NOT NULL,
+			description		TEXT NULL,
+			created_on  	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+		);
+
+
 
 		CREATE TABLE IF NOT EXISTS alarms (
     		alarm_id 	VARCHAR(255),

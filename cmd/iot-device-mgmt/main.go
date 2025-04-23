@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -12,154 +13,163 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/router"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
+	k8shandlers "github.com/diwise/service-chassis/pkg/infrastructure/net/http/handlers"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/go-chi/chi/v5"
-	"gopkg.in/yaml.v2"
+	"github.com/diwise/service-chassis/pkg/infrastructure/servicerunner"
 )
 
 const serviceName string = "iot-device-mgmt"
 
-var (
-	knownDevicesFile  string
-	opaFilePath       string
-	configurationFile string
-)
+func defaultFlags() flagMap {
+	return flagMap{
+		listenAddress: "0.0.0.0",
+		servicePort:   "8080",
+		controlPort:   "8000",
+
+		policiesFile: "/opt/diwise/config/authz.rego",
+
+		dbHost:     "",
+		dbUser:     "",
+		dbPassword: "",
+		dbPort:     "5432",
+		dbName:     "diwise",
+		dbSSLMode:  "disable",
+
+		allowedSeedTenants: "default",
+
+		devmode: "false",
+	}
+}
 
 func main() {
+	ctx, flags := parseExternalConfig(context.Background(), defaultFlags())
+
 	serviceVersion := buildinfo.SourceVersion()
-	ctx, _, cleanup := o11y.Init(context.Background(), serviceName, serviceVersion, "json")
+	ctx, logger, cleanup := o11y.Init(ctx, serviceName, serviceVersion, "json")
 	defer cleanup()
 
-	flag.StringVar(&knownDevicesFile, "devices", "/opt/diwise/config/devices.csv", "A file containing known devices")
-	flag.StringVar(&configurationFile, "config", "/opt/diwise/config/config.yaml", "A yaml file containing configuration data")
-	flag.StringVar(&opaFilePath, "policies", "/opt/diwise/config/authz.rego", "An authorization policy file")
-	flag.Parse()
+	storage, err := newStorage(ctx, flags)
+	exitIf(err, logger, "could not create or connect to database")
 
-	storage := setupStorageOrDie(ctx)
+	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, logger))
+	exitIf(err, logger, "failed to init messenger")
 
-	messenger := setupMessagingOrDie(ctx, serviceName)
-	messenger.Start()
+	policies, err := os.Open(flags[policiesFile])
+	exitIf(err, logger, "unable to open opa policy file")
 
-	mgmtSvc := devicemanagement.New(storage, messenger, loadConfigurationOrDie(ctx))
-	alarmSvc := alarms.New(storage, messenger)
+	cfg, err := os.Open(flags[configurationFile])
+	exitIf(err, logger, "could not open configuration file")
 
-	seedDataOrDie(ctx, mgmtSvc)
+	devices, err := os.Open(flags[devicesFile])
+	exitIf(err, logger, "could not open devices file")
 
-	watchdog := watchdog.New(mgmtSvc, messenger)
-	watchdog.Start(ctx)
-	defer watchdog.Stop(ctx)
+	dm := devicemanagement.New(storage, messenger, cfg)
+	wd := watchdog.New(dm, messenger)
+	as := alarms.New(storage, messenger)
 
-	r, err := setupRouter(ctx, serviceName, mgmtSvc, alarmSvc)
-	if err != nil {
-		fatal(ctx, "failed to setup router", err)
+	appCfg := appConfig{
+		messenger: messenger,
+		db:        storage,
+		dm:        dm,
+		alarm:     as,
+		watchdog:  wd,
 	}
 
-	apiPort := fmt.Sprintf(":%s", env.GetVariableOrDefault(ctx, "SERVICE_PORT", "8080"))
+	runner, err := initialize(ctx, flags, &appCfg, policies, devices)
+	exitIf(err, logger, "failed to initialize service runner")
 
-	err = http.ListenAndServe(apiPort, r)
-	if err != nil {
-		fatal(ctx, "failed to start router", err)
-	}
+	err = runner.Run(ctx)
+	exitIf(err, logger, "failed to start service runner")
 }
 
-func setupStorageOrDie(ctx context.Context) *storage.Storage {
-	var err error
-
-	p, err := storage.NewPool(ctx, storage.LoadConfiguration(ctx))
-	if err != nil {
-		panic(err)
-	}
-
-	s := storage.NewWithPool(p)
-	err = s.CreateTables(ctx)
-	if err != nil {
-		panic(err)
-	}
-
-	return s
-}
-
-func loadConfigurationOrDie(ctx context.Context) *devicemanagement.DeviceManagementConfig {
-	if _, err := os.Stat(configurationFile); os.IsNotExist(err) {
-		fatal(ctx, "configuration file not found", err)
-	}
-
-	f, err := os.Open(configurationFile)
-	if err != nil {
-		fatal(ctx, "could not open configuration", err)
-	}
-	defer f.Close()
-
-	b, err := io.ReadAll(f)
-	if err != nil {
-		fatal(ctx, "could not read configuration file", err)
-	}
-
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	err = yaml.Unmarshal(b, cfg)
-	if err != nil {
-		fatal(ctx, "could not unmarshal configuration file", err)
-	}
-
-	return cfg
-}
-
-func seedDataOrDie(ctx context.Context, svc devicemanagement.DeviceManagement) {
-	if _, err := os.Stat(knownDevicesFile); os.IsNotExist(err) {
-		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be found", knownDevicesFile), err)
-	}
-
-	f, err := os.Open(knownDevicesFile)
-	if err != nil {
-		fatal(ctx, fmt.Sprintf("file with known devices (%s) could not be opened", knownDevicesFile), err)
-	}
-	defer f.Close()
-
-	logger := logging.GetFromContext(ctx)
-
-	tenants := env.GetVariableOrDefault(ctx, "ALLOWED_SEED_TENANTS", "default")
-
-	logger.Debug(fmt.Sprintf("Allowed seed tenants: %s", tenants))
-
-	err = svc.Seed(ctx, f, strings.Split(tenants, ","))
-	if err != nil {
-		fatal(ctx, "could not seed database with devices", err)
-	}
-}
-
-func setupMessagingOrDie(ctx context.Context, serviceName string) messaging.MsgContext {
-	logger := logging.GetFromContext(ctx)
-
-	config := messaging.LoadConfiguration(ctx, serviceName, logger)
-	messenger, err := messaging.Initialize(ctx, config)
-	if err != nil {
-		fatal(ctx, "failed to init messenger", err)
-	}
-
-	return messenger
-}
-
-func setupRouter(ctx context.Context, serviceName string, svc devicemanagement.DeviceManagement, alarmSvc alarms.AlarmService) (*chi.Mux, error) {
-	r := router.New(serviceName)
-
-	policies, err := os.Open(opaFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("unable to open opa policy file: %s", err.Error())
-	}
+func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 	defer policies.Close()
 
-	return api.RegisterHandlers(ctx, r, policies, svc, alarmSvc)
+	probes := map[string]k8shandlers.ServiceProber{
+		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
+		"timescale": func(context.Context) (string, error) { return "ok", nil },
+	}
+
+	_, runner := servicerunner.New(ctx, *cfg,
+		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
+			pprof(), liveness(func() error { return nil }), readiness(probes),
+		),
+		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]),
+			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
+				return api.RegisterHandlers(ctx, handler, policies, appCfg.dm, appCfg.alarm)
+			}),
+		),
+		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
+			appCfg.db.CreateTables(ctx)
+
+			appCfg.dm.Seed(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
+			appCfg.watchdog.Start(ctx)
+			appCfg.messenger.Start()
+
+			return nil
+		}),
+		onshutdown(func(ctx context.Context, appCfg *appConfig) error {
+			appCfg.watchdog.Stop(ctx)
+			appCfg.messenger.Close()
+			appCfg.db.Close()
+
+			return nil
+		}),
+	)
+
+	return runner, nil
 }
 
-func fatal(ctx context.Context, msg string, err error) {
-	logger := logging.GetFromContext(ctx)
-	logger.Error(msg, "err", err.Error())
-	os.Exit(1)
+func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
+	if flags[devmode] == "true" {
+		return &storage.Storage{}, fmt.Errorf("not implemented")
+	}
+	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
+}
+
+func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, flagMap) {
+	// Allow environment variables to override certain defaults
+	envOrDef := env.GetVariableOrDefault
+
+	flags[listenAddress] = envOrDef(ctx, "LISTEN_ADDRESS", flags[listenAddress])
+	flags[controlPort] = envOrDef(ctx, "CONTROL_PORT", flags[controlPort])
+	flags[servicePort] = envOrDef(ctx, "SERVICE_PORT", flags[servicePort])
+
+	flags[policiesFile] = envOrDef(ctx, "POLICIES_FILE", flags[policiesFile])
+	flags[allowedSeedTenants] = envOrDef(ctx, "ALLOWED_SEED_TENANTS", flags[allowedSeedTenants])
+
+	flags[dbHost] = envOrDef(ctx, "POSTGRES_HOST", flags[dbHost])
+	flags[dbPort] = envOrDef(ctx, "POSTGRES_PORT", flags[dbPort])
+	flags[dbName] = envOrDef(ctx, "POSTGRES_DBNAME", flags[dbName])
+	flags[dbUser] = envOrDef(ctx, "POSTGRES_USER", flags[dbUser])
+	flags[dbPassword] = envOrDef(ctx, "POSTGRES_PASSWORD", flags[dbPassword])
+	flags[dbSSLMode] = envOrDef(ctx, "POSTGRES_SSLMODE", flags[dbSSLMode])
+
+	apply := func(f flagType) func(string) error {
+		return func(value string) error {
+			flags[f] = value
+			return nil
+		}
+	}
+
+	// Allow command line arguments to override defaults and environment variables
+	flag.Func("policies", "an authorization policy file", apply(policiesFile))
+	flag.Func("devices", "list of known devices", apply(devicesFile))
+	flag.Func("config", "device management configuration file", apply(configurationFile))
+	flag.Func("devmode", "enable dev mode", apply(devmode))
+	flag.Parse()
+
+	return ctx, flags
+}
+
+func exitIf(err error, logger *slog.Logger, msg string, args ...any) {
+	if err != nil {
+		logger.With(args...).Error(msg, "err", err.Error())
+		os.Exit(1)
+	}
 }

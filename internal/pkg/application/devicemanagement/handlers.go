@@ -41,42 +41,11 @@ func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 
 		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", m.DeviceID), slog.String("tenant", m.Tenant))
 
-		// observedAt := m.Timestamp
-
-		err = svc.AddDeviceStatus(ctx, m)
+		err = svc.HandleStatusMessage(ctx, m)
 		if err != nil {
 			log.Error("could not add device status", "err", err.Error())
 			return
 		}
-		/*
-			device, err := svc.GetByDeviceID(ctx, m.DeviceID, []string{m.Tenant})
-			if err != nil {
-				log.Error("could not fetch device", "err", err.Error())
-				return
-			}
-
-			status := device.DeviceStatus
-			if observedAt.After(status.ObservedAt) || status.ObservedAt.IsZero() {
-				status.ObservedAt = observedAt
-				err := svc.UpdateStatus(ctx, device.DeviceID, device.Tenant, status)
-				if err != nil {
-					log.Error("could not update status", "err", err.Error())
-					return
-				}
-			}
-
-			state := device.DeviceState
-			if observedAt.After(state.ObservedAt) || state.ObservedAt.IsZero() {
-				state.ObservedAt = observedAt
-				state.Online = true
-				state.State = types.DeviceStateOK
-				err := svc.UpdateState(ctx, device.DeviceID, device.Tenant, state)
-				if err != nil {
-					log.Error("could not update state", "err", err.Error())
-					return
-				}
-			}
-		*/
 	}
 }
 
