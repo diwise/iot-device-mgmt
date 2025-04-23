@@ -37,15 +37,15 @@ type DeviceManagement interface {
 	UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 
-	Seed(ctx context.Context, reader io.ReadCloser, tenants []string) error
-
 	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
 	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
 	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
 
+	// -----------------
 	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
+	Config() *DeviceManagementConfig
 }
 
 type DeviceManagementConfig struct {
@@ -70,6 +70,10 @@ type service struct {
 	storage   DeviceRepository
 	config    *DeviceManagementConfig
 	messenger messaging.MsgContext
+}
+
+func (s service) Config() *DeviceManagementConfig {
+	return s.config
 }
 
 func New(storage DeviceRepository, messenger messaging.MsgContext, config io.ReadCloser) DeviceManagement {

@@ -105,9 +105,26 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 			}),
 		),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
-			appCfg.db.CreateTables(ctx)
+			err = appCfg.db.CreateTables(ctx)
+			if err != nil {
+				return
+			}
 
-			appCfg.dm.Seed(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = devicemanagement.SeedLwm2mTypes(ctx, appCfg.db, appCfg.dm.Config().Types)
+			if err != nil {
+				return
+			}
+
+			err = devicemanagement.SeedDeviceProfiles(ctx, appCfg.db, appCfg.dm.Config().DeviceProfiles)
+			if err != nil {
+				return
+			}
+
+			err = devicemanagement.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ","))
+			if err != nil {
+				return
+			}
+
 			appCfg.watchdog.Start(ctx)
 			appCfg.messenger.Start()
 

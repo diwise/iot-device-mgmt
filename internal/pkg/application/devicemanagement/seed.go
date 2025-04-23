@@ -3,6 +3,7 @@ package devicemanagement
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -10,15 +11,18 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (d service) Seed(ctx context.Context, reader io.ReadCloser, tenants []string) error {
-	log := logging.GetFromContext(ctx)
-	defer reader.Close()
 
-	r := csv.NewReader(reader)
+
+func SeedDevices(ctx context.Context, s *storage.Storage, devices io.ReadCloser, validTenants []string) error {
+	log := logging.GetFromContext(ctx)
+	defer devices.Close()
+
+	r := csv.NewReader(devices)
 	r.Comma = ';'
 
 	rows, err := r.ReadAll()
@@ -33,84 +37,36 @@ func (d service) Seed(ctx context.Context, reader io.ReadCloser, tenants []strin
 
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)))
 
-	deviceProfiles := make(map[string]types.DeviceProfile)
-	for _, dp := range d.config.DeviceProfiles {
-		deviceProfiles[dp.Name] = dp
-	}
-
-	lwm2mTypes := make(map[string]types.Lwm2mType)
-	for _, l := range d.config.Types {
-		if l.Urn != "" {
-			lwm2mTypes[l.Urn] = l
-		}
-	}
-
 	for _, record := range records {
 		device, _ := record.mapToDevice()
 
-		if !slices.Contains(tenants, device.Tenant) {
+		if !slices.Contains(validTenants, device.Tenant) {
 			log.Warn("tenant not allowed", "device_id", device.DeviceID, "tenant", device.Tenant)
 			continue
 		}
 
-		e, err := d.GetByDeviceID(ctx, device.DeviceID, []string{device.Tenant})
+		err := s.CreateOrUpdateDevice(ctx, device)
 		if err != nil {
-			log.Debug("create new device", "device_id", device.DeviceID)
-
-			interval := device.DeviceProfile.Interval
-			device.DeviceProfile = deviceProfiles[device.DeviceProfile.Name]
-			device.DeviceProfile.Interval = interval
-
-			deviceLwm2mTypes := device.Lwm2mTypes
-			device.Lwm2mTypes = []types.Lwm2mType{}
-			for _, l := range deviceLwm2mTypes {
-				if t, ok := lwm2mTypes[l.Urn]; ok {
-					device.Lwm2mTypes = append(device.Lwm2mTypes, t)
-				}
-			}
-
-			err := d.Create(ctx, device)
-			if err != nil {
-				log.Error("could not create new device", "device_id", device.DeviceID, "err", err.Error())
-			}
-
-			continue
-		}
-
-		e.Active = device.Active
-		e.Description = device.Description
-
-		// Add all configured properties for device profile, but not custom interval setting
-		e.DeviceProfile = deviceProfiles[device.DeviceProfile.Name]
-		e.DeviceProfile.Interval = device.DeviceProfile.Interval
-
-		e.Environment = device.Environment
-		e.Location = device.Location
-
-		// Add all configured values to type
-		e.Lwm2mTypes = device.Lwm2mTypes
-		for i, l := range e.Lwm2mTypes {
-			e.Lwm2mTypes[i] = lwm2mTypes[l.Urn]
-		}
-
-		e.Name = device.Name
-		e.Source = device.Source
-		e.Tags = device.Tags
-
-		if e.SensorID != device.SensorID {
-			log.Warn("sensorID changed", "device_id", device.DeviceID, "old_sensor_id", e.SensorID, "new_sensor_id", device.SensorID)
-			e.SensorID = device.SensorID
-		}
-
-		log.Debug("update existing device", "device_id", device.DeviceID)
-
-		err = d.Update(ctx, e)
-		if err != nil {
-			log.Error("could not update device", "device_id", device.DeviceID, "err", err.Error())
+			return err
 		}
 	}
-
 	return nil
+}
+
+func SeedLwm2mTypes(ctx context.Context, s *storage.Storage, lwm2m []types.Lwm2mType) error {
+	var errs []error
+	for _, t := range lwm2m {
+		errs = append(errs, s.CreateDeviceProfileType(ctx, t))
+	}
+	return errors.Join(errs...)
+}
+
+func SeedDeviceProfiles(ctx context.Context, s *storage.Storage, profiles []types.DeviceProfile) error {
+	var errs []error
+	for _, p := range profiles {
+		errs = append(errs, s.CreateDeviceProfile(ctx, p))
+	}
+	return errors.Join(errs...)
 }
 
 type deviceRecord struct {

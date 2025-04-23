@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -79,89 +78,6 @@ func (s *Storage) AddDevice(ctx context.Context, device types.Device) error {
 	}
 
 	return nil
-}
-
-func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
-	args := pgx.NamedArgs{
-		"time":          status.Timestamp,
-		"device_id":     status.DeviceID,
-		"battery_level": status.BatteryLevel,
-		"rssi":          status.RSSI,
-		"snr":           status.LoRaSNR,
-		"fq":            status.Frequency,
-		"sf":            status.SpreadingFactor,
-		"dr":            status.DR,
-	}
-
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-
-	device, err := getDeviceTx(ctx, tx, WithDeviceID(status.DeviceID))
-	if err != nil {
-		tx.Rollback(ctx)
-		return err
-	}
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO device_status (time, device_id, battery_level, rssi, snr, fq, sf, dr)
-		VALUES (@time, @device_id, @battery_level, @rssi, @snr, @fq, @sf, @dr);`, args)
-	if err != nil {
-		tx.Rollback(ctx)
-		return err
-	}
-
-	_, err = tx.Exec(ctx, `DELETE FROM device_status WHERE device_id=@device_id AND time < NOW() - INTERVAL '3 weeks'`, args)
-	if err != nil {
-		tx.Rollback(ctx)
-		return err
-	}
-
-	ds := device.DeviceStatus
-	if status.BatteryLevel != nil {
-		b := *status.BatteryLevel
-		ds.BatteryLevel = int(b)
-	}
-
-	if status.RSSI != nil {
-		ds.RSSI = status.RSSI
-	}
-
-	if status.LoRaSNR != nil {
-		ds.LoRaSNR = status.LoRaSNR
-	}
-
-	if status.Frequency != nil {
-		ds.Frequency = status.Frequency
-	}
-
-	if status.SpreadingFactor != nil {
-		ds.SpreadingFactor = status.SpreadingFactor
-	}
-
-	if status.DR != nil {
-		ds.DR = status.DR
-	}
-
-	var ts time.Time
-	if status.Timestamp.IsZero() {
-		ts = time.Now()
-	} else {
-		ts = status.Timestamp
-	}
-
-	if ts.After(device.DeviceStatus.ObservedAt) {
-		ds.ObservedAt = ts
-	}
-
-	err = updateDeviceStatusTx(ctx, tx, device.DeviceID, device.Tenant, ds)
-	if err != nil {
-		tx.Rollback(ctx)
-		return err
-	}
-
-	return tx.Commit(ctx)
 }
 
 func (s *Storage) UpdateDevice(ctx context.Context, device types.Device) error {
@@ -383,39 +299,9 @@ func (s *Storage) QueryDevices(ctx context.Context, conditions ...ConditionFunc)
 	}, nil
 }
 
-func updateDeviceStatusTx(ctx context.Context, tx pgx.Tx, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
-	log := logging.GetFromContext(ctx)
-	log.Debug("update device status", "deviceID", deviceID, "tenant", tenant, "status", deviceStatus)
-
-	status, _ := json.Marshal(deviceStatus)
-
-	_, err := tx.Exec(ctx, `
-		UPDATE devices
-		SET status = @status
-		WHERE device_id = @device_id AND tenant = @tenant AND deleted = FALSE
-	`, pgx.NamedArgs{
-		"device_id": deviceID,
-		"tenant":    tenant,
-		"status":    string(status),
-	})
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *Storage) UpdateStatus(ctx context.Context, deviceID, tenant string, deviceStatus types.DeviceStatus) error {
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
+	tx, _ := s.pool.Begin(ctx)
 
-	err = updateDeviceStatusTx(ctx, tx, deviceID, tenant, deviceStatus)
-	if err != nil {
-		tx.Rollback(ctx)
-		return err
-	}
 
 	return tx.Commit(ctx)
 }

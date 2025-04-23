@@ -20,6 +20,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
+//			ConfigFunc: func() *DeviceManagementConfig {
+//				panic("mock out the Config method")
+//			},
 //			CreateFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the Create method")
 //			},
@@ -75,6 +78,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
+	// ConfigFunc mocks the Config method.
+	ConfigFunc func() *DeviceManagementConfig
+
 	// CreateFunc mocks the Create method.
 	CreateFunc func(ctx context.Context, device types.Device) error
 
@@ -125,6 +131,9 @@ type DeviceManagementMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// Config holds details about calls to the Config method.
+		Config []struct {
+		}
 		// Create holds details about calls to the Create method.
 		Create []struct {
 			// Ctx is the ctx argument value.
@@ -260,6 +269,7 @@ type DeviceManagementMock struct {
 			DeviceStatus types.DeviceStatus
 		}
 	}
+	lockConfig              sync.RWMutex
 	lockCreate              sync.RWMutex
 	lockGetByDeviceID       sync.RWMutex
 	lockGetBySensorID       sync.RWMutex
@@ -276,6 +286,33 @@ type DeviceManagementMock struct {
 	lockUpdate              sync.RWMutex
 	lockUpdateState         sync.RWMutex
 	lockUpdateStatus        sync.RWMutex
+}
+
+// Config calls ConfigFunc.
+func (mock *DeviceManagementMock) Config() *DeviceManagementConfig {
+	if mock.ConfigFunc == nil {
+		panic("DeviceManagementMock.ConfigFunc: method is nil but DeviceManagement.Config was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockConfig.Lock()
+	mock.calls.Config = append(mock.calls.Config, callInfo)
+	mock.lockConfig.Unlock()
+	return mock.ConfigFunc()
+}
+
+// ConfigCalls gets all the calls that were made to Config.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.ConfigCalls())
+func (mock *DeviceManagementMock) ConfigCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockConfig.RLock()
+	calls = mock.calls.Config
+	mock.lockConfig.RUnlock()
+	return calls
 }
 
 // Create calls CreateFunc.

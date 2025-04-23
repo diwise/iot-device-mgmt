@@ -280,3 +280,29 @@ func testSetup(t *testing.T) (context.Context, *Storage) {
 	}
 	return ctx, s
 }
+
+func TestQueryX(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+	_, err := s.Query(ctx)
+	is.NoErr(err)
+}
+
+func TestCreateTables(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	config := Config{
+		host:     "localhost",
+		user:     "postgres",
+		password: "password",
+		port:     "5432",
+		dbname:   "postgres",
+		sslmode:  "disable",
+	}
+	s, err := New(ctx, config)
+	is.NoErr(err)
+
+	err = s.CreateTables(ctx)
+	is.NoErr(err)
+}
