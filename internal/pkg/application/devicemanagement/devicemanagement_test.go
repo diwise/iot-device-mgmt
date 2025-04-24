@@ -2,62 +2,93 @@ package devicemanagement
 
 import (
 	"context"
-	"io"
-	"strings"
+	"encoding/json"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/google/uuid"
 	"github.com/matryer/is"
 )
 
-func TestNewSeeds(t *testing.T) {
-	ctx, is, s := testSetup(t)
-	var err error
+func TestDeviceStatusHandler(t *testing.T) {
+	is := is.New(t)
+	log := slog.Default()
+	ctx := context.Background()
 
-	err = s.CreateTables(ctx)
-	is.NoErr(err)
-
-	err = SeedLwm2mTypes(ctx, s, []types.Lwm2mType{
-		{
-			Urn:  "urn:diwise:1",
-			Name: "name",
+	storage := &DeviceStorageMock{
+		QueryFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+			return types.Collection[types.Device]{}, nil
 		},
-	})
-	is.NoErr(err)
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			return nil
+		},
+		AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
+			return nil
+		},
+	}
 
-	err = SeedDeviceProfiles(ctx, s, []types.DeviceProfile{
-		{
-			Name:     "elsys",
-			Decoder:  "elsys",
-			Interval: 60,
-			Types: []string{
-				"urn:diwise:1",
+	msgCtx := messaging.MsgContextMock{
+		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
+			return nil
+		},
+	}
+
+	bat := 99.0
+
+	sm := types.StatusMessage{
+		DeviceID:     uuid.NewString(),
+		Tenant:       "default",
+		Timestamp:    time.Now(),
+		BatteryLevel: &bat,
+	}
+
+	svc := New(storage, &msgCtx, nil)
+
+	err := svc.NewDevice(ctx, types.Device{
+		Active:      true,
+		SensorID:    uuid.NewString(),
+		DeviceID:    sm.DeviceID,
+		Tenant:      "default",
+		Name:        "Test",
+		Description: "Test",
+		Location: types.Location{
+			Latitude:  0,
+			Longitude: 0,
+		},
+		Environment: "",
+		Source:      "",
+		Lwm2mTypes: []types.Lwm2mType{
+			{
+				Urn:  "urn:xxx:1",
+				Name: "1",
 			},
 		},
+		Tags: []types.Tag{},
+		DeviceProfile: types.DeviceProfile{
+			Name:     "test",
+			Decoder:  "test",
+			Interval: 0,
+			Types:    []string{"urn:xxx:1"},
+		},
+		DeviceStatus: types.DeviceStatus{},
+		DeviceState:  types.DeviceState{},
+		Alarms:       []string{},
 	})
 	is.NoErr(err)
 
-	err = SeedDevices(ctx, s, io.NopCloser(strings.NewReader(devices_test)), []string{"default"})
-	is.NoErr(err)
+	handler := NewDeviceStatusHandler(svc)
+	handler(ctx, statusMessage(sm), log)
 }
 
-func testSetup(t *testing.T) (context.Context, *is.I, *storage.Storage) {
-	ctx := context.Background()
-	is := is.New(t)
-
-	s, err := storage.New(ctx, storage.NewConfig("localhost", "postgres", "password", "5432", "postgres", "disable"))
-	if err != nil {
-		t.SkipNow()
+func statusMessage(s types.StatusMessage) messaging.IncomingTopicMessage {
+	return &messaging.IncomingTopicMessageMock{
+		BodyFunc: func() []byte {
+			b, _ := json.Marshal(s)
+			return b
+		},
 	}
-	err = s.CreateTables(ctx)
-	if err != nil {
-		t.SkipNow()
-	}
-	return ctx, is, s
 }
-
-const devices_test string = `
-devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-70t589;intern-70t589;62.39160;17.30723;water;urn:diwise:1;elsys;name-70t589;desc-70t589;true;default;3600;
-`

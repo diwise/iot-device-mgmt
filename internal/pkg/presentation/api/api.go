@@ -16,18 +16,18 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
-	"github.com/go-chi/chi/v5"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"	
 	"go.opentelemetry.io/otel"
 )
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService) error {
+func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s storage.Store) error {
 	const apiPrefix string = "/api/v0"
 	const devicesPrefix string = apiPrefix + "/devices"
 	const alarmsPrefix string = apiPrefix + "/alarms"
@@ -42,11 +42,11 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 
 	devicesMux := http.NewServeMux()
 	devicesMux.HandleFunc("GET /", queryDevicesHandler(log, dm))
-	devicesMux.HandleFunc("GET /{deviceID}", getDeviceDetails(log, dm))
-	devicesMux.HandleFunc("GET /{deviceID}/alarms", getAlarmsHandler(log, alarm))
-	devicesMux.HandleFunc("POST /", createDeviceHandler(log, dm))
-	devicesMux.HandleFunc("PUT /{deviceID}", updateDeviceHandler(log, dm))
-	devicesMux.HandleFunc("PATCH /{deviceID}", patchDeviceHandler(log, dm))
+	devicesMux.HandleFunc("GET /{id}", getDeviceHandler(log, dm))
+	devicesMux.HandleFunc("POST /", createDeviceHandler(log, dm, s))
+	devicesMux.HandleFunc("PUT /{id}", updateDeviceHandler(log, dm))
+	devicesMux.HandleFunc("PATCH /{id}", patchDeviceHandler(log, dm))
+	//devicesMux.HandleFunc("GET /{deviceID}/alarms", getAlarmsHandler(log, alarm))
 	devicesGroup := http.StripPrefix(devicesPrefix, devicesMux)
 
 	rootMux.Handle("GET "+devicesPrefix+"/", authenticator(devicesGroup))
@@ -54,6 +54,7 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 	rootMux.Handle("PUT "+devicesPrefix+"/", authenticator(devicesGroup))
 	rootMux.Handle("PATCH "+devicesPrefix+"/", authenticator(devicesGroup))
 
+	/*
 	alarmsMux := http.NewServeMux()
 	alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
 	alarmsMux.HandleFunc("GET /{alarmID}", getAlarmDetailsHandler(log, alarm))
@@ -62,87 +63,19 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 
 	rootMux.Handle("GET "+alarmsPrefix+"/", authenticator(alarmsGroup))
 	rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
+	*/
 
 	adminMux := http.NewServeMux()
 	adminMux.HandleFunc("GET /deviceprofiles", queryDeviceProfilesHandler(log, dm))
-	adminMux.HandleFunc("GET /deviceprofiles/{deviceprofileid}", queryDeviceProfilesHandler(log, dm))
+	adminMux.HandleFunc("GET /deviceprofiles/{id}", queryDeviceProfilesHandler(log, dm))
 	adminMux.HandleFunc("GET /lwm2mtypes", queryLwm2mTypesHandler(log, dm))
+	adminMux.HandleFunc("GET /lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
 	adminMux.HandleFunc("GET /tenants", queryTenantsHandler())
 	adminGroup := http.StripPrefix(adminPrefix, adminMux)
 
 	rootMux.Handle("GET "+adminPrefix+"/", authenticator(adminGroup))
 
 	return nil
-}
-
-func createLinks(u *url.URL, m *meta) *links {
-	if m == nil || m.TotalRecords == 0 {
-		return nil
-	}
-
-	query := u.Query()
-
-	newUrl := func(offset uint64) *string {
-		query.Set("offset", strconv.Itoa(int(offset)))
-		u.RawQuery = query.Encode()
-		u_ := u.String()
-		return &u_
-	}
-
-	first := uint64(0)
-	last := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
-	next := *m.Offset + *m.Limit
-	prev := int64(*m.Offset) - int64(*m.Limit)
-
-	links := &links{
-		Self:  newUrl(*m.Offset),
-		First: newUrl(first),
-		Last:  newUrl(last),
-	}
-
-	if next < m.TotalRecords {
-		links.Next = newUrl(next)
-	}
-
-	if prev >= 0 {
-		links.Prev = newUrl(uint64(prev))
-	}
-
-	return links
-}
-
-func getOffsetAndLimit(r *http.Request) (int, int) {
-	offset := r.URL.Query().Get("offset")
-	limit := r.URL.Query().Get("limit")
-
-	conv := func(s string, defaultValue int) int {
-		i, err := strconv.Atoi(s)
-		if err != nil {
-			return defaultValue
-		}
-		return i
-	}
-
-	return conv(offset, 0), conv(limit, 10)
-}
-
-func queryTenantsHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
-		_, span := tracer.Start(r.Context(), "query-tenants")
-		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-
-		response := ApiResponse{
-			Data: allowedTenants,
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(response.Byte())
-	}
 }
 
 func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
@@ -153,12 +86,12 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 
 		ctx, span := tracer.Start(r.Context(), "query-devices")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		sensorID := r.URL.Query().Get("devEUI")
 
 		if sensorID != "" {
-			ctx = logging.NewContextWithLogger(ctx, requestLogger, slog.String("sensor_id", sensorID))
+			ctx = logging.NewContextWithLogger(ctx, logger, slog.String("sensor_id", sensorID))
 
 			device, err := svc.GetBySensorID(ctx, sensorID, allowedTenants)
 			if err != nil {
@@ -167,7 +100,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 					return
 				}
 
-				requestLogger.Error("could not fetch data", "sensor_id", sensorID, "err", err.Error())
+				logger.Error("could not fetch data", "sensor_id", sensorID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -248,18 +181,23 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 	}
 }
 
-func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
 		ctx, span := tracer.Start(r.Context(), "get-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		deviceID := chi.URLParam(r, "deviceID")
-		ctx = logging.NewContextWithLogger(ctx, requestLogger, slog.String("device_id", deviceID))
+		deviceID := r.PathValue("id")
+		if deviceID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
 		device, err := svc.GetByDeviceID(ctx, deviceID, allowedTenants)
 		if err != nil {
@@ -268,7 +206,7 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 				return
 			}
 
-			requestLogger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
+			logger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -283,27 +221,27 @@ func getDeviceDetails(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement, s storage.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
 		ctx, span := tracer.Start(r.Context(), "create-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
 		if isMultipartFormData(r) {
 			file, _, err := r.FormFile("fileupload")
 			if err != nil {
-				requestLogger.Error("unable to read file", "err", err.Error())
+				logger.Error("unable to read file", "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
-			err = svc.Seed(ctx, file, allowedTenants)
+			err = storage.SeedDevices(ctx, s, file, allowedTenants)
 			if err != nil {
-				requestLogger.Error("failed to import data", "err", err.Error())
+				logger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -314,7 +252,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		} else if isApplicationJson(r) {
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				requestLogger.Error("unable to read body", "err", err.Error())
+				logger.Error("unable to read body", "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -322,25 +260,25 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			var d types.Device
 			err = json.Unmarshal(body, &d)
 			if err != nil {
-				requestLogger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
+				logger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
 			if !slices.Contains(allowedTenants, d.Tenant) {
-				requestLogger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
+				logger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
-			err = svc.Create(ctx, d)
+			err = svc.NewDevice(ctx, d)
 			if err != nil {
 				if errors.Is(err, devicemanagement.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)
 					return
 				}
 
-				requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
+				logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -350,7 +288,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		}
 
-		requestLogger.Error("Unsupported MediaType")
+		logger.Error("Unsupported MediaType")
 		w.WriteHeader(http.StatusUnsupportedMediaType)
 	}
 }
@@ -358,21 +296,21 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		ctx, span := tracer.Start(r.Context(), "update-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		if !isApplicationJson(r) {
-			requestLogger.Error("Unsupported MediaType")
+			logger.Error("Unsupported MediaType")
 			w.WriteHeader(http.StatusUnsupportedMediaType)
 		}
 
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
-			requestLogger.Error("unable to read body", "err", err.Error())
+			logger.Error("unable to read body", "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -380,20 +318,20 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		var d types.Device
 		err = json.Unmarshal(body, &d)
 		if err != nil {
-			requestLogger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
+			logger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		if !slices.Contains(allowedTenants, d.Tenant) {
-			requestLogger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
+			logger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		err = svc.Update(ctx, d)
+		err = svc.UpdateDevice(ctx, d)
 		if err != nil {
-			requestLogger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
+			logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -406,19 +344,24 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
 
 		ctx, span := tracer.Start(r.Context(), "patch-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, requestLogger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-		deviceID := chi.URLParam(r, "deviceID")
+		deviceID := r.PathValue("id")
 
-		ctx = logging.NewContextWithLogger(ctx, requestLogger, slog.String("device_id", deviceID))
+		if deviceID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
 		b, err := io.ReadAll(r.Body)
 		if err != nil {
-			requestLogger.Error("unable to read body", "err", err.Error())
+			logger.Error("unable to read body", "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -426,14 +369,14 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 		var fields map[string]any
 		err = json.Unmarshal(b, &fields)
 		if err != nil {
-			requestLogger.Error("unable to unmarshal body into map", "err", err.Error())
+			logger.Error("unable to unmarshal body into map", "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
+		err = svc.MergeDevice(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
-			requestLogger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
+			logger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -443,6 +386,202 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 	}
 }
 
+func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		ctx, span := tracer.Start(r.Context(), "query-deviceprofiles")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		name := r.URL.Query().Get("name")
+		deviceprofileId := r.PathValue("id")
+
+		if name == "" && deviceprofileId != "" {
+			name = deviceprofileId
+		}
+
+		var profiles types.Collection[types.DeviceProfile]
+
+		if name != "" {
+			names := []string{name}
+			if strings.Contains(name, ",") {
+				parts := strings.Split(name, ",")
+				names = parts
+			}
+
+			profiles, err = svc.GetDeviceProfiles(ctx, names...)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+		} else {
+			profiles, err = svc.GetDeviceProfiles(ctx)
+			if err != nil {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+		}
+
+		if len(profiles.Data) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var response ApiResponse
+
+		if len(profiles.Data) == 1 {
+			response = ApiResponse{
+				Data: profiles.Data[0],
+			}
+		} else {
+			meta := &meta{
+				TotalRecords: profiles.TotalCount,
+				Offset:       &profiles.Offset,
+				Limit:        &profiles.Limit,
+				Count:        profiles.Count,
+			}
+			response = ApiResponse{
+				Data:  profiles.Data,
+				Meta:  meta,
+				Links: createLinks(r.URL, meta),
+			}
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		ctx, span := tracer.Start(r.Context(), "query-lwm2mtypes")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		urn := r.URL.Query().Get("urn")
+		urnParam := r.PathValue("urn")
+
+		if urn == "" && urnParam != "" {
+			urn = urnParam
+		}
+
+		types, err := svc.GetLwm2mTypes(ctx, urn)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		if len(types.Data) == 0 {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		var response ApiResponse
+
+		if len(types.Data) == 1 {
+			response = ApiResponse{
+				Data: types.Data[0],
+			}
+		} else {
+			meta := &meta{
+				TotalRecords: types.TotalCount,
+				Offset:       &types.Offset,
+				Limit:        &types.Limit,
+				Count:        types.Count,
+			}
+			response = ApiResponse{
+				Data:  types.Data,
+				Meta:  meta,
+				Links: createLinks(r.URL, meta),
+			}
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+/* -------------- --------------- --------------- */
+
+
+
+func createLinks(u *url.URL, m *meta) *links {
+	if m == nil || m.TotalRecords == 0 {
+		return nil
+	}
+
+	query := u.Query()
+
+	newUrl := func(offset uint64) *string {
+		query.Set("offset", strconv.Itoa(int(offset)))
+		u.RawQuery = query.Encode()
+		u_ := u.String()
+		return &u_
+	}
+
+	first := uint64(0)
+	last := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
+	next := *m.Offset + *m.Limit
+	prev := int64(*m.Offset) - int64(*m.Limit)
+
+	links := &links{
+		Self:  newUrl(*m.Offset),
+		First: newUrl(first),
+		Last:  newUrl(last),
+	}
+
+	if next < m.TotalRecords {
+		links.Next = newUrl(next)
+	}
+
+	if prev >= 0 {
+		links.Prev = newUrl(uint64(prev))
+	}
+
+	return links
+}
+
+func getOffsetAndLimit(r *http.Request) (int, int) {
+	offset := r.URL.Query().Get("offset")
+	limit := r.URL.Query().Get("limit")
+
+	conv := func(s string, defaultValue int) int {
+		i, err := strconv.Atoi(s)
+		if err != nil {
+			return defaultValue
+		}
+		return i
+	}
+
+	return conv(offset, 0), conv(limit, 10)
+}
+
+func queryTenantsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		_, span := tracer.Start(r.Context(), "query-tenants")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+		response := ApiResponse{
+			Data: allowedTenants,
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+
+/*
 func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -516,7 +655,8 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		w.Write(response.Byte())
 	}
 }
-
+*/
+/*
 func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -548,7 +688,8 @@ func getAlarmDetailsHandler(log *slog.Logger, svc alarms.AlarmService) http.Hand
 		w.Write(response.Byte())
 	}
 }
-
+*/
+/*
 func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -580,126 +721,9 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 		w.WriteHeader(http.StatusOK)
 	}
 }
+*/
 
-func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
 
-		ctx, span := tracer.Start(r.Context(), "query-deviceprofiles")
-		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-		name := r.URL.Query().Get("name")
-		deviceprofileId := chi.URLParam(r, "deviceprofileid")
-
-		if name == "" && deviceprofileId != "" {
-			name = deviceprofileId
-		}
-
-		var profiles types.Collection[types.DeviceProfile]
-
-		if name != "" {
-			names := []string{name}
-			if strings.Contains(name, ",") {
-				parts := strings.Split(name, ",")
-				names = parts
-			}
-
-			profiles, err = svc.GetDeviceProfiles(ctx, names...)
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-		} else {
-			profiles, err = svc.GetDeviceProfiles(ctx)
-			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
-				return
-			}
-		}
-
-		if len(profiles.Data) == 0 {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		var response ApiResponse
-
-		if len(profiles.Data) == 1 {
-			response = ApiResponse{
-				Data: profiles.Data[0],
-			}
-		} else {
-			meta := &meta{
-				TotalRecords: profiles.TotalCount,
-				Offset:       &profiles.Offset,
-				Limit:        &profiles.Limit,
-				Count:        profiles.Count,
-			}
-			response = ApiResponse{
-				Data:  profiles.Data,
-				Meta:  meta,
-				Links: createLinks(r.URL, meta),
-			}
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(response.Byte())
-	}
-}
-
-func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var err error
-
-		ctx, span := tracer.Start(r.Context(), "query-lwm2mtypes")
-		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
-		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
-		urn := r.URL.Query().Get("urn")
-		urnParam := chi.URLParam(r, "urn")
-
-		if urn == "" && urnParam != "" {
-			urn = urnParam
-		}
-
-		types, err := svc.GetLwm2mTypes(ctx, urn)
-		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		if len(types.Data) == 0 {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-
-		var response ApiResponse
-
-		if len(types.Data) == 1 {
-			response = ApiResponse{
-				Data: types.Data[0],
-			}
-		} else {
-			meta := &meta{
-				TotalRecords: types.TotalCount,
-				Offset:       &types.Offset,
-				Limit:        &types.Limit,
-				Count:        types.Count,
-			}
-			response = ApiResponse{
-				Data:  types.Data,
-				Meta:  meta,
-				Links: createLinks(r.URL, meta),
-			}
-		}
-
-		w.Header().Add("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		w.Write(response.Byte())
-	}
-}
 
 func isMultipartFormData(r *http.Request) bool {
 	contentType := r.Header.Get("Content-Type")

@@ -68,9 +68,12 @@ func main() {
 	devices, err := os.Open(flags[devicesFile])
 	exitIf(err, logger, "could not open devices file")
 
-	dm := devicemanagement.New(storage, messenger, cfg)
-	wd := watchdog.New(dm, messenger)
-	as := alarms.New(storage, messenger)
+	dmCfg, err := devicemanagement.NewConfig(cfg)
+	exitIf(err, logger, "could not create device management config")
+
+	dm := devicemanagement.New(devicemanagement.NewDeviceStorage(storage), messenger, dmCfg)
+	as := alarms.New(alarms.NewAlarmStorage(storage), messenger)
+	wd := watchdog.New(as)
 
 	appCfg := appConfig{
 		messenger: messenger,
@@ -101,26 +104,26 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		),
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
-				return api.RegisterHandlers(ctx, handler, policies, appCfg.dm, appCfg.alarm)
+				return api.RegisterHandlers(ctx, handler, policies, appCfg.dm, appCfg.alarm, appCfg.db)
 			}),
 		),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
-			err = appCfg.db.CreateTables(ctx)
+			err = appCfg.db.Initialize(ctx)
 			if err != nil {
 				return
 			}
 
-			err = devicemanagement.SeedLwm2mTypes(ctx, appCfg.db, appCfg.dm.Config().Types)
+			err = storage.SeedLwm2mTypes(ctx, appCfg.db, appCfg.dm.Config().Types)
 			if err != nil {
 				return
 			}
 
-			err = devicemanagement.SeedDeviceProfiles(ctx, appCfg.db, appCfg.dm.Config().DeviceProfiles)
+			err = storage.SeedDeviceProfiles(ctx, appCfg.db, appCfg.dm.Config().DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = devicemanagement.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = storage.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}
@@ -142,9 +145,9 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	return runner, nil
 }
 
-func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
+func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
 	if flags[devmode] == "true" {
-		return &storage.Storage{}, fmt.Errorf("not implemented")
+		return &storage.StoreMock{}, fmt.Errorf("not implemented")
 	}
 	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
 }

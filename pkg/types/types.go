@@ -71,19 +71,17 @@ type DeviceState struct {
 }
 
 const (
-	AlarmSeverityLow    = 1
-	AlarmSeverityMedium = 2
-	AlarmSeverityHigh   = 3
+	AlarmSeverityUnknown = 0
+	AlarmSeverityLow     = 1
+	AlarmSeverityMedium  = 2
+	AlarmSeverityHigh    = 3
 )
 
 type Alarm struct {
-	ID          string    `json:"id"`
 	AlarmType   string    `json:"alarmType"`
 	Description string    `json:"description,omitempty"`
 	ObservedAt  time.Time `json:"observedAt"`
-	RefID       string    `json:"refID"`
 	Severity    int       `json:"severity"`
-	Tenant      string    `json:"tenant"`
 }
 
 type InformationItem struct {

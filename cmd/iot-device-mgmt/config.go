@@ -35,7 +35,7 @@ const (
 
 type appConfig struct {
 	messenger messaging.MsgContext
-	db        *storage.Storage
+	db        storage.Store
 	dm        devicemanagement.DeviceManagement
 	alarm     alarms.AlarmService
 	watchdog  watchdog.Watchdog

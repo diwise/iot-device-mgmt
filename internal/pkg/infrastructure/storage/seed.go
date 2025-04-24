@@ -1,4 +1,4 @@
-package devicemanagement
+package storage
 
 import (
 	"context"
@@ -11,14 +11,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-
-
-func SeedDevices(ctx context.Context, s *storage.Storage, devices io.ReadCloser, validTenants []string) error {
+func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenants []string) error {
 	log := logging.GetFromContext(ctx)
 	defer devices.Close()
 
@@ -53,7 +50,7 @@ func SeedDevices(ctx context.Context, s *storage.Storage, devices io.ReadCloser,
 	return nil
 }
 
-func SeedLwm2mTypes(ctx context.Context, s *storage.Storage, lwm2m []types.Lwm2mType) error {
+func SeedLwm2mTypes(ctx context.Context, s Store, lwm2m []types.Lwm2mType) error {
 	var errs []error
 	for _, t := range lwm2m {
 		errs = append(errs, s.CreateDeviceProfileType(ctx, t))
@@ -61,7 +58,7 @@ func SeedLwm2mTypes(ctx context.Context, s *storage.Storage, lwm2m []types.Lwm2m
 	return errors.Join(errs...)
 }
 
-func SeedDeviceProfiles(ctx context.Context, s *storage.Storage, profiles []types.DeviceProfile) error {
+func SeedDeviceProfiles(ctx context.Context, s Store, profiles []types.DeviceProfile) error {
 	var errs []error
 	for _, p := range profiles {
 		errs = append(errs, s.CreateDeviceProfile(ctx, p))
@@ -110,6 +107,7 @@ func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: types.DeviceProfile{
 			Name:     dr.sensorType,
+			Decoder:  dr.sensorType,
 			Interval: dr.interval,
 		},
 		DeviceStatus: types.DeviceStatus{

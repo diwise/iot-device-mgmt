@@ -14,26 +14,30 @@ import (
 type ConditionFunc func(*Condition) *Condition
 
 type Condition struct {
-	DeviceID          string
-	SensorID          string
-	DeviceWithAlarmID string
-	Types             []string
-	Tenant            string
-	Tenants           []string
-	ProfileName       []string
-	offset            *int
-	limit             *int
-	Active            *bool
-	Online            *bool
-	Bounds            *Box
-	sortBy            string
-	sortOrder         string
-	AlarmID           string
-	RefID             string
-	IncludeDeleted    bool
-	Urn               []string
-	Search            string
-	LastSeen          time.Time
+	DeviceID string
+	SensorID string
+
+	Active      *bool
+	Online      *bool
+	Types       []string
+	Tenant      string
+	Tenants     []string
+	ProfileName []string
+
+	Urn      []string
+	LastSeen time.Time
+
+	Search string
+
+	Bounds *Box
+
+	IncludeDeleted bool
+
+	sortBy    string
+	sortOrder string
+
+	offset *int
+	limit  *int
 }
 
 type Box struct {
@@ -70,85 +74,85 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	if len(c.ProfileName) > 0 {
 		args["profile_name"] = c.ProfileName
 	}
-	if c.AlarmID != "" {
-		args["alarm_id"] = c.AlarmID
-	}
-	if c.RefID != "" {
-		args["ref_id"] = c.RefID
-	}
 	if len(c.Urn) > 0 {
 		args["urn"] = c.Urn
 	}
 	if !c.LastSeen.IsZero() {
 		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
 	}
+	if c.Search != "" {
+		args["search"] = c.Search
+	}
 
 	return args
 }
 
 func (c Condition) Where() string {
-	var where string
+	where := []string{}
 
 	if c.DeviceID != "" {
-		where += "AND device_id = @device_id "
+		where = append(where, "d.device_id = @device_id")
 	}
+
 	if c.SensorID != "" {
-		where += "AND sensor_id = @sensor_id "
+		where = append(where, "d.sensor_id = @sensor_id")
 	}
 
 	if len(c.Tenant) > 0 && len(c.Tenants) > 0 && slices.Contains(c.Tenants, c.Tenant) {
-		where += "AND tenant = @tenant "
+		where = append(where, "d.tenant = @tenant")
 	} else if len(c.Tenants) > 0 {
-		where += "AND tenant = ANY(@tenants) "
+		where = append(where, "d.tenant = ANY(@tenants)")
 	}
 
 	if c.Active != nil {
-		where += "AND active = @active "
-	}
-	if c.Online != nil {
-		where += fmt.Sprintf("AND state->'online' = '%t' ", *c.Online)
-	}
-	if len(c.Types) == 1 {
-		where += "AND profile->>'decoder' = @profile "
-	}
-	if len(c.Types) > 1 {
-		where += "AND profile->>'decoder' = ANY(@profiles) "
-	}
-	if len(c.ProfileName) > 0 {
-		where += "AND profile->>'name' = ANY(@profile_name) "
-	}
-	if c.Bounds != nil {
-		where += fmt.Sprintf("AND location <@ BOX '((%f,%f),(%f,%f))' ", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY)
-	}
-	if c.AlarmID != "" {
-		where += "AND alarm_id = @alarm_id "
-	}
-	if c.RefID != "" {
-		where += "AND ref_id = @ref_id "
-	}
-	if c.DeviceWithAlarmID != "" {
-		where += fmt.Sprintf("AND data @> '{\"alarms\": [\"%s\"]}' ", c.DeviceWithAlarmID)
-	}
-	if len(c.Urn) > 0 {
-		where += "AND data->>'types' IS NOT NULL AND EXISTS (SELECT 1 FROM jsonb_array_elements(data->'types') AS types WHERE types->>'urn' = ANY(@urn)) "
-	}
-	if c.Search != "" {
-		where += fmt.Sprintf("AND (data->>'name' ILIKE '%%%s%%' OR sensor_id ILIKE '%%%s%%') ", c.Search, c.Search)
-	}
-	if !c.LastSeen.IsZero() {
-		where += "AND status->>'observedAt' >= @last_seen "
+		where = append(where, "d.active = @active")
 	}
 
-	where = strings.TrimPrefix(where, "AND")
+	if c.Online != nil {
+		where = append(where, "dst.online = @online")
+	}
+
+	if len(c.Types) == 1 {
+		where = append(where, "dp.decoder = @profile")
+	}
+
+	if len(c.Types) > 1 {
+		where = append(where, "dp.decoder = ANY(@profiles)")
+	}
+
+	if len(c.ProfileName) > 0 {
+		where = append(where, "dp.name = ANY(@profile_name)")
+	}
+
+	if c.Bounds != nil {
+		where = append(where, fmt.Sprintf("location <@ BOX '((%f,%f),(%f,%f))'", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY))
+	}
+
+	if len(c.Urn) > 0 {
+		//TODO
+	}
+
+	if c.Search != "" {
+		where = append(where, "(d.device_id ILIKE @search OR d.sensor_id ILIKE @search OR d.name ILIKE @search)")
+	}
+
+	if !c.LastSeen.IsZero() {
+		where = append(where, "dst.observed_at >= @last_seen")
+	}
 
 	if !c.IncludeDeleted {
-		if where != "" {
-			where += "AND "
-		}
-		where += "deleted = FALSE "
+		where = append(where, "d.deleted=FALSE")
 	}
 
-	return where
+	if len(where) == 0 {
+		return ""
+	}
+
+	if len(where) == 1 {
+		return "WHERE " + where[0]
+	}
+
+	return "WHERE " + strings.Join(where, " AND ")
 }
 
 func WithUrn(urn []string) ConditionFunc {
@@ -174,7 +178,7 @@ func WithProfileName(profileName []string) ConditionFunc {
 		return c
 	}
 }
-
+/*
 func WithDeviceAlarmID(alarmID string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.DeviceWithAlarmID = alarmID
@@ -195,7 +199,7 @@ func WithRefID(refID string) ConditionFunc {
 		return c
 	}
 }
-
+*/
 func WithSortBy(sortBy string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.sortBy = sortBy

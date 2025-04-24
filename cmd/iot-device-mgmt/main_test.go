@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"gopkg.in/yaml.v2"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 
@@ -154,16 +154,22 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 		},
 	}
 
-	cfg := &devicemanagement.DeviceManagementConfig{}
-	is.NoErr(yaml.Unmarshal([]byte(configYaml), cfg))
+	cfg, _ := devicemanagement.NewConfig(io.NopCloser(strings.NewReader(configYaml)))
+	dm := devicemanagement.New(s, &msgCtx, cfg)
+	as := alarms.New(alarms.NewAlarmStorage(s), &msgCtx)
 
-	app := devicemanagement.New(s, &msgCtx, io.NopCloser(strings.NewReader(configYaml)))
-	err = app.Seed(context.Background(), io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
+	is.NoErr(err)
+
+	err = storage.SeedDeviceProfiles(ctx, s, dm.Config().DeviceProfiles)
+	is.NoErr(err)
+
+	err = storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, app, nil)
+	api.RegisterHandlers(ctx, mux, policies, dm, as, s)
 
 	return mux, is
 }
@@ -195,27 +201,165 @@ a81758fffe04d83f;intern-a81758fffe04d83f;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsy
 
 const configYaml string = `
 deviceprofiles:
-  - name: qalcosonic
-    decoder: qalcosonic
-    interval: 3600
-    types:
-      - urn:oma:lwm2m:ext:3
-      - urn:oma:lwm2m:ext:3424
-      - urn:oma:lwm2m:ext:3303
   - name: axsensor
     decoder: axsensor
     interval: 3600 
     types:
       - urn:oma:lwm2m:ext:3
-      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3303
       - urn:oma:lwm2m:ext:3304
       - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3330
+  - name: elsys
+    decoder: elsys
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200
+      - urn:oma:lwm2m:ext:3301
+      - urn:oma:lwm2m:ext:3302
       - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3428
+  - name: elsys_codec
+    decoder: elsys_codec
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200      
+      - urn:oma:lwm2m:ext:3301
+      - urn:oma:lwm2m:ext:3302
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3428
+  - name: elt_2_hp
+    decoder: elt_2_hp
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200
+      - urn:oma:lwm2m:ext:3301
+      - urn:oma:lwm2m:ext:3302
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3428
+  - name: enviot
+    decoder: enviot
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3330
+  - name: milesight
+    decoder: milesight
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3428
+  - name: niab-fls
+    decoder: niab-fls
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3330
+  - name: qalcosonic
+    decoder: qalcosonic
+    interval: 3600
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3424
+  - name: senlabt
+    decoder: senlabt
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3303
+  - name: sensative
+    decoder: sensative
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3302
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+  - name: sensefarm
+    decoder: sensefarm
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3323
+      - urn:oma:lwm2m:ext:3327
+  - name: vegapuls_air_41
+    decoder: vegapuls_air_41
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3330
+  - name: virtual
+    decoder: virtual
+    interval: 3600 
+    types:
+      - urn:oma:lwm2m:ext:3
+      - urn:oma:lwm2m:ext:3200
+      - urn:oma:lwm2m:ext:3301
+      - urn:oma:lwm2m:ext:3302
+      - urn:oma:lwm2m:ext:3303
+      - urn:oma:lwm2m:ext:3304
+      - urn:oma:lwm2m:ext:3323
+      - urn:oma:lwm2m:ext:3327
+      - urn:oma:lwm2m:ext:3328
+      - urn:oma:lwm2m:ext:3330
+      - urn:oma:lwm2m:ext:3331
+      - urn:oma:lwm2m:ext:3350
+      - urn:oma:lwm2m:ext:3411
+      - urn:oma:lwm2m:ext:3424
+      - urn:oma:lwm2m:ext:3428
+      - urn:oma:lwm2m:ext:3434
+      - urn:oma:lwm2m:ext:3435  
+
 types:
   - urn : urn:oma:lwm2m:ext:3
     name: Device 
   - urn: urn:oma:lwm2m:ext:3303
     name: Temperature
+  - urn: urn:oma:lwm2m:ext:3304
+    name: Humidity
+  - urn: urn:oma:lwm2m:ext:3301
+    name: Illuminance
+  - urn: urn:oma:lwm2m:ext:3428
+    name: AirQuality
+  - urn: urn:oma:lwm2m:ext:3302
+    name: Presence
+  - urn: urn:oma:lwm2m:ext:3200
+    name: DigitalInput
+  - urn: urn:oma:lwm2m:ext:3330
+    name: Distance
+  - urn: urn:oma:lwm2m:ext:3327
+    name: Conductivity
+  - urn: urn:oma:lwm2m:ext:3323
+    name: Pressure
+  - urn: urn:oma:lwm2m:ext:3435
+    name: FillingLevel 
+  - urn: urn:oma:lwm2m:ext:3424
+    name: WaterMeter
+  - urn: urn:oma:lwm2m:ext:3411
+    name: Battery
+  - urn: urn:oma:lwm2m:ext:3434
+    name: PeopleCounter
+  - urn: urn:oma:lwm2m:ext:3328
+    name: Power
+  - urn: urn:oma:lwm2m:ext:3331
+    name: Energy
+  - urn: urn:oma:lwm2m:ext:3350
+    name: Stopwatch
 `
 
 const opaModule string = `

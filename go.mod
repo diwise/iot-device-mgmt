@@ -4,10 +4,8 @@ go 1.24
 
 require (
 	github.com/diwise/messaging-golang v0.0.0-20241021090331-143508a441a2
-	github.com/go-chi/chi/v5 v5.2.1
+	github.com/go-chi/chi/v5 v5.2.1 // indirect
 	github.com/matryer/is v1.4.1
-	github.com/riandyrn/otelchi v0.12.1
-	github.com/rs/cors v1.11.1
 	go.opentelemetry.io/otel v1.35.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.35.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.35.0 // indirect
@@ -74,7 +72,6 @@ require (
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
-	github.com/diwise/senml v0.0.0-20240402140901-e4008e065e05
 	github.com/diwise/service-chassis v0.0.0-20250404132715-b25a13b9e56a
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
