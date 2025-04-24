@@ -31,7 +31,9 @@ func defaultFlags() flagMap {
 		servicePort:   "8080",
 		controlPort:   "8000",
 
-		policiesFile: "/opt/diwise/config/authz.rego",
+		policiesFile:      "/opt/diwise/config/authz.rego",
+		configurationFile: "/opt/diwise/config/config.yaml",
+		devicesFile:       "/opt/diwise/config/devices.csv",
 
 		dbHost:     "",
 		dbUser:     "",
