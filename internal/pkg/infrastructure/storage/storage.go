@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -103,11 +105,11 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 		CREATE TABLE IF NOT EXISTS device_profiles (
 			device_profile_id	TEXT NOT NULL,
 			name 				TEXT NULL,
-			decoder 			TEXT NOT NULL,			
+			decoder 			TEXT NOT NULL,
 			description			TEXT NULL,
 			interval 			NUMERIC NOT NULL DEFAULT 3600,
 			created_on  		timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_profiles PRIMARY KEY (device_profile_id)
 		);
 
@@ -115,41 +117,41 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			device_profile_type_id	TEXT NOT NULL,
 			name 					TEXT NULL,
 			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_profiles_types PRIMARY KEY (device_profile_type_id)
 		);
 
 		CREATE TABLE IF NOT EXISTS devices (
-			device_id	TEXT 	NOT NULL,			
-			sensor_id	TEXT 	NULL,	
+			device_id	TEXT 	NOT NULL,
+			sensor_id	TEXT 	NULL,
 
-			active		BOOLEAN	NOT NULL DEFAULT FALSE,					
-			
+			active		BOOLEAN	NOT NULL DEFAULT FALSE,
+
 			name        TEXT 	NULL,
-			description TEXT 	NULL,	
+			description TEXT 	NULL,
 			environment TEXT 	NULL,
 			source      TEXT 	NULL,
-			tenant		TEXT 	NOT NULL,	
+			tenant		TEXT 	NOT NULL,
 			location 	POINT 	NULL,
-			
+
 			device_profile 	TEXT NULL,
 			interval 		NUMERIC NOT NULL DEFAULT 0,
 
-			created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,			
+			created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			modified_on timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			deleted     BOOLEAN DEFAULT FALSE,
-			deleted_on  timestamp with time zone NULL,	
-			
-			CONSTRAINT pk_devices PRIMARY KEY (device_id),		
-			CONSTRAINT fk_device_profiles FOREIGN KEY (device_profile) REFERENCES device_profiles (device_profile_id) ON DELETE SET NULL		
+			deleted_on  timestamp with time zone NULL,
+
+			CONSTRAINT pk_devices PRIMARY KEY (device_id),
+			CONSTRAINT fk_device_profiles FOREIGN KEY (device_profile) REFERENCES device_profiles (device_profile_id) ON DELETE SET NULL
 		);
 
 		CREATE UNIQUE INDEX IF NOT EXISTS uq_devices_sensor_not_deleted ON devices(device_id, sensor_id) WHERE deleted = FALSE;
 
-		CREATE TABLE IF NOT EXISTS device_tags (			
+		CREATE TABLE IF NOT EXISTS device_tags (
 			name  		TEXT NOT NULL,
 			created_on	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_tags PRIMARY KEY (name)
 		);
 
@@ -163,9 +165,9 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			sf 				NUMERIC NULL,
 			dr 				NUMERIC NULL,
 			created_on  	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_status PRIMARY KEY (observed_at, device_id),
-			CONSTRAINT fk_device_device_status FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE      			
+			CONSTRAINT fk_device_device_status FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS device_state (
@@ -175,9 +177,9 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			observed_at	timestamp with time zone NULL,
 			created_on 	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			modified_on timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_state PRIMARY KEY (device_id),
-			CONSTRAINT fk_device_device_state FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE      
+			CONSTRAINT fk_device_device_state FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
 		);
 
 		CREATE TABLE IF NOT EXISTS device_alarms (
@@ -185,16 +187,16 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 			type			TEXT NOT NULL,
 			description		TEXT NULL,
 			created_on  	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_alarms PRIMARY KEY (device_id, type),
-			CONSTRAINT fk_device_alarms FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE  
+			CONSTRAINT fk_device_alarms FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
 		);
 
-		CREATE TABLE IF NOT EXISTS device_device_tags (			
+		CREATE TABLE IF NOT EXISTS device_device_tags (
 			device_id 	TEXT NOT NULL,
 			name  		TEXT NOT NULL,
 			created_on	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_device_tags PRIMARY KEY (device_id, name),
 			CONSTRAINT fk_device_device_tags_device FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE,
 			CONSTRAINT fk_device_device_tags_tags FOREIGN KEY (name) REFERENCES device_tags (name) ON DELETE CASCADE
@@ -202,9 +204,9 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS device_profiles_device_profiles_types (
 			device_profile_id 		TEXT NOT NULL,
-			device_profile_type_id	TEXT NOT NULL,			
+			device_profile_type_id	TEXT NOT NULL,
 			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_profiles_device_profiles_types PRIMARY KEY (device_profile_id, device_profile_type_id),
 			CONSTRAINT fk_device_profiles_device_profiles_types FOREIGN KEY (device_profile_id) REFERENCES device_profiles (device_profile_id) ON DELETE CASCADE,
 			CONSTRAINT fk_device_profiles_device_profiles_types_type FOREIGN KEY (device_profile_type_id) REFERENCES device_profiles_types (device_profile_type_id) ON DELETE CASCADE
@@ -212,9 +214,9 @@ func (s *Storage) CreateTables(ctx context.Context) error {
 
 		CREATE TABLE IF NOT EXISTS device_device_profile_types (
 			device_id 				TEXT NOT NULL,
-			device_profile_type_id	TEXT NOT NULL,						
+			device_profile_type_id	TEXT NOT NULL,
 			created_on  			timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			
+
 			CONSTRAINT pk_device_device_profile_types PRIMARY KEY (device_id, device_profile_type_id),
 			CONSTRAINT fk_device_device_profile_types FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE,
 			CONSTRAINT fk_device_device_profile_types_type FOREIGN KEY (device_profile_type_id) REFERENCES device_profiles_types (device_profile_type_id) ON DELETE CASCADE
@@ -298,10 +300,10 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile) 
-		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile) 
+		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile)
+		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile)
 		ON CONFLICT (device_id) DO UPDATE
-			SET 
+			SET
 				sensor_id = EXCLUDED.sensor_id,
 				active = EXCLUDED.active,
 				name = EXCLUDED.name,
@@ -484,10 +486,10 @@ func (s *Storage) SetDeviceProfile(ctx context.Context, deviceID string, dp type
 	}
 
 	_, err = tx.Exec(ctx, `
-		UPDATE devices SET 
-			device_profile=@device_profile, 
+		UPDATE devices SET
+			device_profile=@device_profile,
 			interval=@interval,
-			modified_on=NOW() 
+			modified_on=NOW()
 		WHERE device_id=@device_id AND deleted=FALSE`, args)
 	if err != nil {
 		tx.Rollback(ctx)
@@ -555,71 +557,204 @@ func (s *Storage) SetDevice(ctx context.Context, deviceID string, active *bool, 
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) Query(ctx context.Context) (any, error) {
+func (s *Storage) Query(ctx context.Context) (types.Collection[types.Device], error) {
 	args := pgx.NamedArgs{}
 	sql := `
-WITH latest_status AS (
-  SELECT DISTINCT ON (device_id)
-    device_id, battery_level, rssi, snr, fq, sf, dr, observed_at
-  FROM device_status
-  ORDER BY device_id, observed_at DESC
-),
+		WITH latest_status AS (
+			SELECT DISTINCT ON (device_id)
+				device_id, battery_level, rssi, snr, fq, sf, dr, observed_at
+			FROM device_status
+			ORDER BY device_id, observed_at DESC
+		),
 
-tag_list AS (
-  SELECT
-    ddt.device_id,
-    array_agg(dt.name) AS tags
-  FROM device_device_tags ddt
-  JOIN device_tags dt USING (name)
-  GROUP BY ddt.device_id
-)
+		tag_list AS (
+			SELECT ddt.device_id, array_agg(dt.name) AS tags
+			FROM device_device_tags ddt
+			JOIN device_tags dt USING (name)
+			GROUP BY ddt.device_id
+		),
 
-SELECT
-  d.device_id,
-  d.sensor_id,
-  d.active,
-  d.location,
-  d.name           AS device_name,
-  d.description    AS device_description,
-  d.environment,
-  d.source,
-  d.tenant,
+		types_list AS (
+			SELECT ddpt.device_id, array_agg(ARRAY[dpt.device_profile_type_id, dpt.name]) AS types
+			FROM device_device_profile_types ddpt
+			JOIN device_profiles_types dpt USING (device_profile_type_id)
+			JOIN devices d USING (device_id)
+			WHERE d.deleted = FALSE
+			GROUP BY ddpt.device_id, dpt.device_profile_type_id
+		)
 
-  dp.device_profile_id,
-  dp.name          AS profile_name,
-  dp.decoder,
-  dp.description   AS profile_description,
-  dp.interval      AS profile_interval,
-  d.interval	   AS device_interval,
+		SELECT
+			d.device_id,
+			d.sensor_id,
+			d.active,
+			d.location,
+			d.name           AS device_name,
+			d.description    AS device_description,
+			d.environment,
+			d.source,
+			d.tenant,
 
-  dst.online      AS state_online,
-  dst.state       AS state_value,
-  dst.observed_at AS state_observed_at,
+			dp.device_profile_id,
+			dp.name          AS profile_name,
+			dp.decoder,
+			dp.description   AS profile_description,
+			dp.interval      AS profile_interval,
+			d.interval	     AS device_interval,
 
-  ls.battery_level,
-  ls.rssi,
-  ls.snr,
-  ls.fq,
-  ls.sf,
-  ls.dr,
-  ls.observed_at  AS status_observed_at,
+			dst.online      AS state_online,
+			dst.state       AS state_value,
+			dst.observed_at AS state_observed_at,
 
-  tl.tags
-FROM devices d
-LEFT JOIN device_profiles dp
-  ON dp.device_profile_id = d.device_profile
-LEFT JOIN device_state dst
-  ON dst.device_id = d.device_id
-LEFT JOIN latest_status ls
-  ON ls.device_id = d.device_id
-LEFT JOIN tag_list tl
-  ON tl.device_id = d.device_id;`
+			ls.battery_level,
+			ls.rssi,
+			ls.snr,
+			ls.fq,
+			ls.sf,
+			ls.dr,
+			ls.observed_at  AS status_observed_at,
 
-	_, err := s.pool.Query(ctx, sql, args)
+			tl.tags,
+			types_list.types,
+
+			count(*) OVER () AS count
+
+		FROM devices d
+		LEFT JOIN device_profiles dp ON dp.device_profile_id = d.device_profile
+		LEFT JOIN device_state dst ON dst.device_id = d.device_id
+		LEFT JOIN latest_status ls ON ls.device_id = d.device_id
+		LEFT JOIN tag_list tl ON tl.device_id = d.device_id
+		LEFT JOIN types_list ON types_list.device_id = d.device_id;`
+
+	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
-		return nil, err
+		return types.Collection[types.Device]{}, err
+	}
+	defer rows.Close()
+
+	var devices []types.Device
+	var count uint64
+	for rows.Next() {
+		var location pgtype.Point
+		var profileName, profileDescription, deviceName, deviceDescription, environment, source, tenant *string
+		var deviceID, sensorID, profileID *string
+		var active, online *bool
+		var rssi, snr, sf *float64
+		var statusObservedAt, stateObservedAt *time.Time
+		var tagList []string
+		var typesList [][]string
+		var decoder *string
+		var interval, deviceInterval, stateValue, batteryLevel, dr *int
+		var fq *int64
+
+		err = rows.Scan(
+			&deviceID,
+			&sensorID,
+			&active,
+			&location,
+			&deviceName,
+			&deviceDescription,
+			&environment,
+			&source,
+			&tenant,
+			&profileID,
+			&profileName,
+			&decoder,
+			&profileDescription,
+			&interval,
+			&deviceInterval,
+			&online,
+			&stateValue,
+			&stateObservedAt,
+			&batteryLevel,
+			&rssi,
+			&snr,
+			&fq,
+			&sf,
+			&dr,
+			&statusObservedAt,
+			&tagList,
+			&typesList,
+			&count,
+		)
+		if err != nil {
+			return types.Collection[types.Device]{}, err
+		}
+
+		device := types.Device{
+			DeviceID: *deviceID,
+			Active:   *active,
+			Tenant:   *tenant,
+		}
+
+		if sensorID != nil {
+			device.SensorID = *sensorID
+		}
+		if deviceName != nil {
+			device.Name = *deviceName
+		}
+		if deviceDescription != nil {
+			device.Description = *deviceDescription
+		}
+		if environment != nil {
+			device.Environment = *environment
+		}
+		if source != nil {
+			device.Source = *source
+		}
+		if profileID != nil {
+			device.DeviceProfile = types.DeviceProfile{
+				Name:     *profileID,
+				Decoder:  *decoder,
+				Interval: *interval,
+			}
+			if deviceInterval != nil && *deviceInterval > 0 {
+				device.DeviceProfile.Interval = *deviceInterval
+			}
+		}
+		if stateObservedAt != nil {
+			device.DeviceState = types.DeviceState{
+				Online:     *online,
+				State:      *stateValue,
+				ObservedAt: *stateObservedAt,
+			}
+		}
+		if statusObservedAt != nil {
+			device.DeviceStatus = types.DeviceStatus{
+				BatteryLevel:    *batteryLevel,
+				RSSI:            rssi,
+				LoRaSNR:         snr,
+				Frequency:       fq,
+				SpreadingFactor: sf,
+				DR:              dr,
+				ObservedAt:      *statusObservedAt,
+			}
+		}
+		if len(tagList) > 0 {
+			device.Tags = make([]types.Tag, 0)
+			for _, t := range tagList {
+				device.Tags = append(device.Tags, types.Tag{
+					Name: t,
+				})
+			}
+		}
+		if len(typesList) > 0 {
+			device.Lwm2mTypes = make([]types.Lwm2mType, 0)
+			for _, t := range typesList {
+				device.Lwm2mTypes = append(device.Lwm2mTypes, types.Lwm2mType{
+					Urn:  t[0],
+					Name: t[1],
+				})
+			}
+		}
+
+		devices = append(devices, device)
 	}
 
-	return nil, nil
-
+	return types.Collection[types.Device]{
+		Data:       devices,
+		Count:      uint64(len(devices)),
+		TotalCount: count,
+		Offset:     0,
+		Limit:      uint64(len(devices)),
+	}, nil
 }

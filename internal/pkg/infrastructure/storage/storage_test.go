@@ -284,9 +284,24 @@ func testSetup(t *testing.T) (context.Context, *Storage) {
 func TestQueryX(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
-	_, err := s.Query(ctx)
+	c, err := s.Query(ctx)
+	is.NoErr(err)
+	is.True(len(c.Data) > 0)
+}
+
+func TestSetDevice(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+	c, err := s.Query(ctx)
+	is.NoErr(err)
+	is.True(len(c.Data) > 0)
+
+	d := c.Data[0]
+	env := "air"
+	err = s.SetDevice(ctx, d.DeviceID, nil, nil, nil, &env, nil,nil)
 	is.NoErr(err)
 }
+
 
 func TestCreateTables(t *testing.T) {
 	is := is.New(t)
