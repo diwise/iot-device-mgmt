@@ -445,7 +445,7 @@ func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMe
 		return err
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM device_status WHERE device_id=@device_id AND time < NOW() - INTERVAL '3 weeks'`, args)
+	_, err = tx.Exec(ctx, `DELETE FROM device_status WHERE device_id=@device_id AND observed_at < NOW() - INTERVAL '3 weeks'`, args)
 	if err != nil {
 		tx.Rollback(ctx)
 		return err
@@ -784,13 +784,15 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		}
 		if statusObservedAt != nil {
 			device.DeviceStatus = types.DeviceStatus{
-				BatteryLevel:    *batteryLevel,
 				RSSI:            rssi,
 				LoRaSNR:         snr,
 				Frequency:       fq,
 				SpreadingFactor: sf,
 				DR:              dr,
 				ObservedAt:      *statusObservedAt,
+			}
+			if batteryLevel != nil {
+				device.DeviceStatus.BatteryLevel = *batteryLevel
 			}
 		}
 		if len(tagList) > 0 {
@@ -866,7 +868,7 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 	_, err := s.pool.Exec(ctx, `
 		INSERT INTO device_alarms (device_id, type, description, observed_at, severity) 
 		VALUES (@device_id, @type, @description, @observed_at, @severity) 
-		ON CONFLICT DO UPDATE
+		ON CONFLICT (device_id, type) DO UPDATE
 			SET
 				description=EXCLUDED.description,
 				observed_at=EXCLUDED.observed_at,

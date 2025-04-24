@@ -130,8 +130,19 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 				return
 			}
 
-			appCfg.watchdog.Start(ctx)
 			appCfg.messenger.Start()
+
+			err = appCfg.dm.RegisterTopicMessageHandler(ctx)
+			if err != nil {
+				return
+			}
+
+			err = appCfg.alarm.RegisterTopicMessageHandler(ctx)
+			if err != nil {
+				return
+			}
+
+			appCfg.watchdog.Start(ctx)
 
 			return nil
 		}),

@@ -48,6 +48,8 @@ type DeviceManagement interface {
 	// -----------------
 	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
 	Config() *DeviceManagementConfig
+
+	RegisterTopicMessageHandler(ctx context.Context) error
 }
 
 type DeviceManagementConfig struct {
@@ -134,9 +136,11 @@ func New(storage DeviceStorage, messenger messaging.MsgContext, config *DeviceMa
 		config:    config,
 	}
 
-	s.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(s))
-
 	return s
+}
+
+func (s service) RegisterTopicMessageHandler(ctx context.Context) error {
+	return s.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(s))
 }
 
 func (s service) HandleStatusMessage(ctx context.Context, status types.StatusMessage) error {

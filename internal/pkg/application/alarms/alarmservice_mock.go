@@ -25,6 +25,9 @@ var _ AlarmService = &AlarmServiceMock{}
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
 //				panic("mock out the GetStaleDevices method")
 //			},
+//			RegisterTopicMessageHandlerFunc: func(ctx context.Context) error {
+//				panic("mock out the RegisterTopicMessageHandler method")
+//			},
 //			RemoveFunc: func(ctx context.Context, deviceID string, alarmType string) error {
 //				panic("mock out the Remove method")
 //			},
@@ -40,6 +43,9 @@ type AlarmServiceMock struct {
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
+
+	// RegisterTopicMessageHandlerFunc mocks the RegisterTopicMessageHandler method.
+	RegisterTopicMessageHandlerFunc func(ctx context.Context) error
 
 	// RemoveFunc mocks the Remove method.
 	RemoveFunc func(ctx context.Context, deviceID string, alarmType string) error
@@ -60,6 +66,11 @@ type AlarmServiceMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
+		// RegisterTopicMessageHandler holds details about calls to the RegisterTopicMessageHandler method.
+		RegisterTopicMessageHandler []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 		// Remove holds details about calls to the Remove method.
 		Remove []struct {
 			// Ctx is the ctx argument value.
@@ -70,9 +81,10 @@ type AlarmServiceMock struct {
 			AlarmType string
 		}
 	}
-	lockAdd             sync.RWMutex
-	lockGetStaleDevices sync.RWMutex
-	lockRemove          sync.RWMutex
+	lockAdd                         sync.RWMutex
+	lockGetStaleDevices             sync.RWMutex
+	lockRegisterTopicMessageHandler sync.RWMutex
+	lockRemove                      sync.RWMutex
 }
 
 // Add calls AddFunc.
@@ -144,6 +156,38 @@ func (mock *AlarmServiceMock) GetStaleDevicesCalls() []struct {
 	mock.lockGetStaleDevices.RLock()
 	calls = mock.calls.GetStaleDevices
 	mock.lockGetStaleDevices.RUnlock()
+	return calls
+}
+
+// RegisterTopicMessageHandler calls RegisterTopicMessageHandlerFunc.
+func (mock *AlarmServiceMock) RegisterTopicMessageHandler(ctx context.Context) error {
+	if mock.RegisterTopicMessageHandlerFunc == nil {
+		panic("AlarmServiceMock.RegisterTopicMessageHandlerFunc: method is nil but AlarmService.RegisterTopicMessageHandler was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockRegisterTopicMessageHandler.Lock()
+	mock.calls.RegisterTopicMessageHandler = append(mock.calls.RegisterTopicMessageHandler, callInfo)
+	mock.lockRegisterTopicMessageHandler.Unlock()
+	return mock.RegisterTopicMessageHandlerFunc(ctx)
+}
+
+// RegisterTopicMessageHandlerCalls gets all the calls that were made to RegisterTopicMessageHandler.
+// Check the length with:
+//
+//	len(mockedAlarmService.RegisterTopicMessageHandlerCalls())
+func (mock *AlarmServiceMock) RegisterTopicMessageHandlerCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockRegisterTopicMessageHandler.RLock()
+	calls = mock.calls.RegisterTopicMessageHandler
+	mock.lockRegisterTopicMessageHandler.RUnlock()
 	return calls
 }
 

@@ -59,6 +59,7 @@ type AlarmService interface {
 	Add(ctx context.Context, deviceID string, alarm types.Alarm) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+	RegisterTopicMessageHandler(ctx context.Context) error
 }
 
 func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.Alarm) error {
@@ -73,18 +74,20 @@ func (svc *alarmSvc) Remove(ctx context.Context, deviceID string, alarmType stri
 	return svc.storage.RemoveAlarm(ctx, deviceID, alarmType)
 }
 
+func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
+	return svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(svc))
+}
+
 func New(s AlarmStorage, m messaging.MsgContext) AlarmService {
 	svc := &alarmSvc{
 		storage:   s,
 		messenger: m,
 	}
 
-	svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, svc))
-
 	return svc
 }
 
-func NewDeviceStatusHandler(messenger messaging.MsgContext, svc AlarmService) messaging.TopicMessageHandler {
+func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
 		var err error
 
