@@ -32,6 +32,8 @@ var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
 type DeviceManagement interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
+	GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error)
 
 	NewDevice(ctx context.Context, device types.Device) error
 	UpdateDevice(ctx context.Context, device types.Device) error
@@ -88,11 +90,13 @@ type DeviceStorage interface {
 	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
 	Query(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error)
 	CreateOrUpdateDevice(ctx context.Context, d types.Device) error
-	SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location) error
+	SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
 	SetDeviceProfile(ctx context.Context, deviceID string, dp types.DeviceProfile) error
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
 	GetTenants(ctx context.Context) (types.Collection[string], error)
+	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
 }
 type deviceStorageImpl struct {
 	s storage.Store
@@ -107,8 +111,8 @@ func (d deviceStorageImpl) Query(ctx context.Context, conditions ...storage.Cond
 func (d deviceStorageImpl) CreateOrUpdateDevice(ctx context.Context, device types.Device) error {
 	return d.s.CreateOrUpdateDevice(ctx, device)
 }
-func (d deviceStorageImpl) SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location) error {
-	return d.s.SetDevice(ctx, deviceID, active, name, description, environment, source, tenant, location)
+func (d deviceStorageImpl) SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+	return d.s.SetDevice(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
 }
 func (d deviceStorageImpl) SetDeviceProfile(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
 	return d.s.SetDeviceProfile(ctx, deviceID, dp)
@@ -121,6 +125,12 @@ func (d deviceStorageImpl) SetDeviceState(ctx context.Context, deviceID string, 
 }
 func (d deviceStorageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	return d.s.GetTenants(ctx)
+}
+func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+	return d.s.GetDeviceStatus(ctx, deviceID)
+}
+func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+	return d.s.GetDeviceAlarms(ctx, deviceID)
 }
 
 func NewDeviceStorage(s storage.Store) DeviceStorage {
@@ -198,6 +208,24 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	return result.Data[0], nil
 }
 
+func (s service) GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
+	if err != nil {
+		return types.Collection[types.DeviceStatus]{}, err
+	}
+
+	return s.storage.GetDeviceStatus(ctx, deviceID)
+}
+
+func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error) {
+	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
+	if err != nil {
+		return types.Collection[types.Alarm]{}, err
+	}
+
+	return s.storage.GetDeviceAlarms(ctx, deviceID)
+}
+
 func (s service) NewDevice(ctx context.Context, device types.Device) error {
 	result, err := s.storage.Query(ctx, storage.WithDeviceID(device.DeviceID))
 	if err != nil {
@@ -254,6 +282,7 @@ func (s service) MergeDevice(ctx context.Context, deviceID string, fields map[st
 	var name, description, environment, source, tenant, deviceProfile *string
 	var location *types.Location
 	var lwm2m []string
+	var interval *int
 
 	for k, v := range fields {
 		switch k {
@@ -295,12 +324,15 @@ func (s service) MergeDevice(ctx context.Context, deviceID string, fields map[st
 		case "deviceProfile":
 			s := v.(string)
 			deviceProfile = &s
+		case "interval":
+			i := v.(int)
+			interval = &i
 		default:
 			log.Debug("field not mapped for merge", "device_id", deviceID, "name", k)
 		}
 	}
 
-	err = s.storage.SetDevice(ctx, deviceID, active, name, description, environment, source, tenant, location)
+	err = s.storage.SetDevice(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
 	if err != nil {
 		log.Error("could not set device information", "err", err.Error())
 		return err
@@ -389,8 +421,6 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 			conditions = append(conditions, storage.WithBounds(coords.MaxLat, coords.MinLat, coords.MaxLon, coords.MinLon))
 		case "profilename":
 			conditions = append(conditions, storage.WithProfileName(v))
-		case "urn":
-			conditions = append(conditions, storage.WithUrn(v))
 		case "search":
 			conditions = append(conditions, storage.WithSearch(v[0]))
 		case "tenant":
@@ -415,6 +445,8 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 					conditions = append(conditions, storage.WithLastSeen(t))
 				}
 			}
+		default:
+			log.Debug("unknown query parameter", "param", k, "value", v[0])
 		}
 	}
 

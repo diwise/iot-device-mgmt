@@ -2,7 +2,6 @@ package storage
 
 import (
 	"fmt"
-	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -24,7 +23,6 @@ type Condition struct {
 	Tenants     []string
 	ProfileName []string
 
-	Urn      []string
 	LastSeen time.Time
 
 	Search string
@@ -45,6 +43,21 @@ type Box struct {
 	MaxX float64 // east
 	MinY float64 // south
 	MaxY float64 // north
+}
+
+func (c Condition) OrderBy() string {
+	orderBy := ""
+
+	if c.sortBy != "" {
+		orderBy += fmt.Sprintf("ORDER BY %s ", c.sortBy)
+		if c.sortOrder != "" {
+			orderBy += c.sortOrder
+		} else {
+			orderBy += "ASC "
+		}
+	}
+
+	return orderBy
 }
 
 func (c Condition) OffsetLimit() string {
@@ -84,9 +97,6 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if len(c.ProfileName) > 0 {
 		args["profile_name"] = c.ProfileName
-	}
-	if len(c.Urn) > 0 {
-		args["urn"] = c.Urn
 	}
 	if !c.LastSeen.IsZero() {
 		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
@@ -145,10 +155,6 @@ func (c Condition) Where() string {
 		where = append(where, fmt.Sprintf("location <@ BOX '((%f,%f),(%f,%f))'", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY))
 	}
 
-	if len(c.Urn) > 0 {
-		//TODO
-	}
-
 	if c.Search != "" {
 		where = append(where, "(d.device_id ILIKE @search OR d.sensor_id ILIKE @search OR d.name ILIKE @search)")
 	}
@@ -172,13 +178,6 @@ func (c Condition) Where() string {
 	return "WHERE " + strings.Join(where, " AND ")
 }
 
-func WithUrn(urn []string) ConditionFunc {
-	return func(c *Condition) *Condition {
-		c.Urn = urn
-		return c
-	}
-}
-
 var re = regexp.MustCompile(`[^a-zA-ZåäöÅÄÖ0-9 _,;().]+|[%]`)
 
 func WithSearch(s string) ConditionFunc {
@@ -198,7 +197,24 @@ func WithProfileName(profileName []string) ConditionFunc {
 
 func WithSortBy(sortBy string) ConditionFunc {
 	return func(c *Condition) *Condition {
-		c.sortBy = sortBy
+
+		switch strings.ToLower(sortBy) {
+		case "device_id":
+			c.sortBy = "d.device_id"
+		case "deveui":
+			fallthrough
+		case "sensor_id":
+			c.sortBy = "d.sensor_id"
+		case "name":
+			c.sortBy = "d.name"
+		case "decoder":
+			fallthrough
+		case "profile":
+			fallthrough
+		case "device_profile_id":
+			c.sortBy = "dp.device_profile_id"
+		}
+
 		return c
 	}
 }
@@ -219,34 +235,6 @@ func WithTypes(types []string) ConditionFunc {
 		c.Types = types
 		return c
 	}
-}
-
-func (c Condition) SortBy() string {
-	if c.sortBy == "" {
-		c.sortBy = "data-->>'name'"
-	}
-	return c.sortBy
-}
-
-func (c Condition) SortOrder() string {
-	if c.sortOrder == "" {
-		c.sortOrder = "ASC"
-	}
-	return c.sortOrder
-}
-
-func (c Condition) Offset() int {
-	if c.offset == nil {
-		return 0
-	}
-	return *c.offset
-}
-
-func (c Condition) Limit() int {
-	if c.limit == nil {
-		return math.MaxInt64
-	}
-	return *c.limit
 }
 
 func WithOffset(offset int) ConditionFunc {
@@ -275,18 +263,6 @@ func WithSensorID(sensorID string) ConditionFunc {
 		c.SensorID = sensorID
 		return c
 	}
-}
-
-func unique(s []string) []string {
-	keys := make(map[string]bool)
-	list := []string{}
-	for _, entry := range s {
-		if _, value := keys[entry]; !value {
-			keys[entry] = true
-			list = append(list, entry)
-		}
-	}
-	return list
 }
 
 func WithTenant(tenant string) ConditionFunc {
@@ -338,4 +314,16 @@ func WithLastSeen(ts time.Time) ConditionFunc {
 		c.LastSeen = ts
 		return c
 	}
+}
+
+func unique(s []string) []string {
+	keys := make(map[string]bool)
+	list := []string{}
+	for _, entry := range s {
+		if _, value := keys[entry]; !value {
+			keys[entry] = true
+			list = append(list, entry)
+		}
+	}
+	return list
 }

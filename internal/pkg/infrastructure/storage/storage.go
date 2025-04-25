@@ -77,16 +77,17 @@ type Store interface {
 	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
 	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
 	SetDeviceProfile(ctx context.Context, deviceID string, dp types.DeviceProfile) error
-	SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location) error
+	SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
-
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
+	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
 	AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error
-	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
+	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
 }
 
 type storageImpl struct {
@@ -422,7 +423,7 @@ func createTagTx(ctx context.Context, tx pgx.Tx, t types.Tag) error {
 
 func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
 	args := pgx.NamedArgs{
-		"observed_at":   status.Timestamp,
+		"observed_at":   status.Timestamp.UTC(),
 		"device_id":     status.DeviceID,
 		"battery_level": status.BatteryLevel,
 		"rssi":          status.RSSI,
@@ -457,7 +458,7 @@ func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMe
 func (s *storageImpl) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
 	args := pgx.NamedArgs{
 		"device_id":   deviceID,
-		"observed_at": state.ObservedAt,
+		"observed_at": state.ObservedAt.UTC(),
 		"online":      state.Online,
 		"state":       state.State,
 	}
@@ -550,7 +551,7 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location) error {
+func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
 	}
@@ -591,6 +592,11 @@ func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bo
 		args["lat"] = location.Latitude
 		args["lon"] = location.Longitude
 		values = append(values, "location=point(@lon,@lat)")
+	}
+
+	if interval != nil {
+		args["interval"] = *interval
+		values = append(values, "interval=@interval")
 	}
 
 	if len(values) == 0 {
@@ -645,7 +651,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 		alarms_list AS (
 			SELECT a.device_id, array_agg(a.type) AS alarms
-			FROM device_alarms
+			FROM device_alarms a 
 			GROUP BY a.device_id
 		)
 
@@ -694,9 +700,12 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		LEFT JOIN types_list ON types_list.device_id = d.device_id
 		LEFT JOIN alarms_list ON alarms_list.device_id = d.device_id
 		%s
-		%s;`, condition.Where(), condition.OffsetLimit())
+		%s
+		%s;`, condition.Where(), condition.OrderBy(), condition.OffsetLimit())
 
-	rows, err := s.pool.Query(ctx, sql, condition.NamedArgs())
+	args := condition.NamedArgs()
+
+	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
 		return types.Collection[types.Device]{}, err
 	}
@@ -787,7 +796,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			device.DeviceState = types.DeviceState{
 				Online:     *online,
 				State:      *stateValue,
-				ObservedAt: *stateObservedAt,
+				ObservedAt: stateObservedAt.UTC(),
 			}
 		}
 		if statusObservedAt != nil {
@@ -797,7 +806,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 				Frequency:       fq,
 				SpreadingFactor: sf,
 				DR:              dr,
-				ObservedAt:      *statusObservedAt,
+				ObservedAt:      statusObservedAt.UTC(),
 			}
 			if batteryLevel != nil {
 				device.DeviceStatus.BatteryLevel = *batteryLevel
@@ -827,13 +836,71 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		devices = append(devices, device)
 	}
 
+	offset := 0
+	if o, ok := args["offset"]; ok {
+		offset = o.(int)
+	}
+
 	return types.Collection[types.Device]{
 		Data:       devices,
 		Count:      uint64(len(devices)),
 		TotalCount: count,
-		Offset:     0,
+		Offset:     uint64(offset),
 		Limit:      uint64(len(devices)),
 	}, nil
+}
+
+func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+	args := pgx.NamedArgs{
+		"device_id": deviceID,
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr 
+		FROM device_status 
+		WHERE device_id=@device_id 
+		ORDER BY observed_at ASC`, args)
+	if err != nil {
+		return types.Collection[types.DeviceStatus]{}, err
+	}
+	defer rows.Close()
+
+	statuses := []types.DeviceStatus{}
+
+	for rows.Next() {
+		var observed_at time.Time
+		var battery_level, rssi, snr, sf *float64
+		var fq *int64
+		var dr *int
+
+		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr)
+		if err != nil {
+			return types.Collection[types.DeviceStatus]{}, err
+		}
+
+		status := types.DeviceStatus{
+			RSSI:            rssi,
+			LoRaSNR:         snr,
+			Frequency:       fq,
+			SpreadingFactor: sf,
+			DR:              dr,
+			ObservedAt:      observed_at.UTC(),
+		}
+		if battery_level != nil {
+			status.BatteryLevel = int(*battery_level)
+		}
+
+		statuses = append(statuses, status)
+	}
+
+	return types.Collection[types.DeviceStatus]{
+		Data:       statuses,
+		Count:      uint64(len(statuses)),
+		TotalCount: uint64(len(statuses)),
+		Offset:     0,
+		Limit:      uint64(len(statuses)),
+	}, nil
+
 }
 
 func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
@@ -887,6 +954,50 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 				`, args)
 
 	return err
+}
+
+func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+	args := pgx.NamedArgs{
+		"device_id": deviceID,
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT device_id, type, description, observed_at, severity 
+		FROM device_alarms
+		WHERE device_id=@device_id
+		ORDER BY observed_at ASC`, args)
+	if err != nil {
+		return types.Collection[types.Alarm]{}, err
+	}
+	defer rows.Close()
+
+	alarms := []types.Alarm{}
+
+	for rows.Next() {
+		var device_id, alarmtype, description string
+		var observed_at time.Time
+		var severity int
+
+		err := rows.Scan(&device_id, &alarmtype, &description, &observed_at, &severity)
+		if err != nil {
+			return types.Collection[types.Alarm]{}, err
+		}
+
+		alarms = append(alarms, types.Alarm{
+			AlarmType:   alarmtype,
+			Description: description,
+			ObservedAt:  observed_at.UTC(),
+			Severity:    severity,
+		})
+	}
+
+	return types.Collection[types.Alarm]{
+		Data:       alarms,
+		Count:      uint64(len(alarms)),
+		Offset:     0,
+		Limit:      uint64(len(alarms)),
+		TotalCount: uint64(len(alarms)),
+	}, nil
 }
 
 func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {

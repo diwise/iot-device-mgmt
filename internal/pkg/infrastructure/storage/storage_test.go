@@ -91,7 +91,7 @@ func TestSetDevice(t *testing.T) {
 
 	d := c.Data[0]
 	env := "air"
-	err = s.SetDevice(ctx, d.DeviceID, nil, nil, nil, &env, nil, nil,nil)
+	err = s.SetDevice(ctx, d.DeviceID, nil, nil, nil, &env, nil, nil, nil, nil)
 	is.NoErr(err)
 }
 
@@ -147,7 +147,6 @@ func TestGetStaleDevices(t *testing.T) {
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
-
 
 const devices_csv string = `
 devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source

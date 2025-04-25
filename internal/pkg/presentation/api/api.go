@@ -21,7 +21,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"	
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/otel"
 )
 
@@ -30,7 +30,7 @@ var tracer = otel.Tracer("iot-device-mgmt/api")
 func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s storage.Store) error {
 	const apiPrefix string = "/api/v0"
 	const devicesPrefix string = apiPrefix + "/devices"
-	const alarmsPrefix string = apiPrefix + "/alarms"
+	//const alarmsPrefix string = apiPrefix + "/alarms"
 	const adminPrefix string = apiPrefix + "/admin"
 
 	log := logging.GetFromContext(ctx)
@@ -43,6 +43,8 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 	devicesMux := http.NewServeMux()
 	devicesMux.HandleFunc("GET /", queryDevicesHandler(log, dm))
 	devicesMux.HandleFunc("GET /{id}", getDeviceHandler(log, dm))
+	devicesMux.HandleFunc("GET /{id}/status", getDeviceStatusHandler(log, dm))
+	devicesMux.HandleFunc("GET /{id}/alarms", getDeviceAlarmsHandler(log, dm))
 	devicesMux.HandleFunc("POST /", createDeviceHandler(log, dm, s))
 	devicesMux.HandleFunc("PUT /{id}", updateDeviceHandler(log, dm))
 	devicesMux.HandleFunc("PATCH /{id}", patchDeviceHandler(log, dm))
@@ -55,14 +57,14 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 	rootMux.Handle("PATCH "+devicesPrefix+"/", authenticator(devicesGroup))
 
 	/*
-	alarmsMux := http.NewServeMux()
-	alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
-	alarmsMux.HandleFunc("GET /{alarmID}", getAlarmDetailsHandler(log, alarm))
-	alarmsMux.HandleFunc("PATCH /{alarmID}/close", closeAlarmHandler(log, alarm))
-	alarmsGroup := http.StripPrefix(alarmsPrefix, alarmsMux)
+		alarmsMux := http.NewServeMux()
+		alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
+		alarmsMux.HandleFunc("GET /{alarmID}", getAlarmDetailsHandler(log, alarm))
+		alarmsMux.HandleFunc("PATCH /{alarmID}/close", closeAlarmHandler(log, alarm))
+		alarmsGroup := http.StripPrefix(alarmsPrefix, alarmsMux)
 
-	rootMux.Handle("GET "+alarmsPrefix+"/", authenticator(alarmsGroup))
-	rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
+		rootMux.Handle("GET "+alarmsPrefix+"/", authenticator(alarmsGroup))
+		rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
 	*/
 
 	adminMux := http.NewServeMux()
@@ -221,6 +223,94 @@ func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 	}
 }
 
+func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-device-status")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		deviceID := r.PathValue("id")
+		if deviceID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
+
+		statuses, err := svc.GetDeviceStatus(ctx, deviceID, allowedTenants)
+		if err != nil {
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			logger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		response := ApiResponse{
+			Data: statuses.Data,
+			Meta: &meta{
+				TotalRecords: statuses.TotalCount,
+				Count:        statuses.Count,
+			},
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-device-status")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		deviceID := r.PathValue("id")
+		if deviceID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
+
+		alarms, err := svc.GetDeviceAlarms(ctx, deviceID, allowedTenants)
+		if err != nil {
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			logger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		response := ApiResponse{
+			Data: alarms.Data,
+			Meta: &meta{
+				TotalRecords: alarms.TotalCount,
+				Count:        alarms.Count,
+			},
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
 func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement, s storage.Store) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -301,7 +391,6 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		ctx, span := tracer.Start(r.Context(), "update-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
-
 
 		if !isApplicationJson(r) {
 			logger.Error("Unsupported MediaType")
@@ -508,8 +597,6 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 
 /* -------------- --------------- --------------- */
 
-
-
 func createLinks(u *url.URL, m *meta) *links {
 	if m == nil || m.TotalRecords == 0 {
 		return nil
@@ -579,7 +666,6 @@ func queryTenantsHandler() http.HandlerFunc {
 		w.Write(response.Byte())
 	}
 }
-
 
 /*
 func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
@@ -722,8 +808,6 @@ func closeAlarmHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFu
 	}
 }
 */
-
-
 
 func isMultipartFormData(r *http.Request) bool {
 	contentType := r.Header.Get("Content-Type")

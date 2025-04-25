@@ -43,6 +43,12 @@ var _ Store = &StoreMock{}
 //			CreateTagFunc: func(ctx context.Context, t types.Tag) error {
 //				panic("mock out the CreateTag method")
 //			},
+//			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+//				panic("mock out the GetDeviceAlarms method")
+//			},
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+//				panic("mock out the GetDeviceStatus method")
+//			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
 //				panic("mock out the GetStaleDevices method")
 //			},
@@ -58,7 +64,7 @@ var _ Store = &StoreMock{}
 //			RemoveAlarmFunc: func(ctx context.Context, deviceID string, alarmType string) error {
 //				panic("mock out the RemoveAlarm method")
 //			},
-//			SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location) error {
+//			SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
 //				panic("mock out the SetDevice method")
 //			},
 //			SetDeviceProfileFunc: func(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
@@ -101,6 +107,12 @@ type StoreMock struct {
 	// CreateTagFunc mocks the CreateTag method.
 	CreateTagFunc func(ctx context.Context, t types.Tag) error
 
+	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
+	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+
+	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
 
@@ -117,7 +129,7 @@ type StoreMock struct {
 	RemoveAlarmFunc func(ctx context.Context, deviceID string, alarmType string) error
 
 	// SetDeviceFunc mocks the SetDevice method.
-	SetDeviceFunc func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location) error
+	SetDeviceFunc func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error
 
 	// SetDeviceProfileFunc mocks the SetDeviceProfile method.
 	SetDeviceProfileFunc func(ctx context.Context, deviceID string, dp types.DeviceProfile) error
@@ -186,6 +198,20 @@ type StoreMock struct {
 			// T is the t argument value.
 			T types.Tag
 		}
+		// GetDeviceAlarms holds details about calls to the GetDeviceAlarms method.
+		GetDeviceAlarms []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+		}
+		// GetDeviceStatus holds details about calls to the GetDeviceStatus method.
+		GetDeviceStatus []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+		}
 		// GetStaleDevices holds details about calls to the GetStaleDevices method.
 		GetStaleDevices []struct {
 			// Ctx is the ctx argument value.
@@ -237,6 +263,8 @@ type StoreMock struct {
 			Tenant *string
 			// Location is the location argument value.
 			Location *types.Location
+			// Interval is the interval argument value.
+			Interval *int
 		}
 		// SetDeviceProfile holds details about calls to the SetDeviceProfile method.
 		SetDeviceProfile []struct {
@@ -274,6 +302,8 @@ type StoreMock struct {
 	lockCreateDeviceProfileType sync.RWMutex
 	lockCreateOrUpdateDevice    sync.RWMutex
 	lockCreateTag               sync.RWMutex
+	lockGetDeviceAlarms         sync.RWMutex
+	lockGetDeviceStatus         sync.RWMutex
 	lockGetStaleDevices         sync.RWMutex
 	lockGetTenants              sync.RWMutex
 	lockInitialize              sync.RWMutex
@@ -572,6 +602,78 @@ func (mock *StoreMock) CreateTagCalls() []struct {
 	return calls
 }
 
+// GetDeviceAlarms calls GetDeviceAlarmsFunc.
+func (mock *StoreMock) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+	if mock.GetDeviceAlarmsFunc == nil {
+		panic("StoreMock.GetDeviceAlarmsFunc: method is nil but Store.GetDeviceAlarms was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+	}
+	mock.lockGetDeviceAlarms.Lock()
+	mock.calls.GetDeviceAlarms = append(mock.calls.GetDeviceAlarms, callInfo)
+	mock.lockGetDeviceAlarms.Unlock()
+	return mock.GetDeviceAlarmsFunc(ctx, deviceID)
+}
+
+// GetDeviceAlarmsCalls gets all the calls that were made to GetDeviceAlarms.
+// Check the length with:
+//
+//	len(mockedStore.GetDeviceAlarmsCalls())
+func (mock *StoreMock) GetDeviceAlarmsCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+	}
+	mock.lockGetDeviceAlarms.RLock()
+	calls = mock.calls.GetDeviceAlarms
+	mock.lockGetDeviceAlarms.RUnlock()
+	return calls
+}
+
+// GetDeviceStatus calls GetDeviceStatusFunc.
+func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+	if mock.GetDeviceStatusFunc == nil {
+		panic("StoreMock.GetDeviceStatusFunc: method is nil but Store.GetDeviceStatus was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+	}
+	mock.lockGetDeviceStatus.Lock()
+	mock.calls.GetDeviceStatus = append(mock.calls.GetDeviceStatus, callInfo)
+	mock.lockGetDeviceStatus.Unlock()
+	return mock.GetDeviceStatusFunc(ctx, deviceID)
+}
+
+// GetDeviceStatusCalls gets all the calls that were made to GetDeviceStatus.
+// Check the length with:
+//
+//	len(mockedStore.GetDeviceStatusCalls())
+func (mock *StoreMock) GetDeviceStatusCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+	}
+	mock.lockGetDeviceStatus.RLock()
+	calls = mock.calls.GetDeviceStatus
+	mock.lockGetDeviceStatus.RUnlock()
+	return calls
+}
+
 // GetStaleDevices calls GetStaleDevicesFunc.
 func (mock *StoreMock) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
 	if mock.GetStaleDevicesFunc == nil {
@@ -745,7 +847,7 @@ func (mock *StoreMock) RemoveAlarmCalls() []struct {
 }
 
 // SetDevice calls SetDeviceFunc.
-func (mock *StoreMock) SetDevice(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location) error {
+func (mock *StoreMock) SetDevice(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
 	if mock.SetDeviceFunc == nil {
 		panic("StoreMock.SetDeviceFunc: method is nil but Store.SetDevice was just called")
 	}
@@ -759,6 +861,7 @@ func (mock *StoreMock) SetDevice(ctx context.Context, deviceID string, active *b
 		Source      *string
 		Tenant      *string
 		Location    *types.Location
+		Interval    *int
 	}{
 		Ctx:         ctx,
 		DeviceID:    deviceID,
@@ -769,11 +872,12 @@ func (mock *StoreMock) SetDevice(ctx context.Context, deviceID string, active *b
 		Source:      source,
 		Tenant:      tenant,
 		Location:    location,
+		Interval:    interval,
 	}
 	mock.lockSetDevice.Lock()
 	mock.calls.SetDevice = append(mock.calls.SetDevice, callInfo)
 	mock.lockSetDevice.Unlock()
-	return mock.SetDeviceFunc(ctx, deviceID, active, name, description, environment, source, tenant, location)
+	return mock.SetDeviceFunc(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
 }
 
 // SetDeviceCalls gets all the calls that were made to SetDevice.
@@ -790,6 +894,7 @@ func (mock *StoreMock) SetDeviceCalls() []struct {
 	Source      *string
 	Tenant      *string
 	Location    *types.Location
+	Interval    *int
 } {
 	var calls []struct {
 		Ctx         context.Context
@@ -801,6 +906,7 @@ func (mock *StoreMock) SetDeviceCalls() []struct {
 		Source      *string
 		Tenant      *string
 		Location    *types.Location
+		Interval    *int
 	}
 	mock.lockSetDevice.RLock()
 	calls = mock.calls.SetDevice
