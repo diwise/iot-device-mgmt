@@ -11,7 +11,6 @@ import (
 
 const DefaultTimespan = 3600
 
-
 type Watchdog interface {
 	Start(context.Context)
 	Stop(context.Context)
