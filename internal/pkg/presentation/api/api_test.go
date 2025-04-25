@@ -107,6 +107,37 @@ func TestGetDeviceHandler(t *testing.T) {
 	is.Equal("33788389279", response.Data.DeviceID)
 }
 
+func TestGetDeviceStatusHandler(t *testing.T) {
+	is, _, _, repo, _, _, mux := testSetup(t)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{
+			Data: []types.Device{
+				{
+					DeviceID: "33788389279",
+				},
+			},
+			Count: 1}, nil
+	}
+
+	repo.GetDeviceStatusFunc = func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+		return types.Collection[types.DeviceStatus]{}, nil
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices/33788389279/status", nil)
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(200, res.StatusCode)
+	is.Equal(1, len(repo.GetDeviceStatusCalls()))
+}
+
 func TestPatchDeviceHandler(t *testing.T) {
 	is, _, _, repo, _, _, mux := testSetup(t)
 
