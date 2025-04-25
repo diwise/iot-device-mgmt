@@ -144,6 +144,25 @@ func (s service) RegisterTopicMessageHandler(ctx context.Context) error {
 }
 
 func (s service) HandleStatusMessage(ctx context.Context, status types.StatusMessage) error {
+	state := types.DeviceState{
+		Online:     true,
+		State:      types.DeviceStateOK,
+		ObservedAt: status.Timestamp,
+	}
+
+	if status.Code != nil {
+		state.State = types.DeviceStateWarning
+	}
+
+	err := s.storage.SetDeviceState(ctx, status.DeviceID, state)
+	if err != nil {
+		return err
+	}
+
+	if status.BatteryLevel == nil && status.DR == nil && status.Frequency == nil && status.LoRaSNR == nil && status.RSSI == nil && status.SpreadingFactor == nil {
+		return nil
+	}
+
 	return s.storage.AddDeviceStatus(ctx, status)
 }
 
@@ -177,10 +196,6 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	}
 
 	return result.Data[0], nil
-}
-
-func (s service) GetWithAlarmID(ctx context.Context, alarmID string, tenants []string) (types.Device, error) {
-	return types.Device{}, fmt.Errorf("not implemented")
 }
 
 func (s service) NewDevice(ctx context.Context, device types.Device) error {

@@ -619,9 +619,6 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		c(condition)
 	}
 
-	args := condition.NamedArgs()
-	where := condition.Where()
-
 	sql := fmt.Sprintf(`
 		WITH latest_status AS (
 			SELECT DISTINCT ON (device_id)
@@ -644,6 +641,12 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			JOIN devices d USING (device_id)
 			WHERE d.deleted = FALSE
 			GROUP BY ddpt.device_id
+		),
+
+		alarms_list AS (
+			SELECT a.device_id, array_agg(a.type) AS alarms
+			FROM device_alarms
+			GROUP BY a.device_id
 		)
 
 		SELECT
@@ -679,6 +682,8 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			tl.tags,
 			types_list.types,
 
+			alarms_list.alarms,
+
 			count(*) OVER () AS count
 
 		FROM devices d
@@ -687,9 +692,11 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		LEFT JOIN latest_status ls ON ls.device_id = d.device_id
 		LEFT JOIN tag_list tl ON tl.device_id = d.device_id
 		LEFT JOIN types_list ON types_list.device_id = d.device_id
-		%s;`, where)
+		LEFT JOIN alarms_list ON alarms_list.device_id = d.device_id
+		%s
+		%s;`, condition.Where(), condition.OffsetLimit())
 
-	rows, err := s.pool.Query(ctx, sql, args)
+	rows, err := s.pool.Query(ctx, sql, condition.NamedArgs())
 	if err != nil {
 		return types.Collection[types.Device]{}, err
 	}
@@ -704,7 +711,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		var active, online *bool
 		var rssi, snr, sf *float64
 		var statusObservedAt, stateObservedAt *time.Time
-		var tagList []string
+		var tagList, alarmsList []string
 		var typesList [][]string
 		var decoder *string
 		var interval, deviceInterval, stateValue, batteryLevel, dr *int
@@ -738,6 +745,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			&statusObservedAt,
 			&tagList,
 			&typesList,
+			&alarmsList,
 			&count,
 		)
 		if err != nil {
@@ -811,6 +819,9 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 					Name: t[1],
 				})
 			}
+		}
+		if len(alarmsList) > 0 {
+			device.Alarms = append(device.Alarms, alarmsList...)
 		}
 
 		devices = append(devices, device)

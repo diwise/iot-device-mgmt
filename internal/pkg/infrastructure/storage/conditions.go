@@ -47,6 +47,17 @@ type Box struct {
 	MaxY float64 // north
 }
 
+func (c Condition) OffsetLimit() string {
+	offsetLimit := ""
+	if c.offset != nil {
+		offsetLimit += "OFFSET @offset "
+	}
+	if c.limit != nil {
+		offsetLimit += "LIMIT @limit "
+	}
+	return offsetLimit
+}
+
 func (c Condition) NamedArgs() pgx.NamedArgs {
 	args := pgx.NamedArgs{}
 
@@ -82,6 +93,12 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.Search != "" {
 		args["search"] = c.Search
+	}
+	if c.offset != nil {
+		args["offset"] = *c.offset
+	}
+	if c.limit != nil {
+		args["limit"] = *c.limit
 	}
 
 	return args
@@ -178,28 +195,7 @@ func WithProfileName(profileName []string) ConditionFunc {
 		return c
 	}
 }
-/*
-func WithDeviceAlarmID(alarmID string) ConditionFunc {
-	return func(c *Condition) *Condition {
-		c.DeviceWithAlarmID = alarmID
-		return c
-	}
-}
 
-func WithAlarmID(alarmID string) ConditionFunc {
-	return func(c *Condition) *Condition {
-		c.AlarmID = alarmID
-		return c
-	}
-}
-
-func WithRefID(refID string) ConditionFunc {
-	return func(c *Condition) *Condition {
-		c.RefID = refID
-		return c
-	}
-}
-*/
 func WithSortBy(sortBy string) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.sortBy = sortBy
