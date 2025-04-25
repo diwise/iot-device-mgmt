@@ -29,6 +29,9 @@ func TestDeviceStatusHandler(t *testing.T) {
 		AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
 			return nil
 		},
+		SetDeviceStateFunc: func(ctx context.Context, deviceID string, state types.DeviceState) error {
+			return nil
+		},
 	}
 
 	msgCtx := messaging.MsgContextMock{

@@ -27,11 +27,8 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s storage.Store) error {
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s storage.Store) error {
 	const apiPrefix string = "/api/v0"
-	const devicesPrefix string = apiPrefix + "/devices"
-	//const alarmsPrefix string = apiPrefix + "/alarms"
-	const adminPrefix string = apiPrefix + "/admin"
 
 	log := logging.GetFromContext(ctx)
 
@@ -40,21 +37,15 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
 
-	devicesMux := http.NewServeMux()
-	devicesMux.HandleFunc("GET /", queryDevicesHandler(log, dm))
-	devicesMux.HandleFunc("GET /{id}", getDeviceHandler(log, dm))
-	devicesMux.HandleFunc("GET /{id}/status", getDeviceStatusHandler(log, dm))
-	devicesMux.HandleFunc("GET /{id}/alarms", getDeviceAlarmsHandler(log, dm))
-	devicesMux.HandleFunc("POST /", createDeviceHandler(log, dm, s))
-	devicesMux.HandleFunc("PUT /{id}", updateDeviceHandler(log, dm))
-	devicesMux.HandleFunc("PATCH /{id}", patchDeviceHandler(log, dm))
-	//devicesMux.HandleFunc("GET /{deviceID}/alarms", getAlarmsHandler(log, alarm))
-	devicesGroup := http.StripPrefix(devicesPrefix, devicesMux)
+	r := http.NewServeMux()
 
-	rootMux.Handle("GET "+devicesPrefix+"/", authenticator(devicesGroup))
-	rootMux.Handle("POST "+devicesPrefix+"/", authenticator(devicesGroup))
-	rootMux.Handle("PUT "+devicesPrefix+"/", authenticator(devicesGroup))
-	rootMux.Handle("PATCH "+devicesPrefix+"/", authenticator(devicesGroup))
+	r.HandleFunc("GET /devices", queryDevicesHandler(log, dm))
+	r.HandleFunc("GET /devices/{id}", getDeviceHandler(log, dm))
+	r.HandleFunc("GET /devices/{id}/status", getDeviceStatusHandler(log, dm))
+	r.HandleFunc("GET /devices/{id}/alarms", getDeviceAlarmsHandler(log, dm))
+	r.HandleFunc("POST /devices", createDeviceHandler(log, dm, s))
+	r.HandleFunc("PUT /devices/{id}", updateDeviceHandler(log, dm))
+	r.HandleFunc("PATCH /devices/{id}", patchDeviceHandler(log, dm))
 
 	/*
 		alarmsMux := http.NewServeMux()
@@ -67,15 +58,18 @@ func RegisterHandlers(ctx context.Context, rootMux *http.ServeMux, policies io.R
 		rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
 	*/
 
-	adminMux := http.NewServeMux()
-	adminMux.HandleFunc("GET /deviceprofiles", queryDeviceProfilesHandler(log, dm))
-	adminMux.HandleFunc("GET /deviceprofiles/{id}", queryDeviceProfilesHandler(log, dm))
-	adminMux.HandleFunc("GET /lwm2mtypes", queryLwm2mTypesHandler(log, dm))
-	adminMux.HandleFunc("GET /lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
-	adminMux.HandleFunc("GET /tenants", queryTenantsHandler())
-	adminGroup := http.StripPrefix(adminPrefix, adminMux)
+	r.HandleFunc("GET /admin/deviceprofiles", queryDeviceProfilesHandler(log, dm))
+	r.HandleFunc("GET /admin/deviceprofiles/{id}", queryDeviceProfilesHandler(log, dm))
+	r.HandleFunc("GET /admin/lwm2mtypes", queryLwm2mTypesHandler(log, dm))
+	r.HandleFunc("GET /admin/lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
+	r.HandleFunc("GET /admin/tenants", queryTenantsHandler())
 
-	rootMux.Handle("GET "+adminPrefix+"/", authenticator(adminGroup))
+	var handler http.Handler = http.StripPrefix(apiPrefix, r)
+
+	mux.Handle("GET /", authenticator(handler))
+	mux.Handle("POST /", authenticator(handler))
+	mux.Handle("PUT /", authenticator(handler))
+	mux.Handle("PATCH /", authenticator(handler))
 
 	return nil
 }

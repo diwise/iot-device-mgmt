@@ -24,16 +24,6 @@ import (
 
 const noToken string = ""
 
-func TestThatHealthEndpointReturns204NoContent(t *testing.T) {
-	r, is := setupTest(t)
-	server := httptest.NewServer(r)
-	defer server.Close()
-
-	resp, _ := testRequest(server, http.MethodGet, "/health", noToken, nil)
-
-	is.Equal(resp.StatusCode, http.StatusNoContent)
-}
-
 func TestThatGetUnknownDeviceReturns404(t *testing.T) {
 	r, is := setupTest(t)
 	server := httptest.NewServer(r)

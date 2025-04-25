@@ -133,3 +133,7 @@ func GetAllowedTenantsFromContext(ctx context.Context) []string {
 
 	return tenants
 }
+
+func WithAllowedTenants(ctx context.Context, tenants []string) context.Context {
+	return context.WithValue(ctx, allowedTenantsCtxKey, tenants)
+}
