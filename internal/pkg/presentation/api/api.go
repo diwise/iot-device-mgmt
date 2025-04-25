@@ -412,6 +412,12 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 			return
 		}
 
+		id := r.PathValue("id")
+		if id != d.DeviceID {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		err = svc.UpdateDevice(ctx, d)
 		if err != nil {
 			logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())

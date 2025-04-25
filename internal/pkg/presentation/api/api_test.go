@@ -140,6 +140,44 @@ func TestPatchDeviceHandler(t *testing.T) {
 	is.Equal(1, len(repo.SetDeviceCalls()))
 }
 
+func TestPutDeviceHandler(t *testing.T) {
+	is, _, _, repo, _, _, mux := testSetup(t)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{
+			Data: []types.Device{
+				{
+					DeviceID: "33788389279",
+				},
+			},
+			Count: 1}, nil
+	}
+	repo.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		return nil
+	}
+
+	body := strings.NewReader(`
+		{ 
+			"deviceID" : "33788389279",
+			"tenant" : "default" 
+		}
+	`)
+
+	req, _ := http.NewRequest(http.MethodPut, server.URL+"/api/v0/devices/33788389279", body)
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(200, res.StatusCode)
+	is.Equal(1, len(repo.CreateOrUpdateDeviceCalls()))
+}
+
 func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messaging.MsgContextMock, *storage.StoreMock, *slog.Logger, context.Context, *http.ServeMux) {
 	is := is.New(t)
 	ctx := context.Background()
