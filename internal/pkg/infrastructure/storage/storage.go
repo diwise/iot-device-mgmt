@@ -82,6 +82,7 @@ type Store interface {
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
@@ -625,6 +626,8 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		c(condition)
 	}
 
+	offsetLimit, offset, limit := condition.OffsetLimit()
+
 	sql := fmt.Sprintf(`
 		WITH latest_status AS (
 			SELECT DISTINCT ON (device_id)
@@ -651,7 +654,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 		alarms_list AS (
 			SELECT a.device_id, array_agg(a.type) AS alarms
-			FROM device_alarms a 
+			FROM device_alarms a
 			GROUP BY a.device_id
 		)
 
@@ -701,7 +704,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		LEFT JOIN alarms_list ON alarms_list.device_id = d.device_id
 		%s
 		%s
-		%s;`, condition.Where(), condition.OrderBy(), condition.OffsetLimit())
+		%s;`, condition.Where(), condition.OrderBy(), offsetLimit)
 
 	args := condition.NamedArgs()
 
@@ -836,17 +839,12 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		devices = append(devices, device)
 	}
 
-	offset := 0
-	if o, ok := args["offset"]; ok {
-		offset = o.(int)
-	}
-
 	return types.Collection[types.Device]{
 		Data:       devices,
 		Count:      uint64(len(devices)),
 		TotalCount: count,
 		Offset:     uint64(offset),
-		Limit:      uint64(len(devices)),
+		Limit:      uint64(limit),
 	}, nil
 }
 
@@ -856,9 +854,9 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (typ
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr 
-		FROM device_status 
-		WHERE device_id=@device_id 
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
+		FROM device_status
+		WHERE device_id=@device_id
 		ORDER BY observed_at ASC`, args)
 	if err != nil {
 		return types.Collection[types.DeviceStatus]{}, err
@@ -944,8 +942,8 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 	}
 
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO device_alarms (device_id, type, description, observed_at, severity) 
-		VALUES (@device_id, @type, @description, @observed_at, @severity) 
+		INSERT INTO device_alarms (device_id, type, description, observed_at, severity)
+		VALUES (@device_id, @type, @description, @observed_at, @severity)
 		ON CONFLICT (device_id, type) DO UPDATE
 			SET
 				description=EXCLUDED.description,
@@ -962,7 +960,7 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT device_id, type, description, observed_at, severity 
+		SELECT device_id, type, description, observed_at, severity
 		FROM device_alarms
 		WHERE device_id=@device_id
 		ORDER BY observed_at ASC`, args)
@@ -1067,4 +1065,76 @@ func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmTyp
 	_, err := s.pool.Exec(ctx, `DELETE FROM device_alarms WHERE device_id=@device_id AND type=@alarm_type`, args)
 
 	return err
+}
+
+func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
+	condition := &Condition{}
+	for _, c := range conditions {
+		c(condition)
+	}
+
+	args := condition.NamedArgs()
+	offsetLimit, offset, limit := condition.OffsetLimit()
+
+	if offsetLimit == "" {
+		offsetLimit = "OFFSET 0 LIMIT 10 "
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT d."time",d.urn,d.n,d.v,d.vs,d.vb,d.unit,dpt.name, count(*) OVER () AS count
+		FROM events_measurements d
+		LEFT JOIN device_profiles_types dpt ON d.urn=dpt.device_profile_type_id
+		%s
+		ORDER BY "time" ASC
+		%s`, condition.Where(), offsetLimit)
+
+	rows, err := s.pool.Query(ctx, sql, args)
+	if err != nil {
+		return types.Collection[types.Measurement]{}, err
+	}
+	defer rows.Close()
+
+	measurements := []types.Measurement{}
+	var totalCount int64
+	var ts time.Time
+	var urn, n string
+	var v *float64
+	var vs, unit, name *string
+	var vb *bool
+
+	for rows.Next() {
+		err := rows.Scan(&ts, &urn, &n, &v, &vs, &vb, &unit, &name, &totalCount)
+		if err != nil {
+			return types.Collection[types.Measurement]{}, err
+		}
+
+		m := types.Measurement{
+			Urn:       urn,
+			Unit:      unit,
+			Timestamp: ts,
+		}
+
+		if name != nil {
+			n := strings.ToLower(*name)
+			m.Name = &n
+		}
+
+		if v != nil {
+			m.Value = *v
+		} else if vs != nil {
+			m.Value = *vs
+		} else if vb != nil {
+			m.Value = *vb
+		}
+
+		measurements = append(measurements, m)
+	}
+
+	return types.Collection[types.Measurement]{
+		Data:       measurements,
+		Count:      uint64(len(measurements)),
+		TotalCount: uint64(totalCount),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
+	}, nil
 }

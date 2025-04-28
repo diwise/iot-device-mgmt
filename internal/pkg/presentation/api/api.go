@@ -43,6 +43,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	r.HandleFunc("GET /devices/{id}", getDeviceHandler(log, dm))
 	r.HandleFunc("GET /devices/{id}/status", getDeviceStatusHandler(log, dm))
 	r.HandleFunc("GET /devices/{id}/alarms", getDeviceAlarmsHandler(log, dm))
+	r.HandleFunc("GET /devices/{id}/measurements", getDeviceMeasurementsHandler(log, dm))
 	r.HandleFunc("POST /devices", createDeviceHandler(log, dm, s))
 	r.HandleFunc("PUT /devices/{id}", updateDeviceHandler(log, dm))
 	r.HandleFunc("PATCH /devices/{id}", patchDeviceHandler(log, dm))
@@ -296,6 +297,52 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 			Meta: &meta{
 				TotalRecords: alarms.TotalCount,
 				Count:        alarms.Count,
+			},
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-device-status")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		deviceID := r.PathValue("id")
+		if deviceID == "" {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
+
+		result, err := svc.GetDeviceMeasurements(ctx, deviceID, r.URL.Query(), allowedTenants)
+		if err != nil {
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			logger.Error("could not fetch device details", slog.String("device_id", deviceID), "err", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		response := ApiResponse{
+			Data: result.Data,
+			Meta: &meta{
+				TotalRecords: result.TotalCount,
+				Offset:       &result.Offset,
+				Limit:        &result.Limit,
+				Count:        result.Count,
 			},
 		}
 

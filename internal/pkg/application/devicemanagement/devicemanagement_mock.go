@@ -31,6 +31,9 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error) {
 //				panic("mock out the GetDeviceAlarms method")
 //			},
+//			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
+//				panic("mock out the GetDeviceMeasurements method")
+//			},
 //			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
 //				panic("mock out the GetDeviceProfiles method")
 //			},
@@ -82,6 +85,9 @@ type DeviceManagementMock struct {
 
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
 	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error)
+
+	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
+	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 
 	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
 	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
@@ -145,6 +151,17 @@ type DeviceManagementMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
+		// GetDeviceMeasurements holds details about calls to the GetDeviceMeasurements method.
+		GetDeviceMeasurements []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Params is the params argument value.
+			Params map[string][]string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -238,6 +255,7 @@ type DeviceManagementMock struct {
 	lockGetByDeviceID               sync.RWMutex
 	lockGetBySensorID               sync.RWMutex
 	lockGetDeviceAlarms             sync.RWMutex
+	lockGetDeviceMeasurements       sync.RWMutex
 	lockGetDeviceProfiles           sync.RWMutex
 	lockGetDeviceStatus             sync.RWMutex
 	lockGetLwm2mTypes               sync.RWMutex
@@ -395,6 +413,50 @@ func (mock *DeviceManagementMock) GetDeviceAlarmsCalls() []struct {
 	mock.lockGetDeviceAlarms.RLock()
 	calls = mock.calls.GetDeviceAlarms
 	mock.lockGetDeviceAlarms.RUnlock()
+	return calls
+}
+
+// GetDeviceMeasurements calls GetDeviceMeasurementsFunc.
+func (mock *DeviceManagementMock) GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
+	if mock.GetDeviceMeasurementsFunc == nil {
+		panic("DeviceManagementMock.GetDeviceMeasurementsFunc: method is nil but DeviceManagement.GetDeviceMeasurements was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		Params   map[string][]string
+		Tenants  []string
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		Params:   params,
+		Tenants:  tenants,
+	}
+	mock.lockGetDeviceMeasurements.Lock()
+	mock.calls.GetDeviceMeasurements = append(mock.calls.GetDeviceMeasurements, callInfo)
+	mock.lockGetDeviceMeasurements.Unlock()
+	return mock.GetDeviceMeasurementsFunc(ctx, deviceID, params, tenants)
+}
+
+// GetDeviceMeasurementsCalls gets all the calls that were made to GetDeviceMeasurements.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.GetDeviceMeasurementsCalls())
+func (mock *DeviceManagementMock) GetDeviceMeasurementsCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	Params   map[string][]string
+	Tenants  []string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+		Params   map[string][]string
+		Tenants  []string
+	}
+	mock.lockGetDeviceMeasurements.RLock()
+	calls = mock.calls.GetDeviceMeasurements
+	mock.lockGetDeviceMeasurements.RUnlock()
 	return calls
 }
 

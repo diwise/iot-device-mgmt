@@ -123,3 +123,11 @@ type StatusMessage struct {
 	Tenant    string    `json:"tenant"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+type Measurement struct {
+	Urn       string    `json:"urn,omitzero"`
+	Name      *string   `json:"name,omitzero"`
+	Value     any       `json:"value,omitzero"`
+	Unit      *string   `json:"unit,omitzero"`
+	Timestamp time.Time `json:"timestamp"`
+}

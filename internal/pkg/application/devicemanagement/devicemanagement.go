@@ -8,9 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -50,6 +48,8 @@ type DeviceManagement interface {
 	// -----------------
 	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
 	Config() *DeviceManagementConfig
+
+	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 
 	RegisterTopicMessageHandler(ctx context.Context) error
 }
@@ -97,6 +97,7 @@ type DeviceStorage interface {
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
 }
 type deviceStorageImpl struct {
 	s storage.Store
@@ -131,6 +132,9 @@ func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string)
 }
 func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
 	return d.s.GetDeviceAlarms(ctx, deviceID)
+}
+func (d deviceStorageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error) {
+	return d.s.GetDeviceMeasurements(ctx, deviceID, conditions...)
 }
 
 func NewDeviceStorage(s storage.Store) DeviceStorage {
@@ -382,73 +386,8 @@ func (s service) UpdateState(ctx context.Context, deviceID, tenant string, devic
 }
 
 func (s service) Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
-	log := logging.GetFromContext(ctx)
-
-	conditions := make([]storage.ConditionFunc, 0)
-
+	conditions := storage.ParseConditions(ctx, params)
 	conditions = append(conditions, storage.WithTenants(tenants))
-
-	for k, v := range params {
-		switch strings.ToLower(k) {
-		case "deveui":
-			conditions = append(conditions, storage.WithSensorID(v[0]))
-		case "device_id":
-			conditions = append(conditions, storage.WithDeviceID(v[0]))
-		case "sensor_id":
-			conditions = append(conditions, storage.WithSensorID(v[0]))
-		case "type":
-			conditions = append(conditions, storage.WithTypes(v))
-		case "types":
-			conditions = append(conditions, storage.WithTypes(v))
-		case "active":
-			active, _ := strconv.ParseBool(v[0])
-			conditions = append(conditions, storage.WithActive(active))
-		case "online":
-			online, _ := strconv.ParseBool(v[0])
-			conditions = append(conditions, storage.WithOnline(online))
-		case "limit":
-			limit, _ := strconv.Atoi(v[0])
-			conditions = append(conditions, storage.WithLimit(limit))
-		case "offset":
-			offset, _ := strconv.Atoi(v[0])
-			conditions = append(conditions, storage.WithOffset(offset))
-		case "sortby":
-			conditions = append(conditions, storage.WithSortBy(v[0]))
-		case "sortorder":
-			conditions = append(conditions, storage.WithSortDesc(strings.EqualFold(v[0], "desc")))
-		case "bounds":
-			coords := extractCoordsFromQuery(v[0])
-			conditions = append(conditions, storage.WithBounds(coords.MaxLat, coords.MinLat, coords.MaxLon, coords.MinLon))
-		case "profilename":
-			conditions = append(conditions, storage.WithProfileName(v))
-		case "search":
-			conditions = append(conditions, storage.WithSearch(v[0]))
-		case "tenant":
-			conditions = append(conditions, storage.WithTenant(v[0]))
-		case "lastseen":
-			log.Debug("last seen", "value", v[0])
-
-			switch len(v[0]) {
-			case len("2006-01-02T15:04"):
-				t, err := time.Parse("2006-01-02T15:04", v[0])
-				if err == nil {
-					conditions = append(conditions, storage.WithLastSeen(t))
-				}
-			case len("2006-01-02T15:04:05"):
-				t, err := time.Parse("2006-01-02T15:04:05", v[0])
-				if err == nil {
-					conditions = append(conditions, storage.WithLastSeen(t))
-				}
-			case len("2006-01-02T15:04Z"):
-				t, err := time.Parse("2006-01-02T15:04Z", v[0])
-				if err == nil {
-					conditions = append(conditions, storage.WithLastSeen(t))
-				}
-			}
-		default:
-			log.Debug("unknown query parameter", "param", k, "value", v[0])
-		}
-	}
 
 	return s.storage.Query(ctx, conditions...)
 }
@@ -537,27 +476,13 @@ func (s service) GetDeviceProfiles(ctx context.Context, name ...string) (types.C
 	return collection, nil
 }
 
-func extractCoordsFromQuery(bounds string) types.Bounds {
-	trimmed := strings.Trim(bounds, "[]")
+func (s service) GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
+	conditions := storage.ParseConditions(ctx, params)
 
-	pairs := strings.Split(trimmed, ";")
+	conditions = append(conditions, storage.WithDeviceID(deviceID))
+	conditions = append(conditions, storage.WithTenants(tenants))
 
-	coords1 := strings.Split(pairs[0], ",")
-	coords2 := strings.Split(pairs[1], ",")
-
-	seLat, _ := strconv.ParseFloat(coords1[0], 64)
-	nwLon, _ := strconv.ParseFloat(coords1[1], 64)
-	nwLat, _ := strconv.ParseFloat(coords2[0], 64)
-	seLon, _ := strconv.ParseFloat(coords2[1], 64)
-
-	coords := types.Bounds{
-		MinLat: seLat,
-		MinLon: nwLon,
-		MaxLat: nwLat,
-		MaxLon: seLon,
-	}
-
-	return coords
+	return s.storage.GetDeviceMeasurements(ctx, deviceID, conditions...)
 }
 
 func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler {

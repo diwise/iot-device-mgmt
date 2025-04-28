@@ -1,12 +1,16 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -28,6 +32,9 @@ type Condition struct {
 	Search string
 
 	Bounds *Box
+
+	Name string
+	Urn  string
 
 	IncludeDeleted bool
 
@@ -60,15 +67,19 @@ func (c Condition) OrderBy() string {
 	return orderBy
 }
 
-func (c Condition) OffsetLimit() string {
+func (c Condition) OffsetLimit() (string, int, int) {
 	offsetLimit := ""
+	offset := 0
+	limit := 0
 	if c.offset != nil {
 		offsetLimit += "OFFSET @offset "
+		offset = *c.offset
 	}
 	if c.limit != nil {
 		offsetLimit += "LIMIT @limit "
+		limit = *c.limit
 	}
-	return offsetLimit
+	return offsetLimit, offset, limit
 }
 
 func (c Condition) NamedArgs() pgx.NamedArgs {
@@ -109,6 +120,12 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.limit != nil {
 		args["limit"] = *c.limit
+	}
+	if c.Name != "" {
+		args["name"] = c.Name
+	}
+	if c.Urn != "" {
+		args["urn"] = c.Urn
 	}
 
 	return args
@@ -165,6 +182,14 @@ func (c Condition) Where() string {
 
 	if !c.IncludeDeleted {
 		where = append(where, "d.deleted=FALSE")
+	}
+
+	if c.Name != "" {
+		where = append(where, "d.name=@name")
+	}
+
+	if c.Urn != "" {
+		where = append(where, "d.urn=@urn")
 	}
 
 	if len(where) == 0 {
@@ -316,6 +341,20 @@ func WithLastSeen(ts time.Time) ConditionFunc {
 	}
 }
 
+func WithName(n string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.Name = n
+		return c
+	}
+}
+
+func WithUrn(urn string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.Urn = urn
+		return c
+	}
+}
+
 func unique(s []string) []string {
 	keys := make(map[string]bool)
 	list := []string{}
@@ -326,4 +365,100 @@ func unique(s []string) []string {
 		}
 	}
 	return list
+}
+
+func ParseConditions(ctx context.Context, params map[string][]string) []ConditionFunc {
+	log := logging.GetFromContext(ctx)
+
+	conditions := make([]ConditionFunc, 0)
+
+	for k, v := range params {
+		switch strings.ToLower(k) {
+		case "deveui":
+			conditions = append(conditions, WithSensorID(v[0]))
+		case "device_id":
+			conditions = append(conditions, WithDeviceID(v[0]))
+		case "sensor_id":
+			conditions = append(conditions, WithSensorID(v[0]))
+		case "type":
+			conditions = append(conditions, WithTypes(v))
+		case "types":
+			conditions = append(conditions, WithTypes(v))
+		case "active":
+			active, _ := strconv.ParseBool(v[0])
+			conditions = append(conditions, WithActive(active))
+		case "online":
+			online, _ := strconv.ParseBool(v[0])
+			conditions = append(conditions, WithOnline(online))
+		case "limit":
+			limit, _ := strconv.Atoi(v[0])
+			conditions = append(conditions, WithLimit(limit))
+		case "offset":
+			offset, _ := strconv.Atoi(v[0])
+			conditions = append(conditions, WithOffset(offset))
+		case "sortby":
+			conditions = append(conditions, WithSortBy(v[0]))
+		case "sortorder":
+			conditions = append(conditions, WithSortDesc(strings.EqualFold(v[0], "desc")))
+		case "bounds":
+			coords := extractCoordsFromQuery(v[0])
+			conditions = append(conditions, WithBounds(coords.MaxLat, coords.MinLat, coords.MaxLon, coords.MinLon))
+		case "profilename":
+			conditions = append(conditions, WithProfileName(v))
+		case "search":
+			conditions = append(conditions, WithSearch(v[0]))
+		case "tenant":
+			conditions = append(conditions, WithTenant(v[0]))
+		case "name":
+			conditions = append(conditions, WithName(v[0]))
+		case "urn":
+			conditions = append(conditions, WithUrn(v[0]))
+		case "lastseen":
+			log.Debug("last seen", "value", v[0])
+
+			switch len(v[0]) {
+			case len("2006-01-02T15:04"):
+				t, err := time.Parse("2006-01-02T15:04", v[0])
+				if err == nil {
+					conditions = append(conditions, WithLastSeen(t))
+				}
+			case len("2006-01-02T15:04:05"):
+				t, err := time.Parse("2006-01-02T15:04:05", v[0])
+				if err == nil {
+					conditions = append(conditions, WithLastSeen(t))
+				}
+			case len("2006-01-02T15:04Z"):
+				t, err := time.Parse("2006-01-02T15:04Z", v[0])
+				if err == nil {
+					conditions = append(conditions, WithLastSeen(t))
+				}
+			}
+		default:
+			log.Debug("unknown query parameter", "param", k, "value", v[0])
+		}
+	}
+	return conditions
+}
+
+func extractCoordsFromQuery(bounds string) types.Bounds {
+	trimmed := strings.Trim(bounds, "[]")
+
+	pairs := strings.Split(trimmed, ";")
+
+	coords1 := strings.Split(pairs[0], ",")
+	coords2 := strings.Split(pairs[1], ",")
+
+	seLat, _ := strconv.ParseFloat(coords1[0], 64)
+	nwLon, _ := strconv.ParseFloat(coords1[1], 64)
+	nwLat, _ := strconv.ParseFloat(coords2[0], 64)
+	seLon, _ := strconv.ParseFloat(coords2[1], 64)
+
+	coords := types.Bounds{
+		MinLat: seLat,
+		MinLon: nwLon,
+		MaxLat: nwLat,
+		MaxLon: seLon,
+	}
+
+	return coords
 }
