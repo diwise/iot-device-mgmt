@@ -125,6 +125,7 @@ type StatusMessage struct {
 }
 
 type Measurement struct {
+	ID        string    `json:"id,omitzero"`
 	Urn       string    `json:"urn,omitzero"`
 	Name      *string   `json:"name,omitzero"`
 	Value     any       `json:"value,omitzero"`

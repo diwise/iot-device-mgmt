@@ -67,10 +67,18 @@ func (c Condition) OrderBy() string {
 	return orderBy
 }
 
-func (c Condition) OffsetLimit() (string, int, int) {
+func (c Condition) OffsetLimit(i ...int) (string, int, int) {
 	offsetLimit := ""
 	offset := 0
 	limit := 0
+
+	if len(i) > 0 {
+		offset = i[0]
+		if len(i) > 1 {
+			limit = i[1]
+		}
+	}
+
 	if c.offset != nil {
 		offsetLimit += "OFFSET @offset "
 		offset = *c.offset

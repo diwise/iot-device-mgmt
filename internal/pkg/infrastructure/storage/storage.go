@@ -626,7 +626,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		c(condition)
 	}
 
-	offsetLimit, offset, limit := condition.OffsetLimit()
+	offsetLimit, offset, limit := condition.OffsetLimit(0, 10)
 
 	sql := fmt.Sprintf(`
 		WITH latest_status AS (
@@ -857,7 +857,8 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (typ
 		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
 		FROM device_status
 		WHERE device_id=@device_id
-		ORDER BY observed_at ASC`, args)
+		ORDER BY observed_at ASC
+		OFFSET 0 LIMIT 100`, args)
 	if err != nil {
 		return types.Collection[types.DeviceStatus]{}, err
 	}
@@ -1068,6 +1069,10 @@ func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmTyp
 }
 
 func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
+
+	// HACK: to remove where clause for non existing deleted flag
+	conditions = append(conditions, WithDeleted())
+
 	condition := &Condition{}
 	for _, c := range conditions {
 		c(condition)
@@ -1081,11 +1086,11 @@ func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string
 	}
 
 	sql := fmt.Sprintf(`
-		SELECT d."time",d.urn,d.n,d.v,d.vs,d.vb,d.unit,dpt.name, count(*) OVER () AS count
+		SELECT d."time",d.id,d.urn,d.n,d.v,d.vs,d.vb,d.unit, count(*) OVER () AS count
 		FROM events_measurements d
-		LEFT JOIN device_profiles_types dpt ON d.urn=dpt.device_profile_type_id
+		-- LEFT JOIN device_profiles_types dpt ON d.urn=dpt.device_profile_type_id
 		%s
-		ORDER BY "time" ASC
+		ORDER BY d."time" DESC
 		%s`, condition.Where(), offsetLimit)
 
 	rows, err := s.pool.Query(ctx, sql, args)
@@ -1097,28 +1102,29 @@ func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string
 	measurements := []types.Measurement{}
 	var totalCount int64
 	var ts time.Time
-	var urn, n string
+	var id, urn, n string
 	var v *float64
-	var vs, unit, name *string
+	var vs, unit *string
 	var vb *bool
 
 	for rows.Next() {
-		err := rows.Scan(&ts, &urn, &n, &v, &vs, &vb, &unit, &name, &totalCount)
+		err := rows.Scan(&ts, &id, &urn, &n, &v, &vs, &vb, &unit, &totalCount)
 		if err != nil {
 			return types.Collection[types.Measurement]{}, err
 		}
 
 		m := types.Measurement{
-			Urn:       urn,
+			ID: strings.Replace(id, deviceID, "", 1),
+			//Urn:       urn,
 			Unit:      unit,
-			Timestamp: ts,
+			Timestamp: ts.UTC(),
 		}
-
-		if name != nil {
-			n := strings.ToLower(*name)
-			m.Name = &n
-		}
-
+		/*
+			if name != nil {
+				n := strings.ToLower(*name)
+				m.Name = &n
+			}
+		*/
 		if v != nil {
 			m.Value = *v
 		} else if vs != nil {
