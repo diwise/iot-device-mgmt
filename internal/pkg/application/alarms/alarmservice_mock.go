@@ -22,6 +22,9 @@ var _ AlarmService = &AlarmServiceMock{}
 //			AddFunc: func(ctx context.Context, deviceID string, alarm types.Alarm) error {
 //				panic("mock out the Add method")
 //			},
+//			GetAlarmsFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+//				panic("mock out the GetAlarms method")
+//			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
 //				panic("mock out the GetStaleDevices method")
 //			},
@@ -40,6 +43,9 @@ var _ AlarmService = &AlarmServiceMock{}
 type AlarmServiceMock struct {
 	// AddFunc mocks the Add method.
 	AddFunc func(ctx context.Context, deviceID string, alarm types.Alarm) error
+
+	// GetAlarmsFunc mocks the GetAlarms method.
+	GetAlarmsFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error)
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
@@ -60,6 +66,15 @@ type AlarmServiceMock struct {
 			DeviceID string
 			// Alarm is the alarm argument value.
 			Alarm types.Alarm
+		}
+		// GetAlarms holds details about calls to the GetAlarms method.
+		GetAlarms []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Params is the params argument value.
+			Params map[string][]string
+			// Tenants is the tenants argument value.
+			Tenants []string
 		}
 		// GetStaleDevices holds details about calls to the GetStaleDevices method.
 		GetStaleDevices []struct {
@@ -82,6 +97,7 @@ type AlarmServiceMock struct {
 		}
 	}
 	lockAdd                         sync.RWMutex
+	lockGetAlarms                   sync.RWMutex
 	lockGetStaleDevices             sync.RWMutex
 	lockRegisterTopicMessageHandler sync.RWMutex
 	lockRemove                      sync.RWMutex
@@ -124,6 +140,46 @@ func (mock *AlarmServiceMock) AddCalls() []struct {
 	mock.lockAdd.RLock()
 	calls = mock.calls.Add
 	mock.lockAdd.RUnlock()
+	return calls
+}
+
+// GetAlarms calls GetAlarmsFunc.
+func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+	if mock.GetAlarmsFunc == nil {
+		panic("AlarmServiceMock.GetAlarmsFunc: method is nil but AlarmService.GetAlarms was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Params  map[string][]string
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Params:  params,
+		Tenants: tenants,
+	}
+	mock.lockGetAlarms.Lock()
+	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
+	mock.lockGetAlarms.Unlock()
+	return mock.GetAlarmsFunc(ctx, params, tenants)
+}
+
+// GetAlarmsCalls gets all the calls that were made to GetAlarms.
+// Check the length with:
+//
+//	len(mockedAlarmService.GetAlarmsCalls())
+func (mock *AlarmServiceMock) GetAlarmsCalls() []struct {
+	Ctx     context.Context
+	Params  map[string][]string
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Params  map[string][]string
+		Tenants []string
+	}
+	mock.lockGetAlarms.RLock()
+	calls = mock.calls.GetAlarms
+	mock.lockGetAlarms.RUnlock()
 	return calls
 }
 

@@ -43,8 +43,14 @@ var _ Store = &StoreMock{}
 //			CreateTagFunc: func(ctx context.Context, t types.Tag) error {
 //				panic("mock out the CreateTag method")
 //			},
+//			GetAlarmsFunc: func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error) {
+//				panic("mock out the GetAlarms method")
+//			},
 //			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
 //				panic("mock out the GetDeviceAlarms method")
+//			},
+//			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+//				panic("mock out the GetDeviceBySensorID method")
 //			},
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
@@ -110,8 +116,14 @@ type StoreMock struct {
 	// CreateTagFunc mocks the CreateTag method.
 	CreateTagFunc func(ctx context.Context, t types.Tag) error
 
+	// GetAlarmsFunc mocks the GetAlarms method.
+	GetAlarmsFunc func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error)
+
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
 	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+
+	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
+	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
@@ -204,12 +216,26 @@ type StoreMock struct {
 			// T is the t argument value.
 			T types.Tag
 		}
+		// GetAlarms holds details about calls to the GetAlarms method.
+		GetAlarms []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Conditions is the conditions argument value.
+			Conditions []ConditionFunc
+		}
 		// GetDeviceAlarms holds details about calls to the GetDeviceAlarms method.
 		GetDeviceAlarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
+		}
+		// GetDeviceBySensorID holds details about calls to the GetDeviceBySensorID method.
+		GetDeviceBySensorID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SensorID is the sensorID argument value.
+			SensorID string
 		}
 		// GetDeviceMeasurements holds details about calls to the GetDeviceMeasurements method.
 		GetDeviceMeasurements []struct {
@@ -317,7 +343,9 @@ type StoreMock struct {
 	lockCreateDeviceProfileType sync.RWMutex
 	lockCreateOrUpdateDevice    sync.RWMutex
 	lockCreateTag               sync.RWMutex
+	lockGetAlarms               sync.RWMutex
 	lockGetDeviceAlarms         sync.RWMutex
+	lockGetDeviceBySensorID     sync.RWMutex
 	lockGetDeviceMeasurements   sync.RWMutex
 	lockGetDeviceStatus         sync.RWMutex
 	lockGetStaleDevices         sync.RWMutex
@@ -618,6 +646,42 @@ func (mock *StoreMock) CreateTagCalls() []struct {
 	return calls
 }
 
+// GetAlarms calls GetAlarmsFunc.
+func (mock *StoreMock) GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error) {
+	if mock.GetAlarmsFunc == nil {
+		panic("StoreMock.GetAlarmsFunc: method is nil but Store.GetAlarms was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Conditions []ConditionFunc
+	}{
+		Ctx:        ctx,
+		Conditions: conditions,
+	}
+	mock.lockGetAlarms.Lock()
+	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
+	mock.lockGetAlarms.Unlock()
+	return mock.GetAlarmsFunc(ctx, conditions...)
+}
+
+// GetAlarmsCalls gets all the calls that were made to GetAlarms.
+// Check the length with:
+//
+//	len(mockedStore.GetAlarmsCalls())
+func (mock *StoreMock) GetAlarmsCalls() []struct {
+	Ctx        context.Context
+	Conditions []ConditionFunc
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Conditions []ConditionFunc
+	}
+	mock.lockGetAlarms.RLock()
+	calls = mock.calls.GetAlarms
+	mock.lockGetAlarms.RUnlock()
+	return calls
+}
+
 // GetDeviceAlarms calls GetDeviceAlarmsFunc.
 func (mock *StoreMock) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
 	if mock.GetDeviceAlarmsFunc == nil {
@@ -651,6 +715,42 @@ func (mock *StoreMock) GetDeviceAlarmsCalls() []struct {
 	mock.lockGetDeviceAlarms.RLock()
 	calls = mock.calls.GetDeviceAlarms
 	mock.lockGetDeviceAlarms.RUnlock()
+	return calls
+}
+
+// GetDeviceBySensorID calls GetDeviceBySensorIDFunc.
+func (mock *StoreMock) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+	if mock.GetDeviceBySensorIDFunc == nil {
+		panic("StoreMock.GetDeviceBySensorIDFunc: method is nil but Store.GetDeviceBySensorID was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+	}{
+		Ctx:      ctx,
+		SensorID: sensorID,
+	}
+	mock.lockGetDeviceBySensorID.Lock()
+	mock.calls.GetDeviceBySensorID = append(mock.calls.GetDeviceBySensorID, callInfo)
+	mock.lockGetDeviceBySensorID.Unlock()
+	return mock.GetDeviceBySensorIDFunc(ctx, sensorID)
+}
+
+// GetDeviceBySensorIDCalls gets all the calls that were made to GetDeviceBySensorID.
+// Check the length with:
+//
+//	len(mockedStore.GetDeviceBySensorIDCalls())
+func (mock *StoreMock) GetDeviceBySensorIDCalls() []struct {
+	Ctx      context.Context
+	SensorID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		SensorID string
+	}
+	mock.lockGetDeviceBySensorID.RLock()
+	calls = mock.calls.GetDeviceBySensorID
+	mock.lockGetDeviceBySensorID.RUnlock()
 	return calls
 }
 

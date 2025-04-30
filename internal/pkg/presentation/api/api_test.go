@@ -11,12 +11,14 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
+	"github.com/google/uuid"
 	"github.com/matryer/is"
 )
 
@@ -207,6 +209,51 @@ func TestPutDeviceHandler(t *testing.T) {
 
 	is.Equal(200, res.StatusCode)
 	is.Equal(1, len(repo.CreateOrUpdateDeviceCalls()))
+}
+
+func TestGetAlarmsHandler(t *testing.T) {
+	is, _, _, repo, _, _, mux := testSetup(t)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	deviceID := uuid.NewString()
+
+	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
+		return types.Collection[types.Alarm]{
+			Data: []types.Alarm{
+				{
+					DeviceID:    deviceID,
+					AlarmType:   alarms.AlarmDeviceNotObserved,
+					Description: "",
+					ObservedAt:  time.Now().UTC(),
+					Severity:    types.AlarmSeverityLow,
+				},
+			},
+			Count:      1,
+			Offset:     0,
+			Limit:      1,
+			TotalCount: 1,
+		}, nil
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/alarms", nil)
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(200, res.StatusCode)
+
+	response := struct {
+		Data []types.Alarm
+	}{}
+	b, _ := io.ReadAll(res.Body)
+	json.Unmarshal(b, &response)
+
+	is.Equal(response.Data[0].DeviceID, deviceID)
 }
 
 func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messaging.MsgContextMock, *storage.StoreMock, *slog.Logger, context.Context, *http.ServeMux) {

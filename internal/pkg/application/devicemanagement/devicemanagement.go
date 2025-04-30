@@ -98,6 +98,7 @@ type DeviceStorage interface {
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
+	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
 }
 type deviceStorageImpl struct {
 	s storage.Store
@@ -135,6 +136,9 @@ func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string)
 }
 func (d deviceStorageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error) {
 	return d.s.GetDeviceMeasurements(ctx, deviceID, conditions...)
+}
+func (d deviceStorageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+	return d.s.GetDeviceBySensorID(ctx, sensorID)
 }
 
 func NewDeviceStorage(s storage.Store) DeviceStorage {
@@ -181,19 +185,14 @@ func (s service) HandleStatusMessage(ctx context.Context, status types.StatusMes
 }
 
 func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
-	result, err := s.storage.Query(ctx, storage.WithSensorID(sensorID), storage.WithTenants(tenants))
+	d, err := s.storage.GetDeviceBySensorID(ctx, sensorID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoRows) {
 			return types.Device{}, ErrDeviceNotFound
 		}
 		return types.Device{}, err
 	}
-
-	if result.Count != 1 {
-		return types.Device{}, ErrDeviceNotFound
-	}
-
-	return result.Data[0], nil
+	return d, nil
 }
 
 func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
@@ -493,7 +492,7 @@ func NewDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler 
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
 
-		log.Debug("received device status", "service", "devicemanagement", "body", string(itm.Body()))
+		//log.Debug("received device status", "service", "devicemanagement", "body", string(itm.Body()))
 
 		m := types.StatusMessage{}
 		err = json.Unmarshal(itm.Body(), &m)

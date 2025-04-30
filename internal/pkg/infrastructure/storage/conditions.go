@@ -70,7 +70,7 @@ func (c Condition) OrderBy() string {
 func (c Condition) OffsetLimit(i ...int) (string, int, int) {
 	offsetLimit := ""
 	offset := 0
-	limit := 0
+	limit := 10
 
 	if len(i) > 0 {
 		offset = i[0]
@@ -82,11 +82,17 @@ func (c Condition) OffsetLimit(i ...int) (string, int, int) {
 	if c.offset != nil {
 		offsetLimit += "OFFSET @offset "
 		offset = *c.offset
+	} else {
+		offsetLimit += fmt.Sprintf("OFFSET %d ", offset)
 	}
+
 	if c.limit != nil {
 		offsetLimit += "LIMIT @limit "
 		limit = *c.limit
+	} else {
+		offsetLimit += fmt.Sprintf("LIMIT %d ", limit)
 	}
+
 	return offsetLimit, offset, limit
 }
 
@@ -107,6 +113,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.Active != nil {
 		args["active"] = *c.Active
+	}
+	if c.Online != nil {
+		args["online"] = *c.Online
 	}
 	if len(c.Types) == 1 {
 		args["profile"] = c.Types[0]

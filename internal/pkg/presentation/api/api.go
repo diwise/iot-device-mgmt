@@ -48,6 +48,8 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	r.HandleFunc("PUT /devices/{id}", updateDeviceHandler(log, dm))
 	r.HandleFunc("PATCH /devices/{id}", patchDeviceHandler(log, dm))
 
+	r.HandleFunc("GET /alarms", getAlarmsHandler(log, alarm))
+
 	/*
 		alarmsMux := http.NewServeMux()
 		alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
@@ -634,6 +636,40 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 				Meta:  meta,
 				Links: createLinks(r.URL, meta),
 			}
+		}
+
+		w.Header().Add("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(response.Byte())
+	}
+}
+
+func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var err error
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		ctx, span := tracer.Start(r.Context(), "get-alarms")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		result, err := svc.GetAlarms(ctx, r.URL.Query(), allowedTenants)
+		if err != nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+
+		meta := &meta{
+			TotalRecords: result.TotalCount,
+			Offset:       &result.Offset,
+			Limit:        &result.Limit,
+			Count:        result.Count,
+		}
+		response := ApiResponse{
+			Data:  result.Data,
+			Meta:  meta,
+			Links: createLinks(r.URL, meta),
 		}
 
 		w.Header().Add("Content-Type", "application/json")

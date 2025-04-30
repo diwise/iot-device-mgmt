@@ -5,6 +5,7 @@ package alarms
 
 import (
 	"context"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
@@ -22,6 +23,9 @@ var _ AlarmStorage = &AlarmStorageMock{}
 //			AddAlarmFunc: func(ctx context.Context, deviceID string, a types.Alarm) error {
 //				panic("mock out the AddAlarm method")
 //			},
+//			GetAlarmsFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
+//				panic("mock out the GetAlarms method")
+//			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
 //				panic("mock out the GetStaleDevices method")
 //			},
@@ -37,6 +41,9 @@ var _ AlarmStorage = &AlarmStorageMock{}
 type AlarmStorageMock struct {
 	// AddAlarmFunc mocks the AddAlarm method.
 	AddAlarmFunc func(ctx context.Context, deviceID string, a types.Alarm) error
+
+	// GetAlarmsFunc mocks the GetAlarms method.
+	GetAlarmsFunc func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
@@ -55,6 +62,13 @@ type AlarmStorageMock struct {
 			// A is the a argument value.
 			A types.Alarm
 		}
+		// GetAlarms holds details about calls to the GetAlarms method.
+		GetAlarms []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Conditions is the conditions argument value.
+			Conditions []storage.ConditionFunc
+		}
 		// GetStaleDevices holds details about calls to the GetStaleDevices method.
 		GetStaleDevices []struct {
 			// Ctx is the ctx argument value.
@@ -71,6 +85,7 @@ type AlarmStorageMock struct {
 		}
 	}
 	lockAddAlarm        sync.RWMutex
+	lockGetAlarms       sync.RWMutex
 	lockGetStaleDevices sync.RWMutex
 	lockRemoveAlarm     sync.RWMutex
 }
@@ -112,6 +127,42 @@ func (mock *AlarmStorageMock) AddAlarmCalls() []struct {
 	mock.lockAddAlarm.RLock()
 	calls = mock.calls.AddAlarm
 	mock.lockAddAlarm.RUnlock()
+	return calls
+}
+
+// GetAlarms calls GetAlarmsFunc.
+func (mock *AlarmStorageMock) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
+	if mock.GetAlarmsFunc == nil {
+		panic("AlarmStorageMock.GetAlarmsFunc: method is nil but AlarmStorage.GetAlarms was just called")
+	}
+	callInfo := struct {
+		Ctx        context.Context
+		Conditions []storage.ConditionFunc
+	}{
+		Ctx:        ctx,
+		Conditions: conditions,
+	}
+	mock.lockGetAlarms.Lock()
+	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
+	mock.lockGetAlarms.Unlock()
+	return mock.GetAlarmsFunc(ctx, conditions...)
+}
+
+// GetAlarmsCalls gets all the calls that were made to GetAlarms.
+// Check the length with:
+//
+//	len(mockedAlarmStorage.GetAlarmsCalls())
+func (mock *AlarmStorageMock) GetAlarmsCalls() []struct {
+	Ctx        context.Context
+	Conditions []storage.ConditionFunc
+} {
+	var calls []struct {
+		Ctx        context.Context
+		Conditions []storage.ConditionFunc
+	}
+	mock.lockGetAlarms.RLock()
+	calls = mock.calls.GetAlarms
+	mock.lockGetAlarms.RUnlock()
 	return calls
 }
 

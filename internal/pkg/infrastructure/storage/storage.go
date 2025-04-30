@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -80,6 +81,7 @@ type Store interface {
 	SetDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
+	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
@@ -89,6 +91,7 @@ type Store interface {
 	AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+	GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error)
 }
 
 type storageImpl struct {
@@ -620,7 +623,50 @@ func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bo
 	return tx.Commit(ctx)
 }
 
+func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+	args := pgx.NamedArgs{
+		"sensor_id": sensorID,
+	}
+
+	var device_id, sensor_id, name, description, environment, source, tenant, device_profile string
+	var active bool
+	var location pgtype.Point
+
+	row := s.pool.QueryRow(ctx, `
+		SELECT device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile 
+		FROM devices
+		WHERE sensor_id=@sensor_id AND deleted=FALSE`, args)
+
+	err := row.Scan(&device_id, &sensor_id, &active, &name, &description, &environment, &source, &tenant, &location, &device_profile)
+	if err != nil {
+		return types.Device{}, ErrNoRows
+	}
+
+	d := types.Device{
+		Active:      active,
+		SensorID:    sensor_id,
+		DeviceID:    device_id,
+		Tenant:      tenant,
+		Name:        name,
+		Description: description,
+		Environment: environment,
+		Source:      source,
+		Location: types.Location{
+			Latitude:  location.P.X,
+			Longitude: location.P.Y,
+		},
+		DeviceProfile: types.DeviceProfile{
+			Decoder: device_profile,
+			Name:    device_profile,
+		},
+	}
+
+	return d, nil
+}
+
 func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
+	log := logging.GetFromContext(ctx)
+
 	condition := &Condition{}
 	for _, c := range conditions {
 		c(condition)
@@ -721,12 +767,12 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		var profileName, profileDescription, deviceName, deviceDescription, environment, source, tenant *string
 		var deviceID, sensorID, profileID *string
 		var active, online *bool
-		var rssi, snr, sf *float64
+		var rssi, snr, sf, batteryLevel *float64
 		var statusObservedAt, stateObservedAt *time.Time
 		var tagList, alarmsList []string
 		var typesList [][]string
 		var decoder *string
-		var interval, deviceInterval, stateValue, batteryLevel, dr *int
+		var interval, deviceInterval, stateValue, dr *int
 		var fq *int64
 
 		err = rows.Scan(
@@ -812,7 +858,8 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 				ObservedAt:      statusObservedAt.UTC(),
 			}
 			if batteryLevel != nil {
-				device.DeviceStatus.BatteryLevel = *batteryLevel
+				bat := *batteryLevel
+				device.DeviceStatus.BatteryLevel = int(bat)
 			}
 		}
 		if len(tagList) > 0 {
@@ -837,6 +884,10 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		}
 
 		devices = append(devices, device)
+	}
+
+	if len(devices) == 0 {
+		log.Debug("query did not return any devices", slog.String("sql", sql), slog.Any("args", args))
 	}
 
 	return types.Collection[types.Device]{
@@ -1066,6 +1117,56 @@ func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmTyp
 	_, err := s.pool.Exec(ctx, `DELETE FROM device_alarms WHERE device_id=@device_id AND type=@alarm_type`, args)
 
 	return err
+}
+
+func (s *storageImpl) GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error) {
+	condition := &Condition{}
+	for _, c := range conditions {
+		c(condition)
+	}
+
+	args := condition.NamedArgs()
+	offsetLimit, offset, limit := condition.OffsetLimit(0, 10)
+
+	sql := fmt.Sprintf(`
+		SELECT a.observed_at, a.device_id, a.type, a.description, a.severity, d.tenant, count(*) OVER () AS count
+		FROM device_alarms a
+		JOIN devices d ON a.device_id = d.device_id 
+		ORDER BY a.observed_at ASC
+		%s
+	`, offsetLimit)
+
+	rows, err := s.pool.Query(ctx, sql, args)
+	if err != nil {
+		return types.Collection[types.Alarm]{}, err
+	}
+	defer rows.Close()
+
+	var totalCount uint64
+	alarms := []types.Alarm{}
+
+	for rows.Next() {
+		var observedAt time.Time
+		var deviceID, typ, description, tenant string
+		var severity int
+
+		rows.Scan(&observedAt, &deviceID, &typ, &description, &severity, &tenant, &totalCount)
+		alarms = append(alarms, types.Alarm{
+			DeviceID:    deviceID,
+			AlarmType:   typ,
+			Description: description,
+			ObservedAt:  observedAt.UTC(),
+			Severity:    severity,
+		})
+	}
+
+	return types.Collection[types.Alarm]{
+		Data:       alarms,
+		Count:      uint64(len(alarms)),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
+		TotalCount: totalCount,
+	}, nil
 }
 
 func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {

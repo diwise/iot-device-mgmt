@@ -29,6 +29,9 @@ var _ DeviceStorage = &DeviceStorageMock{}
 //			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
 //				panic("mock out the GetDeviceAlarms method")
 //			},
+//			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+//				panic("mock out the GetDeviceBySensorID method")
+//			},
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
 //			},
@@ -68,6 +71,9 @@ type DeviceStorageMock struct {
 
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
 	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+
+	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
+	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
@@ -115,6 +121,13 @@ type DeviceStorageMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
+		}
+		// GetDeviceBySensorID holds details about calls to the GetDeviceBySensorID method.
+		GetDeviceBySensorID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SensorID is the sensorID argument value.
+			SensorID string
 		}
 		// GetDeviceMeasurements holds details about calls to the GetDeviceMeasurements method.
 		GetDeviceMeasurements []struct {
@@ -198,6 +211,7 @@ type DeviceStorageMock struct {
 	lockAddDeviceStatus       sync.RWMutex
 	lockCreateOrUpdateDevice  sync.RWMutex
 	lockGetDeviceAlarms       sync.RWMutex
+	lockGetDeviceBySensorID   sync.RWMutex
 	lockGetDeviceMeasurements sync.RWMutex
 	lockGetDeviceStatus       sync.RWMutex
 	lockGetTenants            sync.RWMutex
@@ -313,6 +327,42 @@ func (mock *DeviceStorageMock) GetDeviceAlarmsCalls() []struct {
 	mock.lockGetDeviceAlarms.RLock()
 	calls = mock.calls.GetDeviceAlarms
 	mock.lockGetDeviceAlarms.RUnlock()
+	return calls
+}
+
+// GetDeviceBySensorID calls GetDeviceBySensorIDFunc.
+func (mock *DeviceStorageMock) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+	if mock.GetDeviceBySensorIDFunc == nil {
+		panic("DeviceStorageMock.GetDeviceBySensorIDFunc: method is nil but DeviceStorage.GetDeviceBySensorID was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+	}{
+		Ctx:      ctx,
+		SensorID: sensorID,
+	}
+	mock.lockGetDeviceBySensorID.Lock()
+	mock.calls.GetDeviceBySensorID = append(mock.calls.GetDeviceBySensorID, callInfo)
+	mock.lockGetDeviceBySensorID.Unlock()
+	return mock.GetDeviceBySensorIDFunc(ctx, sensorID)
+}
+
+// GetDeviceBySensorIDCalls gets all the calls that were made to GetDeviceBySensorID.
+// Check the length with:
+//
+//	len(mockedDeviceStorage.GetDeviceBySensorIDCalls())
+func (mock *DeviceStorageMock) GetDeviceBySensorIDCalls() []struct {
+	Ctx      context.Context
+	SensorID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		SensorID string
+	}
+	mock.lockGetDeviceBySensorID.RLock()
+	calls = mock.calls.GetDeviceBySensorID
+	mock.lockGetDeviceBySensorID.RUnlock()
 	return calls
 }
 

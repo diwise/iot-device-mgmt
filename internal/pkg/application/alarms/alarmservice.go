@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
@@ -27,6 +28,7 @@ type AlarmStorage interface {
 	AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
 }
 
 func NewAlarmStorage(s storage.Store) AlarmStorage {
@@ -48,6 +50,9 @@ func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collectio
 func (s *alarmStorageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
 	return s.s.RemoveAlarm(ctx, deviceID, alarmType)
 }
+func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
+	return s.s.GetAlarms(ctx, conditions...)
+}
 
 type alarmSvc struct {
 	storage   AlarmStorage
@@ -60,6 +65,7 @@ type AlarmService interface {
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
 	RegisterTopicMessageHandler(ctx context.Context) error
+	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error)
 }
 
 func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.Alarm) error {
@@ -76,6 +82,27 @@ func (svc *alarmSvc) Remove(ctx context.Context, deviceID string, alarmType stri
 
 func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
 	return svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(svc))
+}
+
+func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+	conditions := []storage.ConditionFunc{}
+
+	for k, v := range params {
+		switch strings.ToLower(k) {
+		case "limit":
+			if i, err := strconv.Atoi(v[0]); err == nil {
+				conditions = append(conditions, storage.WithLimit(i))
+			}
+		case "offset":
+			if o, err := strconv.Atoi(v[0]); err == nil {
+				conditions = append(conditions, storage.WithOffset(o))
+			}
+		}
+	}
+
+	conditions = append(conditions, storage.WithTenants(tenants))
+
+	return svc.storage.GetAlarms(ctx, conditions...)
 }
 
 func New(s AlarmStorage, m messaging.MsgContext) AlarmService {
@@ -102,8 +129,8 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 			return
 		}
 
-		if m.Code == nil {
-			log.Debug("received device status with no error code, will remove any device not observed alarms", "device_id", m.DeviceID)
+		if m.Code == nil && len(m.Messages) == 0 {
+			//log.Debug("received device status with no error code, will remove any device not observed alarms", "device_id", m.DeviceID)
 			err = svc.Remove(ctx, m.DeviceID, AlarmDeviceNotObserved)
 			if err != nil {
 				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "err", err.Error())
@@ -112,13 +139,24 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 			return
 		}
 
-		log.Debug("received device status", "service", "alarmservice", "body", string(itm.Body()))
+		//log.Debug("received device status", "service", "alarmservice", "body", string(itm.Body()))
 
-		err = svc.Add(ctx, m.DeviceID, types.Alarm{
-			AlarmType:   *m.Code,
-			Description: strings.Join(m.Messages, ", "),
-			ObservedAt:  m.Timestamp,
-		})
+		if m.Code != nil && *m.Code != "" {
+			err = svc.Add(ctx, m.DeviceID, types.Alarm{
+				DeviceID: m.DeviceID,
+				AlarmType:   *m.Code,
+				Description: strings.Join(m.Messages, ", "),
+				ObservedAt:  m.Timestamp,
+			})
+		} else if len(m.Messages) > 0 {
+			for _, msg := range m.Messages {
+				err = svc.Add(ctx, m.DeviceID, types.Alarm{
+					DeviceID: m.DeviceID,
+					AlarmType:  msg,
+					ObservedAt: m.Timestamp,
+				})
+			}
+		}
 
 		if err != nil {
 			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "err", err.Error())
