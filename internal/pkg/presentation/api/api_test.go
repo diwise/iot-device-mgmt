@@ -125,10 +125,6 @@ func TestGetDeviceStatusHandler(t *testing.T) {
 			Count: 1}, nil
 	}
 
-	repo.GetDeviceStatusFunc = func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
-		return types.Collection[types.DeviceStatus]{}, nil
-	}
-
 	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices/33788389279/status", nil)
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer ????")
@@ -154,9 +150,6 @@ func TestPatchDeviceHandler(t *testing.T) {
 				},
 			},
 			Count: 1}, nil
-	}
-	repo.SetDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
-		return nil
 	}
 
 	body := strings.NewReader(`{"name":"newname"}`)
@@ -188,9 +181,6 @@ func TestPutDeviceHandler(t *testing.T) {
 			},
 			Count: 1}, nil
 	}
-	repo.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
-		return nil
-	}
 
 	body := strings.NewReader(`
 		{ 
@@ -209,6 +199,104 @@ func TestPutDeviceHandler(t *testing.T) {
 
 	is.Equal(200, res.StatusCode)
 	is.Equal(1, len(repo.CreateOrUpdateDeviceCalls()))
+}
+
+func TestPatchDeviceWithPayloadHandler(t *testing.T) {
+	putJson := `
+{
+    "active": true,
+    "description": "alla utom sensor\\r\\njord\\r\\n3601",
+    "deviceID": "defca053-6ec8-5430-a318-92bf7fcb854f",
+    "deviceProfile": "elsys",
+    "environment": "soil",
+    "interval": "3601",
+    "latitude": 59.373227,
+    "longitude": 18.632813,
+    "name": "EMS_Desk_05",
+    "tenant": "default",
+    "types": ["urn:oma:lwm2m:ext:3301", "urn:oma:lwm2m:ext:3200", "urn:oma:lwm2m:ext:3304", "urn:oma:lwm2m:ext:3428", "urn:oma:lwm2m:ext:3302", "urn:oma:lwm2m:ext:3303"]
+}`
+
+	is, _, _, repo, _, _, mux := testSetup(t)
+
+	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{
+			Data: []types.Device{
+				{
+					Active:   false,
+					SensorID: uuid.NewString(),
+					DeviceID: "defca053-6ec8-5430-a318-92bf7fcb854f",
+				},
+			},
+			Count:      1,
+			Offset:     0,
+			Limit:      1,
+			TotalCount: 1,
+		}, nil
+	}
+
+	repo.SetDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+		return nil
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodPatch, server.URL+"/api/v0/devices/defca053-6ec8-5430-a318-92bf7fcb854f", strings.NewReader(putJson))
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(http.StatusOK, res.StatusCode)
+}
+
+func TestCreateNewDeviceHandler(t *testing.T) {
+	deviceJson := `
+{
+    "active": false,
+    "sensorID": "24e124743c211337",
+    "deviceID": "ecff5911-e771-5c5c-b6eb-e9f1bc932195",
+    "tenant": "default",
+    "name": "SN-WS302-01",
+    "description": "",
+    "location": {
+        "latitude": 0,
+        "longitude": 0
+    },
+    "types": null,
+    "deviceProfile": {
+        "name": "unknown",
+        "decoder": "unknown",
+        "interval": 0
+    },
+    "deviceStatus": {
+        "batteryLevel": 0,
+        "observedAt": "0001-01-01T00:00:00Z"
+    },
+    "deviceState": {
+        "online": false,
+        "state": 0,
+        "observedAt": "0001-01-01T00:00:00Z"
+    }
+}`
+
+	is, _, _, _, _, _, mux := testSetup(t)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v0/devices/", strings.NewReader(deviceJson))
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(http.StatusCreated, res.StatusCode)
 }
 
 func TestGetAlarmsHandler(t *testing.T) {
@@ -270,8 +358,29 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 			return nil
 		},
+
 		QueryFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
+		},
+
+		SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+			return nil
+		},
+
+		SetDeviceProfileFunc: func(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
+			return nil
+		},
+
+		SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
+			return nil
+		},
+
+		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+			return nil
+		},
+
+		GetDeviceStatusFunc: func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+			return types.Collection[types.DeviceStatus]{}, nil
 		},
 	}
 	repo := devicemanagement.NewDeviceStorage(db)

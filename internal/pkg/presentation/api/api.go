@@ -67,7 +67,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	r.HandleFunc("GET /admin/lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
 	r.HandleFunc("GET /admin/tenants", queryTenantsHandler())
 
-	var handler http.Handler = http.StripPrefix(apiPrefix, r)
+	var handler http.Handler = stripTrailingSlash(http.StripPrefix(apiPrefix, r))
 
 	mux.Handle("GET /", authenticator(handler))
 	mux.Handle("POST /", authenticator(handler))
@@ -75,6 +75,16 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	mux.Handle("PATCH /", authenticator(handler))
 
 	return nil
+}
+
+func stripTrailingSlash(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if len(p) > 1 && strings.HasSuffix(p, "/") {
+			r.URL.Path = p[:len(p)-1]
+		}
+		h.ServeHTTP(w, r)
+	})
 }
 
 func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {

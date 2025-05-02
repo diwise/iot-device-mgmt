@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"strings"
 	"time"
 
@@ -588,7 +587,7 @@ func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bo
 	}
 
 	if tenant != nil {
-		args["tenant"] = *source
+		args["tenant"] = *tenant
 		values = append(values, "tenant=@tenant")
 	}
 
@@ -756,6 +755,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
+		log.Debug("failed to query database", "sql", sql, "args", args, "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 	defer rows.Close()
@@ -807,6 +807,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			&count,
 		)
 		if err != nil {
+			log.Debug("could not scan row", "err", err.Error())
 			return types.Collection[types.Device]{}, err
 		}
 
@@ -889,10 +890,6 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		}
 
 		devices = append(devices, device)
-	}
-
-	if len(devices) == 0 {
-		log.Debug("query did not return any devices", slog.String("sql", sql), slog.Any("args", args))
 	}
 
 	return types.Collection[types.Device]{

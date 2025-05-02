@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
@@ -82,6 +83,18 @@ func NewConfig(config io.ReadCloser) (*DeviceManagementConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	i := slices.IndexFunc(cfg.DeviceProfiles, func(dp types.DeviceProfile) bool {
+		return dp.Decoder == "unknown"
+	})
+
+	if i < 0 {
+		cfg.DeviceProfiles = append(cfg.DeviceProfiles, types.DeviceProfile{
+			Name:    "unknown",
+			Decoder: "unknown",
+		})
+	}
+
 	return cfg, nil
 }
 
@@ -322,14 +335,19 @@ func (s service) MergeDevice(ctx context.Context, deviceID string, fields map[st
 			s := v.(string)
 			tenant = &s
 		case "types":
-			s := v.([]string)
-			lwm2m = s
+			types := v.([]any)
+			for _, typ := range types {
+				s := typ.(string)
+				lwm2m = append(lwm2m, s)
+			}
 		case "deviceProfile":
 			s := v.(string)
 			deviceProfile = &s
 		case "interval":
-			i := v.(int)
-			interval = &i
+			s := v.(string)
+			if i, err := strconv.Atoi(s); err == nil {
+				interval = &i
+			}
 		default:
 			log.Debug("field not mapped for merge", "device_id", deviceID, "name", k)
 		}
