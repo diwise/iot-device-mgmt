@@ -170,7 +170,11 @@ func (c Condition) Where() string {
 	}
 
 	if c.Online != nil {
-		where = append(where, "dst.online = @online")
+		if !*c.Online {
+			where = append(where, "(dst.online = @online OR dst.online IS NULL)")
+		} else {
+			where = append(where, "dst.online = @online")
+		}
 	}
 
 	if len(c.Types) == 1 {
