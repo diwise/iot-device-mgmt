@@ -749,7 +749,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		LEFT JOIN alarms_list ON alarms_list.device_id = d.device_id
 		%s
 		%s
-		%s;`, condition.Where(), condition.OrderBy(), offsetLimit)
+		%s;`, condition.Where(), condition.OrderBy("ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
 
 	args := condition.NamedArgs()
 

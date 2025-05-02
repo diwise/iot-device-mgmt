@@ -52,7 +52,7 @@ type Box struct {
 	MaxY float64 // north
 }
 
-func (c Condition) OrderBy() string {
+func (c Condition) OrderBy(fallback string) string {
 	orderBy := ""
 
 	if c.sortBy != "" {
@@ -62,6 +62,10 @@ func (c Condition) OrderBy() string {
 		} else {
 			orderBy += "ASC "
 		}
+	}
+
+	if orderBy == "" && fallback != "" {
+		return fallback
 	}
 
 	return orderBy
