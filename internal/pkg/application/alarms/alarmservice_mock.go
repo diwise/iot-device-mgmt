@@ -19,10 +19,10 @@ var _ AlarmService = &AlarmServiceMock{}
 //
 //		// make and configure a mocked AlarmService
 //		mockedAlarmService := &AlarmServiceMock{
-//			AddFunc: func(ctx context.Context, deviceID string, alarm types.Alarm) error {
+//			AddFunc: func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 //				panic("mock out the Add method")
 //			},
-//			GetAlarmsFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+//			GetAlarmsFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
 //				panic("mock out the GetAlarms method")
 //			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
@@ -42,10 +42,10 @@ var _ AlarmService = &AlarmServiceMock{}
 //	}
 type AlarmServiceMock struct {
 	// AddFunc mocks the Add method.
-	AddFunc func(ctx context.Context, deviceID string, alarm types.Alarm) error
+	AddFunc func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 
 	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error)
+	GetAlarmsFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
@@ -65,7 +65,7 @@ type AlarmServiceMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Alarm is the alarm argument value.
-			Alarm types.Alarm
+			Alarm types.AlarmDetails
 		}
 		// GetAlarms holds details about calls to the GetAlarms method.
 		GetAlarms []struct {
@@ -104,14 +104,14 @@ type AlarmServiceMock struct {
 }
 
 // Add calls AddFunc.
-func (mock *AlarmServiceMock) Add(ctx context.Context, deviceID string, alarm types.Alarm) error {
+func (mock *AlarmServiceMock) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 	if mock.AddFunc == nil {
 		panic("AlarmServiceMock.AddFunc: method is nil but AlarmService.Add was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Alarm    types.Alarm
+		Alarm    types.AlarmDetails
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
@@ -130,12 +130,12 @@ func (mock *AlarmServiceMock) Add(ctx context.Context, deviceID string, alarm ty
 func (mock *AlarmServiceMock) AddCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Alarm    types.Alarm
+	Alarm    types.AlarmDetails
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Alarm    types.Alarm
+		Alarm    types.AlarmDetails
 	}
 	mock.lockAdd.RLock()
 	calls = mock.calls.Add
@@ -144,7 +144,7 @@ func (mock *AlarmServiceMock) AddCalls() []struct {
 }
 
 // GetAlarms calls GetAlarmsFunc.
-func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+func (mock *AlarmServiceMock) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
 	if mock.GetAlarmsFunc == nil {
 		panic("AlarmServiceMock.GetAlarmsFunc: method is nil but AlarmService.GetAlarms was just called")
 	}

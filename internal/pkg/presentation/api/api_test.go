@@ -219,15 +219,13 @@ func TestGetAlarmsHandler(t *testing.T) {
 
 	deviceID := uuid.NewString()
 
-	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
-		return types.Collection[types.Alarm]{
-			Data: []types.Alarm{
+	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+		return types.Collection[types.Alarms]{
+			Data: []types.Alarms{
 				{
-					DeviceID:    deviceID,
-					AlarmType:   alarms.AlarmDeviceNotObserved,
-					Description: "",
-					ObservedAt:  time.Now().UTC(),
-					Severity:    types.AlarmSeverityLow,
+					DeviceID:   deviceID,
+					AlarmTypes: []string{alarms.AlarmDeviceNotObserved},
+					ObservedAt: time.Now().UTC(),
 				},
 			},
 			Count:      1,
@@ -248,7 +246,7 @@ func TestGetAlarmsHandler(t *testing.T) {
 	is.Equal(200, res.StatusCode)
 
 	response := struct {
-		Data []types.Alarm
+		Data []types.AlarmDetails
 	}{}
 	b, _ := io.ReadAll(res.Body)
 	json.Unmarshal(b, &response)

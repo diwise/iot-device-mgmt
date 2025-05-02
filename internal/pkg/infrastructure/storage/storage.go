@@ -83,15 +83,15 @@ type Store interface {
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
-	AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error
+	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
-	GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error)
+	GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarms], error)
 }
 
 type storageImpl struct {
@@ -652,8 +652,8 @@ func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) 
 		Environment: environment,
 		Source:      source,
 		Location: types.Location{
-			Latitude:  location.P.X,
-			Longitude: location.P.Y,
+			Latitude:  location.P.Y,
+			Longitude: location.P.X,
 		},
 		DeviceProfile: types.DeviceProfile{
 			Decoder: device_profile,
@@ -831,6 +831,11 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		if source != nil {
 			device.Source = *source
 		}
+		device.Location = types.Location{
+			Latitude:  location.P.Y,
+			Longitude: location.P.X,
+		}
+
 		if profileID != nil {
 			device.DeviceProfile = types.DeviceProfile{
 				Name:     *profileID,
@@ -984,7 +989,7 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 	}, nil
 }
 
-func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error {
+func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 	args := pgx.NamedArgs{
 		"device_id":   deviceID,
 		"type":        a.AlarmType,
@@ -1006,7 +1011,7 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 	return err
 }
 
-func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
 	}
@@ -1017,11 +1022,11 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 		WHERE device_id=@device_id
 		ORDER BY observed_at ASC`, args)
 	if err != nil {
-		return types.Collection[types.Alarm]{}, err
+		return types.Collection[types.AlarmDetails]{}, err
 	}
 	defer rows.Close()
 
-	alarms := []types.Alarm{}
+	alarms := []types.AlarmDetails{}
 
 	for rows.Next() {
 		var device_id, alarmtype, description string
@@ -1030,10 +1035,10 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 
 		err := rows.Scan(&device_id, &alarmtype, &description, &observed_at, &severity)
 		if err != nil {
-			return types.Collection[types.Alarm]{}, err
+			return types.Collection[types.AlarmDetails]{}, err
 		}
 
-		alarms = append(alarms, types.Alarm{
+		alarms = append(alarms, types.AlarmDetails{
 			AlarmType:   alarmtype,
 			Description: description,
 			ObservedAt:  observed_at.UTC(),
@@ -1041,7 +1046,7 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 		})
 	}
 
-	return types.Collection[types.Alarm]{
+	return types.Collection[types.AlarmDetails]{
 		Data:       alarms,
 		Count:      uint64(len(alarms)),
 		Offset:     0,
@@ -1119,48 +1124,52 @@ func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmTyp
 	return err
 }
 
-func (s *storageImpl) GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarm], error) {
+func (s *storageImpl) GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarms], error) {
 	condition := &Condition{}
 	for _, c := range conditions {
 		c(condition)
 	}
 
 	args := condition.NamedArgs()
-	offsetLimit, offset, limit := condition.OffsetLimit(0, 10)
+	offsetLimit, offset, limit := condition.OffsetLimit(0, 5)
 
 	sql := fmt.Sprintf(`
-		SELECT a.observed_at, a.device_id, a.type, a.description, a.severity, d.tenant, count(*) OVER () AS count
+		SELECT a.device_id, array_agg(type) as type, MAX(severity) as severity, MAX(observed_at) as observed_at, count(*) OVER () AS count 
 		FROM device_alarms a
 		JOIN devices d ON a.device_id = d.device_id 
-		ORDER BY a.observed_at ASC
 		%s
-	`, offsetLimit)
+		GROUP BY a.device_id
+		ORDER BY observed_at DESC
+		%s
+	`, condition.Where(), offsetLimit)
 
 	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
-		return types.Collection[types.Alarm]{}, err
+		return types.Collection[types.Alarms]{}, err
 	}
 	defer rows.Close()
 
 	var totalCount uint64
-	alarms := []types.Alarm{}
+	alarms := []types.Alarms{}
 
 	for rows.Next() {
 		var observedAt time.Time
-		var deviceID, typ, description, tenant string
+		var deviceID string
+		var typs []string
 		var severity int
 
-		rows.Scan(&observedAt, &deviceID, &typ, &description, &severity, &tenant, &totalCount)
-		alarms = append(alarms, types.Alarm{
-			DeviceID:    deviceID,
-			AlarmType:   typ,
-			Description: description,
-			ObservedAt:  observedAt.UTC(),
-			Severity:    severity,
+		err := rows.Scan(&deviceID, &typs, &severity, &observedAt, &totalCount)
+		if err != nil {
+			return types.Collection[types.Alarms]{}, nil
+		}
+		alarms = append(alarms, types.Alarms{
+			DeviceID:   deviceID,
+			AlarmTypes: typs,
+			ObservedAt: observedAt.UTC(),
 		})
 	}
 
-	return types.Collection[types.Alarm]{
+	return types.Collection[types.Alarms]{
 		Data:       alarms,
 		Count:      uint64(len(alarms)),
 		Offset:     uint64(offset),

@@ -31,7 +31,7 @@ type DeviceManagement interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
 	GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
 
 	NewDevice(ctx context.Context, device types.Device) error
 	UpdateDevice(ctx context.Context, device types.Device) error
@@ -96,7 +96,7 @@ type DeviceStorage interface {
 	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
 }
@@ -131,7 +131,7 @@ func (d deviceStorageImpl) GetTenants(ctx context.Context) (types.Collection[str
 func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
 	return d.s.GetDeviceStatus(ctx, deviceID)
 }
-func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	return d.s.GetDeviceAlarms(ctx, deviceID)
 }
 func (d deviceStorageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error) {
@@ -220,10 +220,10 @@ func (s service) GetDeviceStatus(ctx context.Context, deviceID string, tenants [
 	return s.storage.GetDeviceStatus(ctx, deviceID)
 }
 
-func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error) {
+func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
 	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
-		return types.Collection[types.Alarm]{}, err
+		return types.Collection[types.AlarmDetails]{}, err
 	}
 
 	return s.storage.GetDeviceAlarms(ctx, deviceID)

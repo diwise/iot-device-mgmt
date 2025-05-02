@@ -103,7 +103,7 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
 	}
 
 	for _, d := range result.Data {
-		l.alarmSvc.Add(ctx, d.DeviceID, types.Alarm{
+		l.alarmSvc.Add(ctx, d.DeviceID, types.AlarmDetails{
 			AlarmType:   alarms.AlarmDeviceNotObserved,
 			Description: "",
 			ObservedAt:  time.Now().UTC(),

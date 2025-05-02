@@ -26,7 +26,7 @@ var _ DeviceStorage = &DeviceStorageMock{}
 //			CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 //				panic("mock out the CreateOrUpdateDevice method")
 //			},
-//			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+//			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 //				panic("mock out the GetDeviceAlarms method")
 //			},
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
@@ -70,7 +70,7 @@ type DeviceStorageMock struct {
 	CreateOrUpdateDeviceFunc func(ctx context.Context, d types.Device) error
 
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
-	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error)
+	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 
 	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, error)
@@ -295,7 +295,7 @@ func (mock *DeviceStorageMock) CreateOrUpdateDeviceCalls() []struct {
 }
 
 // GetDeviceAlarms calls GetDeviceAlarmsFunc.
-func (mock *DeviceStorageMock) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.Alarm], error) {
+func (mock *DeviceStorageMock) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	if mock.GetDeviceAlarmsFunc == nil {
 		panic("DeviceStorageMock.GetDeviceAlarmsFunc: method is nil but DeviceStorage.GetDeviceAlarms was just called")
 	}

@@ -18,7 +18,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 	ctx := context.Background()
 
 	s := &AlarmStorageMock{
-		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.Alarm) error {
+		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
 	}
@@ -52,7 +52,7 @@ func TestDeviceStatusHandlerWithMessages(t *testing.T) {
 	ctx := context.Background()
 
 	s := &AlarmStorageMock{
-		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.Alarm) error {
+		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
 	}

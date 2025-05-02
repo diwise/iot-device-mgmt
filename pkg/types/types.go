@@ -77,7 +77,13 @@ const (
 	AlarmSeverityHigh    = 3
 )
 
-type Alarm struct {
+type Alarms struct {
+	DeviceID   string    `json:"deviceID,omitzero"`
+	AlarmTypes []string  `json:"alarms"`
+	ObservedAt time.Time `json:"observedAt"`
+}
+
+type AlarmDetails struct {
 	DeviceID    string    `json:"deviceID,omitzero"`
 	AlarmType   string    `json:"alarmType"`
 	Description string    `json:"description,omitempty"`

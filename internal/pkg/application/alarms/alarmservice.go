@@ -25,10 +25,10 @@ const AlarmDeviceNotObserved string = "device_not_observed"
 
 //go:generate moq -rm -out alarmstorage_mock.go . AlarmStorage
 type AlarmStorage interface {
-	AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error
+	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
-	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
+	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error)
 }
 
 func NewAlarmStorage(s storage.Store) AlarmStorage {
@@ -41,7 +41,7 @@ type alarmStorageImpl struct {
 	s storage.Store
 }
 
-func (s *alarmStorageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Alarm) error {
+func (s *alarmStorageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 	return s.s.AddAlarm(ctx, deviceID, a)
 }
 func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
@@ -50,7 +50,7 @@ func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collectio
 func (s *alarmStorageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
 	return s.s.RemoveAlarm(ctx, deviceID, alarmType)
 }
-func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error) {
+func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
 	return s.s.GetAlarms(ctx, conditions...)
 }
 
@@ -61,14 +61,15 @@ type alarmSvc struct {
 
 //go:generate moq -rm -out alarmservice_mock.go . AlarmService
 type AlarmService interface {
-	Add(ctx context.Context, deviceID string, alarm types.Alarm) error
+	Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
 	RegisterTopicMessageHandler(ctx context.Context) error
-	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error)
+	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
 }
 
-func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.Alarm) error {
+func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
+	alarm.AlarmType = strings.ToLower(strings.ReplaceAll(alarm.AlarmType, " ", "_"))
 	return svc.storage.AddAlarm(ctx, deviceID, alarm)
 }
 
@@ -84,7 +85,7 @@ func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
 	return svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(svc))
 }
 
-func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarm], error) {
+func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
 	conditions := []storage.ConditionFunc{}
 
 	for k, v := range params {
@@ -142,16 +143,16 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 		//log.Debug("received device status", "service", "alarmservice", "body", string(itm.Body()))
 
 		if m.Code != nil && *m.Code != "" {
-			err = svc.Add(ctx, m.DeviceID, types.Alarm{
-				DeviceID: m.DeviceID,
+			err = svc.Add(ctx, m.DeviceID, types.AlarmDetails{
+				DeviceID:    m.DeviceID,
 				AlarmType:   *m.Code,
 				Description: strings.Join(m.Messages, ", "),
 				ObservedAt:  m.Timestamp,
 			})
 		} else if len(m.Messages) > 0 {
 			for _, msg := range m.Messages {
-				err = svc.Add(ctx, m.DeviceID, types.Alarm{
-					DeviceID: m.DeviceID,
+				err = svc.Add(ctx, m.DeviceID, types.AlarmDetails{
+					DeviceID:   m.DeviceID,
 					AlarmType:  msg,
 					ObservedAt: m.Timestamp,
 				})

@@ -28,7 +28,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetBySensorIDFunc: func(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
 //				panic("mock out the GetBySensorID method")
 //			},
-//			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error) {
+//			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
 //				panic("mock out the GetDeviceAlarms method")
 //			},
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
@@ -84,7 +84,7 @@ type DeviceManagementMock struct {
 	GetBySensorIDFunc func(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
-	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error)
+	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
@@ -377,7 +377,7 @@ func (mock *DeviceManagementMock) GetBySensorIDCalls() []struct {
 }
 
 // GetDeviceAlarms calls GetDeviceAlarmsFunc.
-func (mock *DeviceManagementMock) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.Alarm], error) {
+func (mock *DeviceManagementMock) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
 	if mock.GetDeviceAlarmsFunc == nil {
 		panic("DeviceManagementMock.GetDeviceAlarmsFunc: method is nil but DeviceManagement.GetDeviceAlarms was just called")
 	}
