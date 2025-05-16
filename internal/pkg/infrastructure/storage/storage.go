@@ -258,7 +258,10 @@ func (s *storageImpl) CreateDeviceProfileType(ctx context.Context, t types.Lwm2m
 		"device_profile_type_id": strings.ToLower(strings.TrimSpace(t.Urn)),
 		"name":                   strings.TrimSpace(t.Name),
 	}
-	_, err := s.pool.Exec(ctx, `INSERT INTO device_profiles_types (device_profile_type_id, name) VALUES (@device_profile_type_id, @name) ON CONFLICT DO NOTHING`, args)
+	_, err := s.pool.Exec(ctx, `
+		INSERT INTO device_profiles_types (device_profile_type_id, name)
+		VALUES (@device_profile_type_id, @name)
+		ON CONFLICT DO NOTHING`, args)
 	return err
 }
 
@@ -275,7 +278,10 @@ func (s *storageImpl) CreateDeviceProfile(ctx context.Context, p types.DevicePro
 		"interval":          p.Interval,
 	}
 
-	_, err = tx.Exec(ctx, `INSERT INTO device_profiles (device_profile_id, name, decoder, interval) VALUES (@device_profile_id, @name, @decoder, @interval) ON CONFLICT DO NOTHING`, args)
+	_, err = tx.Exec(ctx, `
+		INSERT INTO device_profiles (device_profile_id, name, decoder, interval)
+		VALUES (@device_profile_id, @name, @decoder, @interval)
+		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
 		tx.Rollback(ctx)
 		return err
@@ -283,7 +289,10 @@ func (s *storageImpl) CreateDeviceProfile(ctx context.Context, p types.DevicePro
 
 	for _, t := range p.Types {
 		args["device_profile_type_id"] = strings.TrimSpace(t)
-		_, err := tx.Exec(ctx, `INSERT INTO device_profiles_device_profiles_types (device_profile_id, device_profile_type_id) VALUES (@device_profile_id, @device_profile_type_id) ON CONFLICT DO NOTHING`, args)
+		_, err := tx.Exec(ctx, `
+			INSERT INTO device_profiles_device_profiles_types (device_profile_id, device_profile_type_id)
+			VALUES (@device_profile_id, @device_profile_type_id)
+			ON CONFLICT DO NOTHING`, args)
 		if err != nil {
 			tx.Rollback(ctx)
 			return err
@@ -351,7 +360,10 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 		}
 
 		args["tag_name"] = strings.TrimSpace(t.Name)
-		_, err = tx.Exec(ctx, `INSERT INTO device_device_tags (device_id, name) VALUES (@device_id, @tag_name) ON CONFLICT DO NOTHING;`, args)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_device_tags (device_id, name)
+			VALUES (@device_id, @tag_name)
+			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			tx.Rollback(ctx)
 			return err
@@ -370,7 +382,10 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 		}
 
 		args["device_profile_type_id"] = strings.TrimSpace(t.Urn)
-		_, err = tx.Exec(ctx, `INSERT INTO device_device_profile_types (device_id, device_profile_type_id) VALUES (@device_id, @device_profile_type_id) ON CONFLICT DO NOTHING;`, args)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_device_profile_types (device_id, device_profile_type_id)
+			VALUES (@device_id, @device_profile_type_id)
+			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			log.Error("could not add type to device", "args", args, "err", err.Error())
 			tx.Rollback(ctx)
@@ -543,7 +558,10 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 		}
 
 		args["device_profile_type_id"] = strings.TrimSpace(t.Urn)
-		_, err = tx.Exec(ctx, `INSERT INTO device_device_profile_types (device_id, device_profile_type_id) VALUES (@device_id, @device_profile_type_id) ON CONFLICT DO NOTHING;`, args)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_device_profile_types (device_id, device_profile_type_id)
+			VALUES (@device_id, @device_profile_type_id)
+			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			log.Error("could not add type to device", "args", args, "err", err.Error())
 			tx.Rollback(ctx)
@@ -632,7 +650,7 @@ func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) 
 	var location pgtype.Point
 
 	row := s.pool.QueryRow(ctx, `
-		SELECT device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile 
+		SELECT device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile
 		FROM devices
 		WHERE sensor_id=@sensor_id AND deleted=FALSE`, args)
 
@@ -952,7 +970,6 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (typ
 		Offset:     0,
 		Limit:      uint64(len(statuses)),
 	}, nil
-
 }
 
 func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
@@ -1131,9 +1148,9 @@ func (s *storageImpl) GetAlarms(ctx context.Context, conditions ...ConditionFunc
 	offsetLimit, offset, limit := condition.OffsetLimit(0, 5)
 
 	sql := fmt.Sprintf(`
-		SELECT a.device_id, array_agg(type) as type, MAX(severity) as severity, MAX(observed_at) as observed_at, count(*) OVER () AS count 
+		SELECT a.device_id, array_agg(type) as type, MAX(severity) as severity, MAX(observed_at) as observed_at, count(*) OVER () AS count
 		FROM device_alarms a
-		JOIN devices d ON a.device_id = d.device_id 
+		JOIN devices d ON a.device_id = d.device_id
 		%s
 		GROUP BY a.device_id
 		ORDER BY observed_at DESC
