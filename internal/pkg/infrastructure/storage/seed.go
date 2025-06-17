@@ -44,6 +44,7 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 
 		err := s.CreateOrUpdateDevice(ctx, device)
 		if err != nil {
+			log.Debug("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
 			return err
 		}
 	}
@@ -51,17 +52,27 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 }
 
 func SeedLwm2mTypes(ctx context.Context, s Store, lwm2m []types.Lwm2mType) error {
+	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, t := range lwm2m {
-		errs = append(errs, s.CreateDeviceProfileType(ctx, t))
+		err := s.CreateDeviceProfileType(ctx, t)
+		if err != nil {
+			log.Debug("failed to seed lwm2m type", "name", t.Name, "urn", t.Urn)
+			errs = append(errs, err)
+		}
 	}
 	return errors.Join(errs...)
 }
 
 func SeedDeviceProfiles(ctx context.Context, s Store, profiles []types.DeviceProfile) error {
+	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, p := range profiles {
-		errs = append(errs, s.CreateDeviceProfile(ctx, p))
+		err := s.CreateDeviceProfile(ctx, p)
+		if err != nil {
+			log.Debug("failed to seed device profile", "decoder", p.Decoder, "name", p.Name)
+			errs = append(errs, err)
+		}
 	}
 	return errors.Join(errs...)
 }
