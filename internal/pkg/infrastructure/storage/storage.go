@@ -208,6 +208,22 @@ func createTables(ctx context.Context, s *storageImpl) error {
 			CONSTRAINT fk_device_alarms FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
 		);
 
+		CREATE TABLE IF NOT EXISTS device_metadata (
+			device_id	TEXT NOT NULL,
+			key			TEXT NOT NULL,
+			name		TEXT NOT NULL,
+			description	TEXT NULL,
+			v 			NUMERIC NULL,
+			vs			TEXT NULL,
+			vb			BOOLEAN NULL,
+
+			created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			modified_on timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+			CONSTRAINT pk_device_metadata PRIMARY KEY (device_id, key),
+			CONSTRAINT fk_device_metadata FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
+		);
+
 		CREATE TABLE IF NOT EXISTS device_device_tags (
 			device_id 	TEXT NOT NULL,
 			name  		TEXT NOT NULL,
@@ -645,17 +661,31 @@ func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) 
 		"sensor_id": sensorID,
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	var device_id, sensor_id, name, description, environment, source, tenant, device_profile string
 	var active bool
 	var location pgtype.Point
+	var typesList [][]string
 
 	row := s.pool.QueryRow(ctx, `
-		SELECT device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile
-		FROM devices
+		WITH types_list AS (
+			SELECT ddpt.device_id, array_agg(ARRAY[dpt.device_profile_type_id, dpt.name]) AS types
+			FROM device_device_profile_types ddpt
+			JOIN device_profiles_types dpt USING (device_profile_type_id)
+			JOIN devices d USING (device_id)
+			WHERE d.deleted = FALSE
+			GROUP BY ddpt.device_id
+		)
+
+		SELECT d.device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile,types_list.types
+		FROM devices d
+		LEFT JOIN types_list ON types_list.device_id = d.device_id
 		WHERE sensor_id=@sensor_id AND deleted=FALSE`, args)
 
-	err := row.Scan(&device_id, &sensor_id, &active, &name, &description, &environment, &source, &tenant, &location, &device_profile)
+	err := row.Scan(&device_id, &sensor_id, &active, &name, &description, &environment, &source, &tenant, &location, &device_profile, &typesList)
 	if err != nil {
+		log.Debug(fmt.Sprintf("query by sensorID %s did not return any data, reason: %v", sensorID, err))
 		return types.Device{}, ErrNoRows
 	}
 
@@ -676,6 +706,15 @@ func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) 
 			Decoder: device_profile,
 			Name:    device_profile,
 		},
+	}
+
+	if len(typesList) > 0 {
+		for _, t := range typesList {
+			d.Lwm2mTypes = append(d.Lwm2mTypes, types.Lwm2mType{
+				Urn:  t[0],
+				Name: t[1],
+			})
+		}
 	}
 
 	return d, nil

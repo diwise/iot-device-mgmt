@@ -102,9 +102,12 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 		if sensorID != "" {
 			ctx = logging.NewContextWithLogger(ctx, logger, slog.String("sensor_id", sensorID))
 
+			logger.Debug(fmt.Sprintf("request devEUI %s for tenants %s", sensorID, strings.Join(allowedTenants, ", ")))
+
 			device, err := svc.GetBySensorID(ctx, sensorID, allowedTenants)
 			if err != nil {
 				if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+					logger.Debug(fmt.Sprintf("device %s not found", sensorID))
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
