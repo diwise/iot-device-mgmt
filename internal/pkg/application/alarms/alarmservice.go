@@ -101,7 +101,7 @@ func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, 
 		}
 	}
 
-	conditions = append(conditions, storage.WithTenants(tenants))
+	conditions = append(conditions, storage.WithActive(true), storage.WithTenants(tenants))
 
 	return svc.storage.GetAlarms(ctx, conditions...)
 }
