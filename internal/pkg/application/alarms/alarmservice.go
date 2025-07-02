@@ -126,15 +126,15 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 		m := types.StatusMessage{}
 		err = json.Unmarshal(itm.Body(), &m)
 		if err != nil {
-			log.Error("failed to unmarshal status message", "err", err.Error())
+			log.Error("failed to unmarshal status message", "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
 			return
 		}
 
 		if m.Code == nil && len(m.Messages) == 0 {
-			//log.Debug("received device status with no error code, will remove any device not observed alarms", "device_id", m.DeviceID)
+			log.Debug("received device status with no error code, will remove any device not observed alarms", "device_id", m.DeviceID)
 			err = svc.Remove(ctx, m.DeviceID, AlarmDeviceNotObserved)
 			if err != nil {
-				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "err", err.Error())
+				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
 				return
 			}
 			return
@@ -160,7 +160,7 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 		}
 
 		if err != nil {
-			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "err", err.Error())
+			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
 		}
 	}
 }

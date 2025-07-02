@@ -47,9 +47,13 @@ func (w *watchdogImpl) run(ctx context.Context) {
 
 	go l.Watch(ctx)
 
-	for range w.done {
-		ctx.Done()
-		return
+	for {
+		select {
+		case <-w.done:
+			return
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 

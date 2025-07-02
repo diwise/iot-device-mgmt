@@ -201,6 +201,7 @@ func createTables(ctx context.Context, s *storageImpl) error {
 			type		TEXT NOT NULL,
 			description	TEXT NULL,
 			severity	NUMERIC NOT NULL DEFAULT 0,
+			count 		NUMERIC NOT NULL DEFAULT 0,
 			observed_at	timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
@@ -1058,7 +1059,8 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 			SET
 				description=EXCLUDED.description,
 				observed_at=EXCLUDED.observed_at,
-				severity=EXCLUDED.severity
+				severity=EXCLUDED.severity,
+				count = device_alarms.count + 1
 				`, args)
 
 	return err
