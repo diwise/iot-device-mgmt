@@ -19,6 +19,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/net/http/router"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
@@ -37,54 +38,29 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
 
-	r := http.NewServeMux()
+	r := router.New(mux, router.WithPrefix(apiPrefix))
 
-	r.HandleFunc("GET /devices", queryDevicesHandler(log, dm))
-	r.HandleFunc("GET /devices/{id}", getDeviceHandler(log, dm))
-	r.HandleFunc("GET /devices/{id}/status", getDeviceStatusHandler(log, dm))
-	r.HandleFunc("GET /devices/{id}/alarms", getDeviceAlarmsHandler(log, dm))
-	r.HandleFunc("GET /devices/{id}/measurements", getDeviceMeasurementsHandler(log, dm))
-	r.HandleFunc("POST /devices", createDeviceHandler(log, dm, s))
-	r.HandleFunc("PUT /devices/{id}", updateDeviceHandler(log, dm))
-	r.HandleFunc("PATCH /devices/{id}", patchDeviceHandler(log, dm))
+	r.Use(authenticator)
 
-	r.HandleFunc("GET /alarms", getAlarmsHandler(log, alarm))
+	r.Get("/devices", queryDevicesHandler(log, dm))
+	r.Get("/devices/{id}", getDeviceHandler(log, dm))
+	r.Get("/devices/{id}/status", getDeviceStatusHandler(log, dm))
+	r.Get("/devices/{id}/alarms", getDeviceAlarmsHandler(log, dm))
+	r.Get("/devices/{id}/measurements", getDeviceMeasurementsHandler(log, dm))
 
-	/*
-		alarmsMux := http.NewServeMux()
-		alarmsMux.HandleFunc("GET /", getAlarmsHandler(log, alarm))
-		alarmsMux.HandleFunc("GET /{alarmID}", getAlarmDetailsHandler(log, alarm))
-		alarmsMux.HandleFunc("PATCH /{alarmID}/close", closeAlarmHandler(log, alarm))
-		alarmsGroup := http.StripPrefix(alarmsPrefix, alarmsMux)
+	r.Post("/devices", createDeviceHandler(log, dm, s))
+	r.Put("/devices/{id}", updateDeviceHandler(log, dm))
+	r.Patch("/devices/{id}", patchDeviceHandler(log, dm))
 
-		rootMux.Handle("GET "+alarmsPrefix+"/", authenticator(alarmsGroup))
-		rootMux.Handle("PATCH "+alarmsPrefix+"/", authenticator(alarmsGroup))
-	*/
+	r.Get("/alarms", getAlarmsHandler(log, alarm))
 
-	r.HandleFunc("GET /admin/deviceprofiles", queryDeviceProfilesHandler(log, dm))
-	r.HandleFunc("GET /admin/deviceprofiles/{id}", queryDeviceProfilesHandler(log, dm))
-	r.HandleFunc("GET /admin/lwm2mtypes", queryLwm2mTypesHandler(log, dm))
-	r.HandleFunc("GET /admin/lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
-	r.HandleFunc("GET /admin/tenants", queryTenantsHandler())
-
-	var handler http.Handler = stripTrailingSlash(http.StripPrefix(apiPrefix, r))
-
-	mux.Handle("GET /", authenticator(handler))
-	mux.Handle("POST /", authenticator(handler))
-	mux.Handle("PUT /", authenticator(handler))
-	mux.Handle("PATCH /", authenticator(handler))
+	r.Get("/admin/deviceprofiles", queryDeviceProfilesHandler(log, dm))
+	r.Get("/admin/deviceprofiles/{id}", queryDeviceProfilesHandler(log, dm))
+	r.Get("/admin/lwm2mtypes", queryLwm2mTypesHandler(log, dm))
+	r.Get("/admin/lwm2mtypes/{urn}", queryLwm2mTypesHandler(log, dm))
+	r.Get("/admin/tenants", queryTenantsHandler())
 
 	return nil
-}
-
-func stripTrailingSlash(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		p := r.URL.Path
-		if len(p) > 1 && strings.HasSuffix(p, "/") {
-			r.URL.Path = p[:len(p)-1]
-		}
-		h.ServeHTTP(w, r)
-	})
 }
 
 func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {

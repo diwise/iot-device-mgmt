@@ -288,7 +288,7 @@ func TestCreateNewDeviceHandler(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v0/devices/", strings.NewReader(deviceJson))
+	req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v0/devices", strings.NewReader(deviceJson))
 
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", "Bearer ????")
