@@ -22,8 +22,6 @@ import (
 	"github.com/matryer/is"
 )
 
-const noToken string = ""
-
 func TestThatGetUnknownDeviceReturns404(t *testing.T) {
 	r, is := setupTest(t)
 	server := httptest.NewServer(r)
@@ -146,7 +144,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	cfg, _ := devicemanagement.NewConfig(io.NopCloser(strings.NewReader(configYaml)))
 	dm := devicemanagement.New(s, &msgCtx, cfg)
-	as := alarms.New(alarms.NewAlarmStorage(s), &msgCtx)
+	as := alarms.New(alarms.NewStorage(s), &msgCtx)
 
 	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
 	is.NoErr(err)

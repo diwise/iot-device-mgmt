@@ -154,7 +154,7 @@ func (d deviceStorageImpl) GetDeviceBySensorID(ctx context.Context, sensorID str
 	return d.s.GetDeviceBySensorID(ctx, sensorID)
 }
 
-func NewDeviceStorage(s storage.Store) DeviceStorage {
+func NewStorage(s storage.Store) DeviceStorage {
 	return &deviceStorageImpl{
 		s: s,
 	}
@@ -205,7 +205,12 @@ func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []s
 		}
 		return types.Device{}, err
 	}
-	return d, nil
+
+	if slices.Contains(tenants, d.Tenant) {
+		return d, nil
+	}
+
+	return types.Device{}, ErrDeviceNotFound
 }
 
 func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {

@@ -16,6 +16,7 @@ const (
 	listenAddress flagType = iota
 	servicePort
 	controlPort
+	enableTracing 
 
 	policiesFile
 	devicesFile
@@ -50,3 +51,4 @@ var port = servicerunner.WithPort[appConfig]
 var pprof = servicerunner.WithPPROF[appConfig]
 var liveness = servicerunner.WithK8SLivenessProbe[appConfig]
 var readiness = servicerunner.WithK8SReadinessProbes[appConfig]
+var tracing = servicerunner.WithTracing[appConfig]

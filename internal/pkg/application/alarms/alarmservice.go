@@ -31,7 +31,7 @@ type AlarmStorage interface {
 	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error)
 }
 
-func NewAlarmStorage(s storage.Store) AlarmStorage {
+func NewStorage(s storage.Store) AlarmStorage {
 	return &alarmStorageImpl{
 		s: s,
 	}

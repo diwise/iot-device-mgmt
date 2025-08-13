@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
@@ -30,6 +31,7 @@ func defaultFlags() flagMap {
 		listenAddress: "0.0.0.0",
 		servicePort:   "8080",
 		controlPort:   "8000",
+		enableTracing: "true",
 
 		policiesFile:      "/opt/diwise/config/authz.rego",
 		configurationFile: "/opt/diwise/config/config.yaml",
@@ -73,8 +75,8 @@ func main() {
 	dmCfg, err := devicemanagement.NewConfig(cfg)
 	exitIf(err, logger, "could not create device management config")
 
-	dm := devicemanagement.New(devicemanagement.NewDeviceStorage(storage), messenger, dmCfg)
-	as := alarms.New(alarms.NewAlarmStorage(storage), messenger)
+	dm := devicemanagement.New(devicemanagement.NewStorage(storage), messenger, dmCfg)
+	as := alarms.New(alarms.NewStorage(storage), messenger)
 	wd := watchdog.New(as)
 
 	appCfg := appConfig{
@@ -104,7 +106,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
 			pprof(), liveness(func() error { return nil }), readiness(probes),
 		),
-		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]),
+		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				return api.RegisterHandlers(ctx, handler, policies, appCfg.dm, appCfg.alarm, appCfg.db)
 			}),
@@ -182,6 +184,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flags[dbUser] = envOrDef(ctx, "POSTGRES_USER", flags[dbUser])
 	flags[dbPassword] = envOrDef(ctx, "POSTGRES_PASSWORD", flags[dbPassword])
 	flags[dbSSLMode] = envOrDef(ctx, "POSTGRES_SSLMODE", flags[dbSSLMode])
+	flags[enableTracing] = envOrDef(ctx, "ENABLE_TRACING", flags[enableTracing])
 
 	apply := func(f flagType) func(string) error {
 		return func(value string) error {
@@ -203,6 +206,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 func exitIf(err error, logger *slog.Logger, msg string, args ...any) {
 	if err != nil {
 		logger.With(args...).Error(msg, "err", err.Error())
+		time.Sleep(2 * time.Second)
 		os.Exit(1)
 	}
 }

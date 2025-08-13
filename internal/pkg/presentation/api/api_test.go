@@ -383,9 +383,9 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 			return types.Collection[types.DeviceStatus]{}, nil
 		},
 	}
-	repo := devicemanagement.NewDeviceStorage(db)
+	repo := devicemanagement.NewStorage(db)
 	dm := devicemanagement.New(repo, msgCtx, cfg)
-	arepo := alarms.NewAlarmStorage(db)
+	arepo := alarms.NewStorage(db)
 	as := alarms.New(arepo, msgCtx)
 
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
