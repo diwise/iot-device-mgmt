@@ -38,6 +38,8 @@ type Condition struct {
 
 	IncludeDeleted bool
 
+	Export bool
+
 	sortBy    string
 	sortOrder string
 
@@ -380,6 +382,13 @@ func WithUrn(urn string) ConditionFunc {
 	}
 }
 
+func WithExport() ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.Export = true
+		return c
+	}
+}
+
 func unique(s []string) []string {
 	keys := make(map[string]bool)
 	list := []string{}
@@ -438,6 +447,10 @@ func ParseConditions(ctx context.Context, params map[string][]string) []Conditio
 			conditions = append(conditions, WithName(v[0]))
 		case "urn":
 			conditions = append(conditions, WithUrn(v[0]))
+		case "export":
+			if v[0] == "true" {
+				conditions = append(conditions, WithExport())
+			}
 		case "lastseen":
 			log.Debug("last seen", "value", v[0])
 

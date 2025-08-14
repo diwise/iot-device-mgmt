@@ -731,6 +731,11 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 	offsetLimit, offset, limit := condition.OffsetLimit(0, 10)
 
+	if condition.Export {
+		offsetLimit = ""
+		offset = 0
+	}
+
 	sql := fmt.Sprintf(`
 		WITH latest_status AS (
 			SELECT DISTINCT ON (device_id)
@@ -948,6 +953,10 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		}
 
 		devices = append(devices, device)
+	}
+
+	if condition.Export {
+		limit = len(devices)
 	}
 
 	return types.Collection[types.Device]{
