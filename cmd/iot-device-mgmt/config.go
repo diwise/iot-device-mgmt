@@ -16,7 +16,7 @@ const (
 	listenAddress flagType = iota
 	servicePort
 	controlPort
-	enableTracing 
+	enableTracing
 
 	policiesFile
 	devicesFile
