@@ -2,85 +2,81 @@ package alarms
 
 import (
 	"context"
+	"encoding/json"
+	"log/slog"
 	"testing"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/google/uuid"
 	"github.com/matryer/is"
 )
 
-func TestAddAlarm(t *testing.T) {
-	is, ctx, s, m := testSetup(t)
-	service := New(s, &m)
-
-	alarm := newAlarm()
-	err := service.Add(ctx, alarm)
-	is.NoErr(err)
-}
-
-func TestCloseAlarm(t *testing.T) {
-	is, ctx, s, m := testSetup(t)
-	service := New(s, &m)
-
-	alarm := newAlarm()
-	err := service.Add(ctx, alarm)
-	is.NoErr(err)
-
-	err = service.Close(ctx, alarm.ID, []string{alarm.Tenant})
-	is.NoErr(err)
-
-	// close already closed alarm
-	err = service.Close(ctx, alarm.ID, []string{alarm.Tenant})
-	is.NoErr(err)
-
-	// 1 create and 1 closed
-	is.Equal(2, len(m.PublishOnTopicCalls()))
-}
-
-func newAlarm() types.Alarm {
-	alarm := types.Alarm{
-		ID:          uuid.NewString(),
-		AlarmType:   "alarm1",
-		Description: "alarm1",
-		ObservedAt:  time.Now(),
-		RefID:       uuid.NewString(),
-		Severity:    1,
-		Tenant:      "default",
-	}
-	return alarm
-}
-
-func testSetup(t *testing.T) (*is.I, context.Context, *storage.Storage, messaging.MsgContextMock) {
-	ctx := context.Background()
+func TestDeviceStatusHandler(t *testing.T) {
 	is := is.New(t)
+	log := slog.Default()
+	ctx := context.Background()
 
-	config := storage.NewConfig(
-		"localhost",
-		"postgres",
-		"password",
-		"5432",
-		"postgres",
-		"disable",
-	)
-	s, err := storage.New(ctx, config)
-	if err != nil {
-		t.SkipNow()
-	}
-	err = s.CreateTables(ctx)
-	if err != nil {
-		t.SkipNow()
-	}
-	m := messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-		PublishOnTopicFunc: func(ctx context.Context, message messaging.TopicMessage) error {
+	s := &AlarmStorageMock{
+		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
 	}
+	m := &messaging.MsgContextMock{}
 
-	return is, ctx, s, m
+	svc := New(s, m)
+
+	msg := &messaging.IncomingTopicMessageMock{
+		BodyFunc: func() []byte {
+			code := AlarmDeviceNotObserved
+			observedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			status := types.StatusMessage{
+				Code:      &code,
+				Timestamp: observedAt,
+			}
+			b, _ := json.Marshal(status)
+			return b
+		},
+	}
+
+	handler := NewDeviceStatusHandler(svc)
+	handler(ctx, msg, log)
+
+	is.Equal(1, len(s.AddAlarmCalls()))
+	is.Equal(AlarmDeviceNotObserved, s.AddAlarmCalls()[0].A.AlarmType)
+}
+
+func TestDeviceStatusHandlerWithMessages(t *testing.T) {
+	is := is.New(t)
+	log := slog.Default()
+	ctx := context.Background()
+
+	s := &AlarmStorageMock{
+		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+			return nil
+		},
+	}
+	m := &messaging.MsgContextMock{}
+
+	svc := New(s, m)
+
+	msg := &messaging.IncomingTopicMessageMock{
+		BodyFunc: func() []byte {
+			code := ""
+			observedAt := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+			status := types.StatusMessage{
+				Code:      &code,
+				Timestamp: observedAt,
+				Messages:  []string{"message1", "message2"},
+			}
+			b, _ := json.Marshal(status)
+			return b
+		},
+	}
+
+	handler := NewDeviceStatusHandler(svc)
+	handler(ctx, msg, log)
+
+	is.Equal(2, len(s.AddAlarmCalls()))
+	is.Equal("message2", s.AddAlarmCalls()[1].A.AlarmType)
 }
