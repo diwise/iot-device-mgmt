@@ -5,9 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
+	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 const DefaultTimespan = 3600
@@ -18,16 +17,14 @@ type Watchdog interface {
 }
 
 type watchdogImpl struct {
-	done             chan bool
-	devicemanagement devicemanagement.DeviceManagement
-	messenger        messaging.MsgContext
+	done     chan bool
+	alarmSvc alarms.AlarmService
 }
 
-func New(d devicemanagement.DeviceManagement, m messaging.MsgContext) Watchdog {
+func New(a alarms.AlarmService) Watchdog {
 	w := &watchdogImpl{
-		done:             make(chan bool),
-		devicemanagement: d,
-		messenger:        m,
+		done:     make(chan bool),
+		alarmSvc: a,
 	}
 
 	return w
@@ -43,16 +40,20 @@ func (w *watchdogImpl) Stop(ctx context.Context) {
 
 func (w *watchdogImpl) run(ctx context.Context) {
 	l := &lastObservedWatcher{
-		devicemanagement: w.devicemanagement,
-		messenger:        w.messenger,
-		running:          false,
-		interval:         10 * time.Minute,
+		alarmSvc: w.alarmSvc,
+		running:  false,
+		interval: 10 * time.Minute,
 	}
+
 	go l.Watch(ctx)
 
-	for range w.done {
-		ctx.Done()
-		return
+	for {
+		select {
+		case <-w.done:
+			return
+		case <-ctx.Done():
+			return
+		}
 	}
 }
 
@@ -61,26 +62,21 @@ type Watcher interface {
 }
 
 type lastObservedWatcher struct {
-	devicemanagement devicemanagement.DeviceManagement
-	messenger        messaging.MsgContext
-	running          bool
-	interval         time.Duration
-	mu               sync.Mutex
+	alarmSvc alarms.AlarmService
+	running  bool
+	interval time.Duration
+	mu       sync.Mutex
 }
 
 func (l *lastObservedWatcher) Watch(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
-
-	pub := make(chan string)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			go l.checkLastObserved(ctx, pub)
-		case deviceID := <-pub:
-			l.publish(ctx, deviceID)
+			go l.checkLastObserved(ctx)
 		}
 	}
 }
@@ -92,70 +88,32 @@ func (l *lastObservedWatcher) setRunning(b bool) {
 	l.running = b
 }
 
-func (l *lastObservedWatcher) checkLastObserved(ctx context.Context, pub chan string) {
+func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
 	if l.running {
 		return
 	}
 
 	l.setRunning(true)
 
-	offset := 0
-	limit := 10
-
-	do := func() bool {
-		collection, err := l.devicemanagement.GetOnlineDevices(ctx, offset, limit)
-
-		if err != nil {
-			return false
-		}
-
-		for _, d := range collection.Data {
-			if !checkLastObservedIsAfter(d.DeviceStatus.ObservedAt, time.Now(), d.DeviceProfile.Interval) {
-				pub <- d.DeviceID
-			}
-		}
-
-		return collection.Count != 0
+	result, err := l.alarmSvc.GetStaleDevices(ctx)
+	if err != nil {
+		l.setRunning(false)
+		return
 	}
 
-	for do() {
-		offset = offset + limit
+	if result.TotalCount == 0 {
+		l.setRunning(false)
+		return
+	}
+
+	for _, d := range result.Data {
+		l.alarmSvc.Add(ctx, d.DeviceID, types.AlarmDetails{
+			AlarmType:   alarms.AlarmDeviceNotObserved,
+			Description: "",
+			ObservedAt:  time.Now().UTC(),
+			Severity:    types.AlarmSeverityUnknown,
+		})
 	}
 
 	l.setRunning(false)
-}
-
-func checkLastObservedIsAfter(lastObserved time.Time, t time.Time, i int) bool {
-	lastObserved = lastObserved.UTC()
-	t = t.UTC()
-
-	shouldHaveBeenCalledAfter := t.Add(-time.Duration(i) * time.Second)
-	after := lastObserved.After(shouldHaveBeenCalledAfter)
-
-	return after
-}
-
-func (w *lastObservedWatcher) publish(ctx context.Context, deviceID string) {
-	logger := logging.GetFromContext(ctx)
-
-	tenants, err := w.devicemanagement.GetTenants(ctx)
-	if err != nil {
-		logger.Error("failed to publish DeviceNotObserved, could not fetch tenants", "err", err.Error())
-		return
-	}
-
-	d, err := w.devicemanagement.GetByDeviceID(ctx, deviceID, tenants.Data)
-	if err != nil {
-		logger.Error("failed to publish DeviceNotObserved, could not fetch device", "device_id", deviceID, "err", err.Error())
-		return
-	}
-
-	err = w.messenger.PublishOnTopic(ctx, &DeviceNotObserved{
-		DeviceID:   d.DeviceID,
-		Tenant:     d.Tenant,
-		ObservedAt: time.Now().UTC(),
-	})
-	if err != nil {
-		logger.Error("failed to publish DeviceNotObserved", "err", err.Error())
-	}
 }

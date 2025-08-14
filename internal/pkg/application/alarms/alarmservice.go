@@ -2,132 +2,165 @@ package alarms
 
 import (
 	"context"
-	"errors"
+	"encoding/json"
 	"fmt"
-	"time"
+	"log/slog"
+	"strconv"
+	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
+	"go.opentelemetry.io/otel"
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/google/uuid"
 )
 
-//go:generate moq -rm -out alarmservice_mock.go . AlarmService
-type AlarmService interface {
-	Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
-	Info(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.InformationItem], error)
-	GetByID(ctx context.Context, alarmID string, tenants []string) (types.Alarm, error)
-	GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (types.Collection[types.Alarm], error)
-	Add(ctx context.Context, alarm types.Alarm) error
-	Close(ctx context.Context, alarmID string, tenants []string) error
-}
+var tracer = otel.Tracer("iot-device-mgmt/alarms")
 
 var ErrAlarmNotFound = fmt.Errorf("alarm not found")
 
-//go:generate moq -rm -out alarmrepository_mock.go . AlarmRepository
-type AlarmRepository interface {
-	QueryInformation(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.InformationItem], error)
-	QueryAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarm], error)
-	GetAlarm(ctx context.Context, conditions ...storage.ConditionFunc) (types.Alarm, error)
-	AddAlarm(ctx context.Context, alarm types.Alarm) error
-	CloseAlarm(ctx context.Context, alarmID, tenant string) error
+const AlarmDeviceNotObserved string = "device_not_observed"
+
+//go:generate moq -rm -out alarmstorage_mock.go . AlarmStorage
+type AlarmStorage interface {
+	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
+	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
+	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error)
+}
+
+func NewStorage(s storage.Store) AlarmStorage {
+	return &alarmStorageImpl{
+		s: s,
+	}
+}
+
+type alarmStorageImpl struct {
+	s storage.Store
+}
+
+func (s *alarmStorageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+	return s.s.AddAlarm(ctx, deviceID, a)
+}
+func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
+	return s.s.GetStaleDevices(ctx)
+}
+func (s *alarmStorageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
+	return s.s.RemoveAlarm(ctx, deviceID, alarmType)
+}
+func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+	return s.s.GetAlarms(ctx, conditions...)
 }
 
 type alarmSvc struct {
-	storage   AlarmRepository
+	storage   AlarmStorage
 	messenger messaging.MsgContext
 }
 
-func New(d AlarmRepository, m messaging.MsgContext) AlarmService {
-	svc := &alarmSvc{
-		storage:   d,
-		messenger: m,
+//go:generate moq -rm -out alarmservice_mock.go . AlarmService
+type AlarmService interface {
+	Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
+	Remove(ctx context.Context, deviceID string, alarmType string) error
+	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+	RegisterTopicMessageHandler(ctx context.Context) error
+	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
+}
+
+func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
+	alarm.AlarmType = strings.ToLower(strings.ReplaceAll(alarm.AlarmType, " ", "_"))
+	return svc.storage.AddAlarm(ctx, deviceID, alarm)
+}
+
+func (svc *alarmSvc) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
+	return svc.storage.GetStaleDevices(ctx)
+}
+
+func (svc *alarmSvc) Remove(ctx context.Context, deviceID string, alarmType string) error {
+	return svc.storage.RemoveAlarm(ctx, deviceID, alarmType)
+}
+
+func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
+	return svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(svc))
+}
+
+func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
+	conditions := []storage.ConditionFunc{}
+
+	for k, v := range params {
+		switch strings.ToLower(k) {
+		case "limit":
+			if i, err := strconv.Atoi(v[0]); err == nil {
+				conditions = append(conditions, storage.WithLimit(i))
+			}
+		case "offset":
+			if o, err := strconv.Atoi(v[0]); err == nil {
+				conditions = append(conditions, storage.WithOffset(o))
+			}
+		}
 	}
 
-	svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(m, svc))
-	svc.messenger.RegisterTopicMessageHandler("watchdog.deviceNotObserved", NewDeviceNotObservedHandler(m, svc))
+	conditions = append(conditions, storage.WithActive(true), storage.WithTenants(tenants))
+
+	return svc.storage.GetAlarms(ctx, conditions...)
+}
+
+func New(s AlarmStorage, m messaging.MsgContext) AlarmService {
+	svc := &alarmSvc{
+		storage:   s,
+		messenger: m,
+	}
 
 	return svc
 }
 
-func (svc alarmSvc) Get(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Alarm], error) {
-	alarms, err := svc.storage.QueryAlarms(ctx, storage.WithOffset(offset), storage.WithLimit(limit), storage.WithTenants(tenants))
-	if err != nil {
-		return types.Collection[types.Alarm]{}, err
-	}
+func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+		var err error
 
-	return alarms, nil
-}
+		ctx, span := tracer.Start(ctx, "device-status")
+		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+		_, ctx, log := o11y.AddTraceIDToLoggerAndStoreInContext(span, l, ctx)
 
-func (svc alarmSvc) Info(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.InformationItem], error) {
-	alarms, err := svc.storage.QueryInformation(ctx, storage.WithOffset(offset), storage.WithLimit(limit), storage.WithTenants(tenants))
-	if err != nil {
-		return types.Collection[types.InformationItem]{}, err
-	}
-
-	return alarms, nil
-}
-
-func (svc alarmSvc) GetByID(ctx context.Context, alarmID string, tenants []string) (types.Alarm, error) {
-	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants))
-	if err != nil {
-		return types.Alarm{}, err
-	}
-
-	return alarm, nil
-}
-
-func (svc alarmSvc) GetByRefID(ctx context.Context, refID string, offset, limit int, tenants []string) (types.Collection[types.Alarm], error) {
-	alarms, err := svc.storage.QueryAlarms(ctx, storage.WithRefID(refID), storage.WithTenants(tenants))
-	if err != nil {
-		return types.Collection[types.Alarm]{}, err
-	}
-
-	return alarms, nil
-}
-
-func (svc alarmSvc) Add(ctx context.Context, alarm types.Alarm) error {
-	if alarm.RefID == "" {
-		return fmt.Errorf("no refID is set on alarm")
-	}
-	if alarm.ID == "" {
-		alarm.ID = uuid.NewString()
-	}
-	if alarm.ObservedAt.IsZero() {
-		alarm.ObservedAt = time.Now().UTC()
-	}
-
-	err := svc.storage.AddAlarm(ctx, alarm)
-	if err != nil {
-		return err
-	}
-
-	return svc.messenger.PublishOnTopic(ctx, &AlarmCreated{
-		Alarm:     alarm,
-		Tenant:    alarm.Tenant,
-		Timestamp: alarm.ObservedAt,
-	})
-}
-
-func (svc alarmSvc) Close(ctx context.Context, alarmID string, tenants []string) error {
-	alarm, err := svc.storage.GetAlarm(ctx, storage.WithAlarmID(alarmID), storage.WithTenants(tenants), storage.WithDeleted())
-	if err != nil {
-		if errors.Is(err, storage.ErrDeleted) {
-			return nil
+		m := types.StatusMessage{}
+		err = json.Unmarshal(itm.Body(), &m)
+		if err != nil {
+			log.Error("failed to unmarshal status message", "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
+			return
 		}
-		return err
+
+		if m.Code == nil && len(m.Messages) == 0 {
+			log.Debug("received device status with no error code, will remove any device not observed alarms", "device_id", m.DeviceID)
+			err = svc.Remove(ctx, m.DeviceID, AlarmDeviceNotObserved)
+			if err != nil {
+				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
+				return
+			}
+			return
+		}
+
+		//log.Debug("received device status", "service", "alarmservice", "body", string(itm.Body()))
+
+		if m.Code != nil && *m.Code != "" {
+			err = svc.Add(ctx, m.DeviceID, types.AlarmDetails{
+				DeviceID:    m.DeviceID,
+				AlarmType:   *m.Code,
+				Description: strings.Join(m.Messages, ", "),
+				ObservedAt:  m.Timestamp,
+			})
+		} else if len(m.Messages) > 0 {
+			for _, msg := range m.Messages {
+				err = svc.Add(ctx, m.DeviceID, types.AlarmDetails{
+					DeviceID:   m.DeviceID,
+					AlarmType:  msg,
+					ObservedAt: m.Timestamp,
+				})
+			}
+		}
+
+		if err != nil {
+			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
+		}
 	}
-
-	err = svc.storage.CloseAlarm(ctx, alarmID, alarm.Tenant)
-	if err != nil {
-		return err
-	}
-
-	err = svc.messenger.PublishOnTopic(ctx, &AlarmClosed{
-		ID:        alarm.ID,
-		Tenant:    alarm.Tenant,
-		Timestamp: time.Now().UTC()})
-
-	return err
 }

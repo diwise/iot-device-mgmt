@@ -6,24 +6,24 @@ import (
 
 type Device struct {
 	Active      bool     `json:"active"`
-	SensorID    string   `json:"sensorID"`
+	SensorID    string   `json:"sensorID,omitzero"`
 	DeviceID    string   `json:"deviceID"`
 	Tenant      string   `json:"tenant"`
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
+	Name        string   `json:"name,omitzero"`
+	Description string   `json:"description,omitzero"`
 	Location    Location `json:"location"`
-	Environment string   `json:"environment,omitempty"`
-	Source      string   `json:"source,omitempty"`
+	Environment string   `json:"environment,omitzero"`
+	Source      string   `json:"source,omitzero"`
 
 	Lwm2mTypes []Lwm2mType `json:"types"`
-	Tags       []Tag       `json:"tags,omitempty"`
+	Tags       []Tag       `json:"tags,omitzero"`
 
 	DeviceProfile DeviceProfile `json:"deviceProfile"`
 
 	DeviceStatus DeviceStatus `json:"deviceStatus"`
 	DeviceState  DeviceState  `json:"deviceState"`
 
-	Alarms []string `json:"alarms,omitempty"`
+	Alarms []string `json:"alarms,omitzero"`
 }
 
 type Location struct {
@@ -48,8 +48,13 @@ type Lwm2mType struct {
 }
 
 type DeviceStatus struct {
-	BatteryLevel int       `json:"batteryLevel"`
-	ObservedAt   time.Time `json:"observedAt"`
+	BatteryLevel    int       `json:"batteryLevel,omitzero"`
+	RSSI            *float64  `json:"rssi,omitempty"`
+	LoRaSNR         *float64  `json:"loRaSNR,omitempty"`
+	Frequency       *int64    `json:"frequency,omitempty"`
+	SpreadingFactor *float64  `json:"spreadingFactor,omitempty"`
+	DR              *int      `json:"dr,omitempty"`
+	ObservedAt      time.Time `json:"observedAt"`
 }
 
 const (
@@ -66,19 +71,24 @@ type DeviceState struct {
 }
 
 const (
-	AlarmSeverityLow    = 1
-	AlarmSeverityMedium = 2
-	AlarmSeverityHigh   = 3
+	AlarmSeverityUnknown = 0
+	AlarmSeverityLow     = 1
+	AlarmSeverityMedium  = 2
+	AlarmSeverityHigh    = 3
 )
 
-type Alarm struct {
-	ID          string    `json:"id"`
+type Alarms struct {
+	DeviceID   string    `json:"deviceID,omitzero"`
+	AlarmTypes []string  `json:"alarms"`
+	ObservedAt time.Time `json:"observedAt"`
+}
+
+type AlarmDetails struct {
+	DeviceID    string    `json:"deviceID,omitzero"`
 	AlarmType   string    `json:"alarmType"`
 	Description string    `json:"description,omitempty"`
 	ObservedAt  time.Time `json:"observedAt"`
-	RefID       string    `json:"refID"`
 	Severity    int       `json:"severity"`
-	Tenant      string    `json:"tenant"`
 }
 
 type InformationItem struct {
@@ -100,4 +110,31 @@ type Bounds struct {
 	MaxLon float64
 	MinLat float64
 	MaxLat float64
+}
+
+type StatusMessage struct {
+	DeviceID string `json:"deviceID"`
+
+	BatteryLevel *float64 `json:"batteryLevel,omitempty"`
+
+	Code     *string  `json:"statusCode,omitempty"`
+	Messages []string `json:"statusMessages,omitempty"`
+
+	RSSI            *float64 `json:"rssi,omitempty"`
+	LoRaSNR         *float64 `json:"loRaSNR,omitempty"`
+	Frequency       *int64   `json:"frequency,omitempty"`
+	SpreadingFactor *float64 `json:"spreadingFactor,omitempty"`
+	DR              *int     `json:"dr,omitempty"`
+
+	Tenant    string    `json:"tenant"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+type Measurement struct {
+	ID        string    `json:"id,omitzero"`
+	Urn       string    `json:"urn,omitzero"`
+	Name      *string   `json:"name,omitzero"`
+	Value     any       `json:"value,omitzero"`
+	Unit      *string   `json:"unit,omitzero"`
+	Timestamp time.Time `json:"timestamp"`
 }
