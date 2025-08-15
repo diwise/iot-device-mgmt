@@ -133,6 +133,12 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	s := storage.NewWithPool(p)
 
+	err = s.Initialize(ctx)
+	if err != nil {
+		t.Log("could not initialize storage, will skip test")
+		t.SkipNow()
+	}
+
 	msgCtx := messaging.MsgContextMock{
 		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
 			return nil
