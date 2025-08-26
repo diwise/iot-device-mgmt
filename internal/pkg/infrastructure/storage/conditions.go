@@ -136,7 +136,13 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
 	}
 	if c.Search != "" {
-		args["search"] = c.Search
+		term := c.Search
+
+		if !strings.Contains(term, "%") {
+			term = "%" + strings.TrimSpace(term) + "%"
+		}
+
+		args["search"] = term
 	}
 	if c.offset != nil {
 		args["offset"] = *c.offset
