@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -816,12 +817,16 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 	args := condition.NamedArgs()
 
+	now := time.Now()
+
 	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
 		log.Debug("failed to query database", "sql", sql, "args", args, "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 	defer rows.Close()
+
+	log.Debug("Query", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	var devices []types.Device
 	var count uint64
