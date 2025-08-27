@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,12 +17,15 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
 	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	k8shandlers "github.com/diwise/service-chassis/pkg/infrastructure/net/http/handlers"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/servicerunner"
+	"go.yaml.in/yaml/v2"
 )
 
 const serviceName string = "iot-device-mgmt"
@@ -57,37 +61,19 @@ func main() {
 	ctx, logger, cleanup := o11y.Init(ctx, serviceName, serviceVersion, "json")
 	defer cleanup()
 
-	storage, err := newStorage(ctx, flags)
-	exitIf(err, logger, "could not create or connect to database")
+	cfg, err := os.Open(flags[configurationFile])
+	exitIf(err, logger, "could not open configuration file")
 
-	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, logger))
-	exitIf(err, logger, "failed to init messenger")
+	dmCfg, err := parseExternalConfigFile(ctx, cfg)
+	exitIf(err, logger, "could not create device management config")
 
 	policies, err := os.Open(flags[policiesFile])
 	exitIf(err, logger, "unable to open opa policy file")
 
-	cfg, err := os.Open(flags[configurationFile])
-	exitIf(err, logger, "could not open configuration file")
-
 	devices, err := os.Open(flags[devicesFile])
 	exitIf(err, logger, "could not open devices file")
 
-	dmCfg, err := devicemanagement.NewConfig(cfg)
-	exitIf(err, logger, "could not create device management config")
-
-	dm := devicemanagement.New(devicemanagement.NewStorage(storage), messenger, dmCfg)
-	as := alarms.New(alarms.NewStorage(storage), messenger)
-	wd := watchdog.New(as)
-
-	appCfg := appConfig{
-		messenger: messenger,
-		db:        storage,
-		dm:        dm,
-		alarm:     as,
-		watchdog:  wd,
-	}
-
-	runner, err := initialize(ctx, flags, &appCfg, policies, devices)
+	runner, err := initialize(ctx, flags, dmCfg, policies, devices)
 	exitIf(err, logger, "failed to initialize service runner")
 
 	err = runner.Run(ctx)
@@ -97,10 +83,22 @@ func main() {
 func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 	defer policies.Close()
 
+	log := logging.GetFromContext(ctx)
+
 	probes := map[string]k8shandlers.ServiceProber{
 		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
 		"timescale": func(context.Context) (string, error) { return "ok", nil },
 	}
+
+	s, err := newStorage(ctx, flags)
+	exitIf(err, log, "could not create or connect to database")
+
+	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
+	exitIf(err, log, "failed to init messenger")
+
+	var dm devicemanagement.DeviceManagement
+	var as alarms.AlarmService
+	var wd watchdog.Watchdog
 
 	_, runner := servicerunner.New(ctx, *cfg,
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
@@ -108,50 +106,62 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		),
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
-				return api.RegisterHandlers(ctx, handler, policies, appCfg.dm, appCfg.alarm, appCfg.db)
+				return api.RegisterHandlers(ctx, handler, policies, dm, as, s)
 			}),
 		),
+		oninit(func(ctx context.Context, ac *appConfig) error {
+			log.Debug("initializing servicerunner")
+
+			dm = devicemanagement.New(devicemanagement.NewStorage(s), messenger, &ac.DeviceManagementConfig)
+			as = alarms.New(alarms.NewStorage(s), messenger, &ac.AlarmServiceConfig)
+			wd = watchdog.New(as, &ac.WatchdogConfig)
+
+			return nil
+		}),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
-			err = appCfg.db.Initialize(ctx)
+			log.Debug("starting servicerunner")
+
+			err = s.Initialize(ctx)
+			if err != nil {
+				return
+			}
+			err = storage.SeedLwm2mTypes(ctx, s, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedLwm2mTypes(ctx, appCfg.db, appCfg.dm.Config().Types)
+			err = storage.SeedDeviceProfiles(ctx, s, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedDeviceProfiles(ctx, appCfg.db, appCfg.dm.Config().DeviceProfiles)
+			err = storage.SeedDevices(ctx, s, devices, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ","))
+			messenger.Start()
+
+			err = dm.RegisterTopicMessageHandler(ctx)
 			if err != nil {
 				return
 			}
 
-			appCfg.messenger.Start()
-
-			err = appCfg.dm.RegisterTopicMessageHandler(ctx)
+			err = as.RegisterTopicMessageHandler(ctx)
 			if err != nil {
 				return
 			}
 
-			err = appCfg.alarm.RegisterTopicMessageHandler(ctx)
-			if err != nil {
-				return
-			}
-
-			appCfg.watchdog.Start(ctx)
+			wd.Start(ctx)
 
 			return nil
 		}),
 		onshutdown(func(ctx context.Context, appCfg *appConfig) error {
-			appCfg.watchdog.Stop(ctx)
-			appCfg.messenger.Close()
-			appCfg.db.Close()
+			log.Debug("shutdown servicerunner")
+
+			wd.Stop(ctx)
+			messenger.Close()
+			s.Close()
 
 			return nil
 		}),
@@ -165,6 +175,34 @@ func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
 		return &storage.StoreMock{}, fmt.Errorf("not implemented")
 	}
 	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
+}
+
+func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConfig, error) {
+	defer cfgFile.Close()
+
+	b, err := io.ReadAll(cfgFile)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg := &appConfig{}
+	err = yaml.Unmarshal(b, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	i := slices.IndexFunc(cfg.DeviceManagementConfig.DeviceProfiles, func(dp types.DeviceProfile) bool {
+		return dp.Decoder == "unknown"
+	})
+
+	if i < 0 {
+		cfg.DeviceManagementConfig.DeviceProfiles = append(cfg.DeviceManagementConfig.DeviceProfiles, types.DeviceProfile{
+			Name:    "unknown",
+			Decoder: "unknown",
+		})
+	}
+
+	return cfg, nil
 }
 
 func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, flagMap) {

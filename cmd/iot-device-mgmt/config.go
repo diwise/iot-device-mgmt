@@ -4,8 +4,6 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
-	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/servicerunner"
 )
 
@@ -35,13 +33,19 @@ const (
 )
 
 type appConfig struct {
-	messenger messaging.MsgContext
-	db        storage.Store
-	dm        devicemanagement.DeviceManagement
-	alarm     alarms.AlarmService
-	watchdog  watchdog.Watchdog
+	AlarmServiceConfig     alarms.AlarmServiceConfig               `yaml:"alarmservice"`
+	DeviceManagementConfig devicemanagement.DeviceManagementConfig `yaml:"devicemanagement"`
+	WatchdogConfig         watchdog.WatchdogConfig                 `yaml:"watchdog"`
+	/*
+	   messenger              messaging.MsgContext
+	   db                     storage.Store
+	   dm                     devicemanagement.DeviceManagement
+	   alarm                  alarms.AlarmService
+	   watchdog               watchdog.Watchdog
+	*/
 }
 
+var oninit = servicerunner.OnInit[appConfig]
 var onstarting = servicerunner.OnStarting[appConfig]
 var onshutdown = servicerunner.OnShutdown[appConfig]
 var webserver = servicerunner.WithHTTPServeMux[appConfig]

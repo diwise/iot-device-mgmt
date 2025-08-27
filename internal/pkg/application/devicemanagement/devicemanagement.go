@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/otel"
-	"gopkg.in/yaml.v2"
 )
 
 var tracer = otel.Tracer("iot-device-mgmt/device")
@@ -68,34 +66,6 @@ type service struct {
 
 func (s service) Config() *DeviceManagementConfig {
 	return s.config
-}
-
-func NewConfig(config io.ReadCloser) (*DeviceManagementConfig, error) {
-	defer config.Close()
-
-	b, err := io.ReadAll(config)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := &DeviceManagementConfig{}
-	err = yaml.Unmarshal(b, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	i := slices.IndexFunc(cfg.DeviceProfiles, func(dp types.DeviceProfile) bool {
-		return dp.Decoder == "unknown"
-	})
-
-	if i < 0 {
-		cfg.DeviceProfiles = append(cfg.DeviceProfiles, types.DeviceProfile{
-			Name:    "unknown",
-			Decoder: "unknown",
-		})
-	}
-
-	return cfg, nil
 }
 
 //go:generate moq -rm -out devicestorage_mock.go . DeviceStorage

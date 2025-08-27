@@ -15,6 +15,8 @@ type Device struct {
 	Environment string   `json:"environment,omitzero"`
 	Source      string   `json:"source,omitzero"`
 
+	Interval int `json:"interval,omitzero"`
+
 	Lwm2mTypes []Lwm2mType `json:"types"`
 	Tags       []Tag       `json:"tags,omitzero"`
 
@@ -76,6 +78,13 @@ const (
 	AlarmSeverityMedium  = 2
 	AlarmSeverityHigh    = 3
 )
+
+type AlarmType struct {
+	Name     string `json:"name" yaml:"name"`
+	Enabled  bool   `json:"enabled" yaml:"enabled"`
+	Type     string `json:"type,omitzero" yaml:"type"`
+	Severity int    `json:"severity,omitzero" yaml:"severity"`
+}
 
 type Alarms struct {
 	DeviceID   string    `json:"deviceID,omitzero"`

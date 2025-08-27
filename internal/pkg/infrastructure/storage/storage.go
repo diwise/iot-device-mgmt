@@ -339,12 +339,13 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 		"tenant":         strings.TrimSpace(d.Tenant),
 		"lat":            d.Location.Latitude,
 		"lon":            d.Location.Longitude,
+		"interval":       d.Interval,
 		"device_profile": strings.ToLower(strings.TrimSpace(d.DeviceProfile.Decoder)),
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile)
-		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile)
+		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile,interval)
+		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile,@interval)
 		ON CONFLICT (device_id) DO UPDATE
 			SET
 				sensor_id = EXCLUDED.sensor_id,
@@ -356,6 +357,7 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 				tenant = EXCLUDED.tenant,
 				location = EXCLUDED.location,
 				device_profile = EXCLUDED.device_profile,
+				interval = EXCLUDED.interval,
 				modified_on = NOW()
 			WHERE devices.deleted = FALSE
 		`, args)
@@ -1131,6 +1133,7 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 			FROM device_status
 			GROUP BY device_id
 		)
+			
 		SELECT
 			d.device_id,
 			d.sensor_id,
@@ -1144,7 +1147,8 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 		FROM devices d
 			LEFT JOIN device_profiles dp ON dp.device_profile_id = d.device_profile
 			LEFT JOIN last_status ls ON ls.device_id = d.device_id
-		WHERE ls.last_observed IS NULL OR ls.last_observed < NOW() - (COALESCE(NULLIF(d.interval, 0), dp.interval) * INTERVAL '1 second');`
+		WHERE ls.last_observed IS NOT NULL AND ls.last_observed < NOW() - (COALESCE(NULLIF(d.interval, 0), dp.interval) * INTERVAL '1 second');
+	`
 
 	rows, err := s.pool.Query(ctx, sql)
 	if err != nil {
@@ -1154,24 +1158,41 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 
 	devices := []types.Device{}
 
-	for rows.Next() {
-		var deviceID, tenant, profile string
-		var device_interval, profile_interval, effective_interval int
-		var sensorID *string
-		var active bool
-		var lastObserved *time.Time
+	var deviceID, tenant, profile string
+	var device_interval, profile_interval, effective_interval int
+	var sensorID *string
+	var active bool
+	var lastObserved *time.Time
 
+	for rows.Next() {
 		err := rows.Scan(&deviceID, &sensorID, &active, &tenant, &profile, &device_interval, &profile_interval, &lastObserved, &effective_interval)
 		if err != nil {
 			return types.Collection[types.Device]{}, err
 		}
 
-		devices = append(devices, types.Device{
-			Active:   active,
-			SensorID: *sensorID,
-			DeviceID: deviceID,
-			Tenant:   tenant,
-		})
+		_a := active
+		_sid := *sensorID
+		_did := deviceID
+		_tid := tenant
+		_ei := effective_interval
+		_l := lastObserved
+
+		d := types.Device{
+			Active:   _a,
+			SensorID: _sid,
+			DeviceID: _did,
+			Tenant:   _tid,
+			Interval: _ei,
+			DeviceState: types.DeviceState{
+				ObservedAt: time.Time{},
+			},
+		}
+
+		if _l != nil {
+			d.DeviceState.ObservedAt = *_l
+		}
+
+		devices = append(devices, d)
 	}
 
 	return types.Collection[types.Device]{
