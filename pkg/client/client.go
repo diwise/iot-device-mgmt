@@ -294,7 +294,12 @@ func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context,
 	dmc.queue <- func() {
 		if err != nil {
 			log := logging.GetFromContext(ctx)
-			log.Error("failed to update device cache", "err", err.Error())
+
+			if errors.Is(err, ErrDeviceNotFound) {
+				log.Info("device not found", "devEUI", devEUI)
+			} else {
+				log.Error("failed to update device cache", "err", err.Error())
+			}
 
 			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
 		} else {

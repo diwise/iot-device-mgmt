@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 
@@ -125,11 +126,16 @@ func TestQueryWithActive(t *testing.T) {
 
 	c, err := s.Query(ctx, WithActive(true))
 	is.NoErr(err)
-	is.True(len(c.Data) > 0)
+	is.True(!slices.ContainsFunc(c.Data, func(d types.Device) bool {
+		return d.Active == false
+	}))
 
 	c, err = s.Query(ctx, WithActive(false))
 	is.NoErr(err)
-	is.True(len(c.Data) == 0)
+
+	is.True(!slices.ContainsFunc(c.Data, func(d types.Device) bool {
+		return d.Active == true
+	}))
 }
 
 func TestQueryWithSearch(t *testing.T) {

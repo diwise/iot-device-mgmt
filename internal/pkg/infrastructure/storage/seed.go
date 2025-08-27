@@ -117,9 +117,8 @@ func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
 		Source:      dr.source,
 		Lwm2mTypes:  strArrToLwm2m(dr.types),
 		DeviceProfile: types.DeviceProfile{
-			Name:     dr.sensorType,
-			Decoder:  dr.sensorType,
-			Interval: dr.interval,
+			Name:    dr.sensorType,
+			Decoder: dr.sensorType,
 		},
 		DeviceStatus: types.DeviceStatus{
 			BatteryLevel: -1,
@@ -128,6 +127,7 @@ func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
 			Online: false,
 			State:  types.DeviceStateUnknown,
 		},
+		Interval: dr.interval,
 	}
 
 	return device, device.DeviceProfile

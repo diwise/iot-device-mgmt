@@ -148,9 +148,9 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 		},
 	}
 
-	cfg, _ := devicemanagement.NewConfig(io.NopCloser(strings.NewReader(configYaml)))
-	dm := devicemanagement.New(s, &msgCtx, cfg)
-	as := alarms.New(alarms.NewStorage(s), &msgCtx)
+	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
+	dm := devicemanagement.New(s, &msgCtx, &cfg.DeviceManagementConfig)
+	as := alarms.New(alarms.NewStorage(s), &msgCtx, &cfg.AlarmServiceConfig)
 
 	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
 	is.NoErr(err)
@@ -197,7 +197,7 @@ const configYaml string = `
 deviceprofiles:
   - name: axsensor
     decoder: axsensor
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3303
@@ -206,7 +206,7 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3330
   - name: elsys
     decoder: elsys
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3200
@@ -217,10 +217,10 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3428
   - name: elsys_codec
     decoder: elsys_codec
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
-      - urn:oma:lwm2m:ext:3200      
+      - urn:oma:lwm2m:ext:3200
       - urn:oma:lwm2m:ext:3301
       - urn:oma:lwm2m:ext:3302
       - urn:oma:lwm2m:ext:3303
@@ -228,7 +228,7 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3428
   - name: elt_2_hp
     decoder: elt_2_hp
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3200
@@ -239,7 +239,7 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3428
   - name: enviot
     decoder: enviot
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3303
@@ -247,7 +247,7 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3330
   - name: milesight
     decoder: milesight
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3200
@@ -257,7 +257,7 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3428
   - name: niab-fls
     decoder: niab-fls
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3303
@@ -271,13 +271,13 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3424
   - name: senlabt
     decoder: senlabt
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3303
   - name: sensative
     decoder: sensative
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3302
@@ -285,21 +285,21 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3304
   - name: sensefarm
     decoder: sensefarm
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3323
       - urn:oma:lwm2m:ext:3327
   - name: vegapuls_air_41
     decoder: vegapuls_air_41
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3303
       - urn:oma:lwm2m:ext:3330
   - name: virtual
     decoder: virtual
-    interval: 3600 
+    interval: 3600
     types:
       - urn:oma:lwm2m:ext:3
       - urn:oma:lwm2m:ext:3200
@@ -317,11 +317,11 @@ deviceprofiles:
       - urn:oma:lwm2m:ext:3424
       - urn:oma:lwm2m:ext:3428
       - urn:oma:lwm2m:ext:3434
-      - urn:oma:lwm2m:ext:3435  
+      - urn:oma:lwm2m:ext:3435
 
 types:
   - urn : urn:oma:lwm2m:ext:3
-    name: Device 
+    name: Device
   - urn: urn:oma:lwm2m:ext:3303
     name: Temperature
   - urn: urn:oma:lwm2m:ext:3304
@@ -341,7 +341,7 @@ types:
   - urn: urn:oma:lwm2m:ext:3323
     name: Pressure
   - urn: urn:oma:lwm2m:ext:3435
-    name: FillingLevel 
+    name: FillingLevel
   - urn: urn:oma:lwm2m:ext:3424
     name: WaterMeter
   - urn: urn:oma:lwm2m:ext:3411
@@ -354,6 +354,64 @@ types:
     name: Energy
   - urn: urn:oma:lwm2m:ext:3350
     name: Stopwatch
+
+alarmtypes:
+  - name: backflow
+    enabled: true
+    type: application
+    severity: 0
+  - name: burst
+    enabled: true
+    type: application
+    severity: 0
+  - name:  empty_spool
+    enabled: true
+    type: application
+    severity: 0
+  - name:  freeze
+    enabled: true
+    type: application
+    severity: 0
+  - name:  leak
+    enabled: true
+    type: application
+    severity: 0
+  - name:  permanent_error
+    enabled: true
+    type: application
+    severity: 0
+  - name:  power_low
+    enabled: true
+    type: application
+    severity: 0
+  - name:  temporary_error
+    enabled: true
+    type: application
+    severity: 0
+  - name:  downlink_gateway
+    enabled: true
+    type: system
+    severity: 0
+  - name:  device_not_observed
+    enabled: true
+    type: system
+    severity: 0
+  - name:  otaa
+    enabled: true
+    type: system
+    severity: 0
+  - name:  uplink_fcnt_retransmission
+    enabled: false
+    type: system
+    severity: 0
+  - name:  uplink_mic
+    enabled: true
+    type: system
+    severity: 0
+  - name:  unknown
+    enabled: true
+    type: system
+    severity: 0
 `
 
 const opaModule string = `
