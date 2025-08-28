@@ -27,6 +27,8 @@ type Condition struct {
 	Tenants     []string
 	ProfileName []string
 
+	AlarmType string
+
 	LastSeen time.Time
 
 	Search string
@@ -122,6 +124,9 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	}
 	if c.Online != nil {
 		args["online"] = *c.Online
+	}
+	if c.AlarmType != "" {
+		args["alarmtype"] = c.AlarmType
 	}
 	if len(c.Types) == 1 {
 		args["profile"] = c.Types[0]
@@ -225,6 +230,10 @@ func (c Condition) Where() string {
 		where = append(where, "d.urn=@urn")
 	}
 
+	if c.Urn != "" {
+		where = append(where, "a.type=@alarmtype")
+	}
+
 	if len(where) == 0 {
 		return ""
 	}
@@ -305,6 +314,13 @@ func WithOffset(offset int) ConditionFunc {
 func WithLimit(limit int) ConditionFunc {
 	return func(c *Condition) *Condition {
 		c.limit = &limit
+		return c
+	}
+}
+
+func WithAlarmType(alarmtype string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.AlarmType = alarmtype
 		return c
 	}
 }

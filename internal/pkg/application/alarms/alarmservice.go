@@ -126,6 +126,10 @@ func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, 
 			if o, err := strconv.Atoi(v[0]); err == nil {
 				conditions = append(conditions, storage.WithOffset(o))
 			}
+		case "alarmtype":
+			if v[0] != "" {
+				conditions = append(conditions, storage.WithAlarmType(v[0]))
+			}
 		}
 	}
 
