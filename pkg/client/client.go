@@ -154,7 +154,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	ctx, span := tracer.Start(ctx, "create-device")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
-	url := dmc.url + "/api/v0/devices/"
+	url := dmc.url + "/api/v0/devices"
 
 	requestBody, err := json.Marshal(device)
 	if err != nil {
