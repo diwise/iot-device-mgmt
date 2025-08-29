@@ -1,4 +1,4 @@
-FROM --platform=$BUILDPLATFORM docker.io/golang:1.24 AS builder
+FROM --platform=$BUILDPLATFORM docker.io/golang:1.25 AS builder
 
 # Set the Current Working Directory inside the container
 WORKDIR /app
