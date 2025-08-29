@@ -29,7 +29,7 @@ var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
 type DeviceManagement interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
 
 	NewDevice(ctx context.Context, device types.Device) error
@@ -78,7 +78,7 @@ type DeviceStorage interface {
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
 	GetTenants(ctx context.Context) (types.Collection[string], error)
-	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
@@ -111,8 +111,8 @@ func (d deviceStorageImpl) SetDeviceState(ctx context.Context, deviceID string, 
 func (d deviceStorageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	return d.s.GetTenants(ctx)
 }
-func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
-	return d.s.GetDeviceStatus(ctx, deviceID)
+func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+	return d.s.GetDeviceStatus(ctx, deviceID, conditions...)
 }
 func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	return d.s.GetDeviceAlarms(ctx, deviceID)
@@ -199,13 +199,16 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	return result.Data[0], nil
 }
 
-func (s service) GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+func (s service) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
 	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
 	if err != nil {
 		return types.Collection[types.DeviceStatus]{}, err
 	}
 
-	return s.storage.GetDeviceStatus(ctx, deviceID)
+	conditions := storage.ParseConditions(ctx, params)
+	conditions = append(conditions, storage.WithTenants(tenants))
+
+	return s.storage.GetDeviceStatus(ctx, deviceID, conditions...)
 }
 
 func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {

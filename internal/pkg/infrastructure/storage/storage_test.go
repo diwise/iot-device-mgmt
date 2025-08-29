@@ -163,6 +163,13 @@ func TestGetSensorByID(t *testing.T) {
 	is.Equal(3, len(d.Lwm2mTypes))
 }
 
+func TestGetDeviceStatus(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+	_, err := s.GetDeviceStatus(ctx, "intern-70t589")
+	is.NoErr(err)	
+}
+
 const devices_csv string = `
 devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
 70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;`

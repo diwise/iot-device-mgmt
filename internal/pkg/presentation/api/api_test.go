@@ -377,7 +377,7 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 			return nil
 		},
 
-		GetDeviceStatusFunc: func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+		GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error) {
 			return types.Collection[types.DeviceStatus]{}, nil
 		},
 	}
