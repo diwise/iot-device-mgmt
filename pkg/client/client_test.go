@@ -19,7 +19,7 @@ func TestCreateUnknownDevice(t *testing.T) {
 
 	mockedService := test.NewMockServiceThat(
 		test.Expects(is,
-			expects.RequestPath("/api/v0/devices/"),
+			expects.RequestPath("/api/v0/devices"),
 			expects.RequestMethod("POST"),
 			expects.RequestHeaderContains("Content-Type", "application/json"),
 			expects.RequestBodyContaining(`"active":false`,

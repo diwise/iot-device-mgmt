@@ -37,7 +37,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
 //				panic("mock out the GetDeviceProfiles method")
 //			},
-//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
 //				panic("mock out the GetDeviceStatus method")
 //			},
 //			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
@@ -93,7 +93,7 @@ type DeviceManagementMock struct {
 	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
-	GetDeviceStatusFunc func(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error)
 
 	// GetLwm2mTypesFunc mocks the GetLwm2mTypes method.
 	GetLwm2mTypesFunc func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
@@ -178,6 +178,8 @@ type DeviceManagementMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
+			// Params is the params argument value.
+			Params map[string][]string
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
@@ -497,23 +499,25 @@ func (mock *DeviceManagementMock) GetDeviceProfilesCalls() []struct {
 }
 
 // GetDeviceStatus calls GetDeviceStatusFunc.
-func (mock *DeviceManagementMock) GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+func (mock *DeviceManagementMock) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
 	if mock.GetDeviceStatusFunc == nil {
 		panic("DeviceManagementMock.GetDeviceStatusFunc: method is nil but DeviceManagement.GetDeviceStatus was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
+		Params   map[string][]string
 		Tenants  []string
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
+		Params:   params,
 		Tenants:  tenants,
 	}
 	mock.lockGetDeviceStatus.Lock()
 	mock.calls.GetDeviceStatus = append(mock.calls.GetDeviceStatus, callInfo)
 	mock.lockGetDeviceStatus.Unlock()
-	return mock.GetDeviceStatusFunc(ctx, deviceID, tenants)
+	return mock.GetDeviceStatusFunc(ctx, deviceID, params, tenants)
 }
 
 // GetDeviceStatusCalls gets all the calls that were made to GetDeviceStatus.
@@ -523,11 +527,13 @@ func (mock *DeviceManagementMock) GetDeviceStatus(ctx context.Context, deviceID 
 func (mock *DeviceManagementMock) GetDeviceStatusCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
+	Params   map[string][]string
 	Tenants  []string
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
+		Params   map[string][]string
 		Tenants  []string
 	}
 	mock.lockGetDeviceStatus.RLock()

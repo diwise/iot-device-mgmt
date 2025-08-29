@@ -82,7 +82,7 @@ type Store interface {
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
@@ -975,21 +975,42 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 	}, nil
 }
 
-func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+	log := logging.GetFromContext(ctx)
+
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
 	}
 
-	rows, err := s.pool.Query(ctx, `
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
-		FROM device_status
-		WHERE device_id=@device_id
-		ORDER BY observed_at ASC
-		OFFSET 0 LIMIT 100`, args)
+	condition := &Condition{}
+	for _, c := range conditions {
+		c(condition)
+	}
+
+	offsetLimitSql, offset, limit := condition.OffsetLimit(0, 100)
+
+	sql := fmt.Sprintf(`
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr 
+		FROM (
+			SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
+			FROM device_status
+			WHERE device_id=@device_id
+			ORDER BY observed_at DESC
+			%s
+		) AS last100
+		ORDER BY observed_at ASC;
+		`, offsetLimitSql)
+
+	now := time.Now()
+
+	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
+		log.Debug("failed to query device statuses", "sql", sql, "args", args, "err", err.Error())
 		return types.Collection[types.DeviceStatus]{}, err
 	}
 	defer rows.Close()
+
+	log.Debug("Query", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	statuses := []types.DeviceStatus{}
 
@@ -1023,8 +1044,8 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (typ
 		Data:       statuses,
 		Count:      uint64(len(statuses)),
 		TotalCount: uint64(len(statuses)),
-		Offset:     0,
-		Limit:      uint64(len(statuses)),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
 	}, nil
 }
 
