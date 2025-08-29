@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -334,12 +336,66 @@ func TestGetAlarmsHandler(t *testing.T) {
 	is.Equal(200, res.StatusCode)
 
 	response := struct {
-		Data []types.AlarmDetails
+		Data []types.Alarms
 	}{}
 	b, _ := io.ReadAll(res.Body)
 	json.Unmarshal(b, &response)
 
 	is.Equal(response.Data[0].DeviceID, deviceID)
+}
+
+func TestGetAlarmsWithFilterHandler(t *testing.T) {
+	is, _, _, repo, _, _, mux := testSetup(t)
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	deviceID := uuid.NewString()
+
+	endpoint := fmt.Sprintf("%s/api/v0/alarms?alarmtype=%s", server.URL, alarms.AlarmDeviceNotObserved)
+
+	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+		return types.Collection[types.Alarms]{
+			Data: []types.Alarms{
+				{
+					DeviceID:   deviceID,
+					AlarmTypes: []string{alarms.AlarmDeviceNotObserved},
+				},
+			},
+			Count:      1,
+			Offset:     0,
+			Limit:      1,
+			TotalCount: 1,
+		}, nil
+	}
+
+	req, _ := http.NewRequest(http.MethodGet, endpoint, nil)
+
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("Authorization", "Bearer ????")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(200, res.StatusCode)
+
+	response := struct {
+		Data []types.Alarms
+	}{}
+	b, _ := io.ReadAll(res.Body)
+	json.Unmarshal(b, &response)
+
+	containsAlartType := slices.ContainsFunc(response.Data[0].AlarmTypes, func(a string) bool { return a == alarms.AlarmDeviceNotObserved })
+
+	is.True(containsAlartType)
+	is.Equal(response.Data[0].DeviceID, deviceID)
+
+	calls := repo.GetAlarmsCalls()
+	c := (&storage.Condition{})
+	for _, f := range calls[0].Conditions {
+		c = f(c)
+	}
+	is.Equal(c.AlarmType, "device_not_observed")
 }
 
 func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messaging.MsgContextMock, *storage.StoreMock, *slog.Logger, context.Context, *http.ServeMux) {
