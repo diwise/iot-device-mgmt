@@ -978,10 +978,6 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
 	log := logging.GetFromContext(ctx)
 
-	args := pgx.NamedArgs{
-		"device_id": deviceID,
-	}
-
 	condition := &Condition{}
 	for _, c := range conditions {
 		c(condition)
@@ -990,16 +986,21 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 	offsetLimitSql, offset, limit := condition.OffsetLimit(0, 100)
 
 	sql := fmt.Sprintf(`
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr 
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count 
 		FROM (
-			SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
-			FROM device_status
-			WHERE device_id=@device_id
+			SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, count(*) OVER () AS total_count
+			FROM devices d
+			JOIN device_status ds ON d.device_id = ds.device_id
+			WHERE d.device_id=@device_id
+			  AND d.tenant=ANY(@tenants)
 			ORDER BY observed_at DESC
 			%s
-		) AS last100
+		) AS statuses
 		ORDER BY observed_at ASC;
 		`, offsetLimitSql)
+
+	args := condition.NamedArgs()
+	args["device_id"] = deviceID
 
 	now := time.Now()
 
@@ -1010,28 +1011,36 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 	}
 	defer rows.Close()
 
-	log.Debug("Query", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
+	log.Debug("GetDeviceStatus", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	statuses := []types.DeviceStatus{}
 
-	for rows.Next() {
-		var observed_at time.Time
-		var battery_level, rssi, snr, sf *float64
-		var fq *int64
-		var dr *int
+	var count int64
+	var observed_at time.Time
+	var battery_level, rssi, snr, sf *float64
+	var fq *int64
+	var dr *int
 
-		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr)
+	for rows.Next() {
+		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr, &count)
 		if err != nil {
 			return types.Collection[types.DeviceStatus]{}, err
 		}
 
+		_rssi := rssi
+		_snr := snr
+		_fq := fq
+		_sf := sf
+		_dr := dr
+		_observedAt := observed_at
+
 		status := types.DeviceStatus{
-			RSSI:            rssi,
-			LoRaSNR:         snr,
-			Frequency:       fq,
-			SpreadingFactor: sf,
-			DR:              dr,
-			ObservedAt:      observed_at.UTC(),
+			RSSI:            _rssi,
+			LoRaSNR:         _snr,
+			Frequency:       _fq,
+			SpreadingFactor: _sf,
+			DR:              _dr,
+			ObservedAt:      _observedAt.UTC(),
 		}
 		if battery_level != nil {
 			status.BatteryLevel = int(*battery_level)
@@ -1043,7 +1052,7 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 	return types.Collection[types.DeviceStatus]{
 		Data:       statuses,
 		Count:      uint64(len(statuses)),
-		TotalCount: uint64(len(statuses)),
+		TotalCount: uint64(count),
 		Offset:     uint64(offset),
 		Limit:      uint64(limit),
 	}, nil

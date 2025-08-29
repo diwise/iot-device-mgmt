@@ -167,7 +167,7 @@ func TestGetDeviceStatus(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
 	_, err := s.GetDeviceStatus(ctx, "intern-70t589")
-	is.NoErr(err)	
+	is.NoErr(err)
 }
 
 const devices_csv string = `

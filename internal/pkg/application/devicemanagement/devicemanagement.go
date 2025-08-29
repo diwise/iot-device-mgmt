@@ -24,6 +24,7 @@ var tracer = otel.Tracer("iot-device-mgmt/device")
 var ErrDeviceNotFound = fmt.Errorf("device not found")
 var ErrDeviceAlreadyExist = fmt.Errorf("device already exists")
 var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
+var ErrMissingTenant = fmt.Errorf("missing tenant")
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 type DeviceManagement interface {
@@ -200,9 +201,12 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 }
 
 func (s service) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
-	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
-	if err != nil {
-		return types.Collection[types.DeviceStatus]{}, err
+	if deviceID == "" {
+		return types.Collection[types.DeviceStatus]{}, ErrDeviceNotFound
+	}
+
+	if len(tenants) == 0 {
+		return types.Collection[types.DeviceStatus]{}, ErrMissingTenant
 	}
 
 	conditions := storage.ParseConditions(ctx, params)
