@@ -230,7 +230,7 @@ func (c Condition) Where() string {
 		where = append(where, "d.urn=@urn")
 	}
 
-	if c.Urn != "" {
+	if c.AlarmType != "" {
 		where = append(where, "a.type=@alarmtype")
 	}
 
