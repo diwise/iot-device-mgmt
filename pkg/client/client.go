@@ -202,7 +202,12 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		return err
 	}
 
-	dmc.updateDeviceCacheFromDevEUI(ctx, device.SensorID)
+	if cached, ok := dmc.knownDevEUI[device.SensorID]; ok {
+		delete(dmc.cacheByInternalID, cached.internalID)
+		delete(dmc.knownDevEUI, device.SensorID)
+	}
+
+	//dmc.updateDeviceCacheFromDevEUI(ctx, device.SensorID)
 
 	return nil
 }
