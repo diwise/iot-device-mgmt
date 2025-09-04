@@ -150,15 +150,6 @@ func (dmc *devManagementClient) refreshToken(ctx context.Context) (token *oauth2
 	return
 }
 
-func (dmc *devManagementClient) removeFromCache(ctx context.Context, devEUI string) error {
-	if d, ok := dmc.knownDevEUI[devEUI]; !ok {
-		delete(dmc.cacheByInternalID, d.internalID)
-		delete(dmc.knownDevEUI, devEUI)
-	}
-
-	return nil
-}
-
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "create-device")
