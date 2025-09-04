@@ -239,6 +239,18 @@ func (s service) NewDevice(ctx context.Context, device types.Device) error {
 		return err
 	}
 
+	if len(device.DeviceProfile.Types) > 0 {
+		l := []types.Lwm2mType{}
+		for _, t := range device.DeviceProfile.Types {
+			l = append(l, types.Lwm2mType{
+				Urn:  t,
+				Name: t,
+			})
+		}
+
+		s.storage.SetDeviceProfileTypes(ctx, device.DeviceID, l)
+	}
+
 	return nil
 }
 
