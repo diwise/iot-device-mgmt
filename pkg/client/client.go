@@ -207,8 +207,6 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		delete(dmc.knownDevEUI, device.SensorID)
 	}
 
-	//dmc.updateDeviceCacheFromDevEUI(ctx, device.SensorID)
-
 	return nil
 }
 
