@@ -123,6 +123,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 		"5432",
 		"postgres",
 		"disable",
+		"skipudate",
 	)
 
 	p, err := storage.NewPool(ctx, config)

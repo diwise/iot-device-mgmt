@@ -30,6 +30,7 @@ const (
 	dbSSLMode
 
 	allowedSeedTenants
+	skipUpdate
 
 	devmode
 )

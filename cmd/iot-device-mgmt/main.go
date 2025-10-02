@@ -44,6 +44,7 @@ func defaultFlags() flagMap {
 		dbName:     "diwise",
 		dbSSLMode:  "disable",
 
+		skipUpdate:         "false",
 		allowedSeedTenants: "default",
 
 		devmode: "false",
@@ -127,7 +128,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 				return
 			}
 
-			err = storage.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = storage.SeedDevices(ctx, appCfg.db, devices, strings.Split(flags[allowedSeedTenants], ",")) //TODO
 			if err != nil {
 				return
 			}
@@ -164,7 +165,8 @@ func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
 	if flags[devmode] == "true" {
 		return &storage.StoreMock{}, fmt.Errorf("not implemented")
 	}
-	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
+	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName],
+		flags[dbSSLMode], flags[skipUpdate])) //TODO
 }
 
 func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, flagMap) {
@@ -185,6 +187,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flags[dbPassword] = envOrDef(ctx, "POSTGRES_PASSWORD", flags[dbPassword])
 	flags[dbSSLMode] = envOrDef(ctx, "POSTGRES_SSLMODE", flags[dbSSLMode])
 	flags[enableTracing] = envOrDef(ctx, "ENABLE_TRACING", flags[enableTracing])
+	flags[skipUpdate] = envOrDef(ctx, "SKIP_UPDATE", flags[skipUpdate])
 
 	apply := func(f flagType) func(string) error {
 		return func(value string) error {

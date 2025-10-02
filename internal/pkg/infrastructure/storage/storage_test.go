@@ -14,12 +14,13 @@ func testSetup(t *testing.T) (context.Context, Store) {
 	ctx := context.Background()
 
 	config := Config{
-		host:     "localhost",
-		user:     "postgres",
-		password: "password",
-		port:     "5432",
-		dbname:   "postgres",
-		sslmode:  "disable",
+		host:       "localhost",
+		user:       "postgres",
+		password:   "password",
+		port:       "5432",
+		dbname:     "postgres",
+		sslmode:    "disable",
+		skipupdate: "false",
 	}
 
 	s, err := New(ctx, config)
@@ -155,6 +156,75 @@ func TestGetSensorByID(t *testing.T) {
 	is.NoErr(err)
 	is.Equal("intern-70t589", d.DeviceID)
 	is.Equal(3, len(d.Lwm2mTypes))
+}
+
+func setupSeedDevices(t *testing.T, skipUpdate string, trackedID map[string]bool) (createCalls int, updateCalls int) {
+	t.Helper()
+	mock := &StoreMock{
+		GetSkipUpdateFunc: func(ctx context.Context) string {
+			return skipUpdate
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			if exists, ok := trackedID[sensorID]; ok && exists {
+				return types.Device{SensorID: sensorID}, nil
+			}
+			return types.Device{}, ErrNoRows
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			if exists, ok := trackedID[d.SensorID]; ok {
+				if !exists {
+					createCalls++
+				} else {
+					updateCalls++
+				}
+			}
+			return nil
+		},
+	}
+	err := SeedDevices(context.Background(), mock, io.NopCloser(strings.NewReader(devices_csv)), []string{"default"})
+	if err != nil {
+		t.Fatalf("SeedDevice returned unexpected error: %v", err)
+	}
+	return createCalls, updateCalls
+}
+
+func TestSeedDevices_CreatesWhenIdNotExist(t *testing.T) {
+	trackingID := map[string]bool{
+		"70t589": false,
+	}
+	createCalls, updateCalls := setupSeedDevices(t, "false", trackingID)
+	if createCalls != 1 {
+		t.Errorf("expected 1 CreateOrUpdateDevice calls, got %d", createCalls)
+	}
+	if updateCalls != 0 {
+		t.Errorf("expected 0 updates, got %d", updateCalls)
+	}
+}
+
+func TestSeedDevices_SkipUpdatesWhenIdExistsAndSkipUpdateTrue(t *testing.T) {
+	trackingID := map[string]bool{
+		"70t589": true, //finns i databasen
+	}
+	createCalls, updateCalls := setupSeedDevices(t, "true", trackingID)
+	if createCalls != 0 {
+		t.Errorf("expected 0 CreateOrUpdateDevice calls, got %d", createCalls)
+	}
+	if updateCalls != 0 {
+		t.Errorf("expected 0 updates, got %d", updateCalls)
+	}
+}
+
+func TestSeedDevices_UpdateWhenIdExistAndSkipUpdateFalse(t *testing.T) {
+	trackingID := map[string]bool{
+		"70t589": true, //finns
+	}
+	createCalls, updateCalls := setupSeedDevices(t, "false", trackingID)
+	if createCalls != 0 {
+		t.Errorf("expected 0 creates calls, got %d", createCalls)
+	}
+	if updateCalls != 1 {
+		t.Errorf("expected 2 updates, got %d", updateCalls)
+	}
 }
 
 const devices_csv string = `

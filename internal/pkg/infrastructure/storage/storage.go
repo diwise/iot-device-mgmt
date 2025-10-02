@@ -15,26 +15,28 @@ import (
 )
 
 type Config struct {
-	host     string
-	user     string
-	password string
-	port     string
-	dbname   string
-	sslmode  string
+	host       string
+	user       string
+	password   string
+	port       string
+	dbname     string
+	sslmode    string
+	skipupdate string
 }
 
 func (c Config) ConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
 }
 
-func NewConfig(host, user, password, port, dbname, sslmode string) Config {
+func NewConfig(host, user, password, port, dbname, sslmode, skipupdate string) Config {
 	return Config{
-		host:     host,
-		user:     user,
-		password: password,
-		port:     port,
-		dbname:   dbname,
-		sslmode:  sslmode,
+		host:       host,
+		user:       user,
+		password:   password,
+		port:       port,
+		dbname:     dbname,
+		sslmode:    sslmode,
+		skipupdate: skipupdate,
 	}
 }
 
@@ -87,6 +89,8 @@ type Store interface {
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
+	GetSkipUpdate(ctx context.Context) string
+
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
@@ -94,20 +98,21 @@ type Store interface {
 }
 
 type storageImpl struct {
-	pool *pgxpool.Pool
+	pool       *pgxpool.Pool
+	skipUpdate string
 }
 
 func NewWithPool(pool *pgxpool.Pool) Store {
 	return &storageImpl{pool: pool}
 }
 
-func New(ctx context.Context, config Config) (Store, error) {
+func New(ctx context.Context, config Config) (Store, error) { // flaggan finns i config
 	pool, err := NewPool(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &storageImpl{pool: pool}, nil
+	return &storageImpl{pool: pool, skipUpdate: config.skipupdate}, nil
 }
 
 func (s *storageImpl) Initialize(ctx context.Context) error {
@@ -1050,6 +1055,10 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 		Limit:      uint64(len(tenants)),
 		TotalCount: uint64(len(tenants)),
 	}, nil
+}
+
+func (s *storageImpl) GetSkipUpdate(ctx context.Context) string {
+	return s.skipUpdate
 }
 
 func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
