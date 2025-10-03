@@ -157,6 +157,13 @@ func TestGetSensorByID(t *testing.T) {
 	is.Equal(3, len(d.Lwm2mTypes))
 }
 
+func TestGetDeviceStatus(t *testing.T) {
+	is := is.New(t)
+	ctx, s := testSetup(t)
+	_, err := s.GetDeviceStatus(ctx, "intern-70t589")
+	is.NoErr(err)
+}
+
 func setupSeedDevices(t *testing.T, updateExistingDevices string, trackedID map[string]bool) (createCalls int, updateCalls int) {
 	t.Helper()
 	mock := &StoreMock{
