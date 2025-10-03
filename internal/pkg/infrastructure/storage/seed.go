@@ -32,8 +32,8 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 		return err
 	}
 
-	skipUpdateVal := s.GetSkipUpdate(ctx)
-	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.String("skip_update", skipUpdateVal))
+	updateExisting := s.GetUpdateExistingDevices(ctx)
+	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.String("update_exisiting_device", updateExisting))
 
 	for _, record := range records {
 		device, _ := record.mapToDevice()
@@ -57,12 +57,11 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 			continue
 		}
 
-		if strings.EqualFold(skipUpdateVal, "true") {
+		if strings.EqualFold(updateExisting, "false") {
 			continue
 		}
 
 		err = s.CreateOrUpdateDevice(ctx, device)
-		fmt.Println("finns db och flagga false")
 		if err != nil {
 			log.Debug("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
 			return err

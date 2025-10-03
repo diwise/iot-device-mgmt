@@ -15,28 +15,28 @@ import (
 )
 
 type Config struct {
-	host       string
-	user       string
-	password   string
-	port       string
-	dbname     string
-	sslmode    string
-	skipupdate string
+	host                   string
+	user                   string
+	password               string
+	port                   string
+	dbname                 string
+	sslmode                string
+	updateExisitingDevices string
 }
 
 func (c Config) ConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
 }
 
-func NewConfig(host, user, password, port, dbname, sslmode, skipupdate string) Config {
+func NewConfig(host, user, password, port, dbname, sslmode, updateExisitingDevices string) Config {
 	return Config{
-		host:       host,
-		user:       user,
-		password:   password,
-		port:       port,
-		dbname:     dbname,
-		sslmode:    sslmode,
-		skipupdate: skipupdate,
+		host:                   host,
+		user:                   user,
+		password:               password,
+		port:                   port,
+		dbname:                 dbname,
+		sslmode:                sslmode,
+		updateExisitingDevices: updateExisitingDevices,
 	}
 }
 
@@ -89,7 +89,7 @@ type Store interface {
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 
-	GetSkipUpdate(ctx context.Context) string
+	GetUpdateExistingDevices(ctx context.Context) string
 
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
@@ -98,21 +98,21 @@ type Store interface {
 }
 
 type storageImpl struct {
-	pool       *pgxpool.Pool
-	skipUpdate string
+	pool                   *pgxpool.Pool
+	updateExisitingDevices string
 }
 
 func NewWithPool(pool *pgxpool.Pool) Store {
 	return &storageImpl{pool: pool}
 }
 
-func New(ctx context.Context, config Config) (Store, error) { // flaggan finns i config
+func New(ctx context.Context, config Config) (Store, error) {
 	pool, err := NewPool(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &storageImpl{pool: pool, skipUpdate: config.skipupdate}, nil
+	return &storageImpl{pool: pool, updateExisitingDevices: config.updateExisitingDevices}, nil
 }
 
 func (s *storageImpl) Initialize(ctx context.Context) error {
@@ -1057,8 +1057,8 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 	}, nil
 }
 
-func (s *storageImpl) GetSkipUpdate(ctx context.Context) string {
-	return s.skipUpdate
+func (s *storageImpl) GetUpdateExistingDevices(ctx context.Context) string {
+	return s.updateExisitingDevices
 }
 
 func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
