@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -162,11 +163,14 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 }
 
 func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
+
+	exisitingDeviceUpdateFlag, _ := strconv.ParseBool(flags[updateExisitingDevices])
+
 	if flags[devmode] == "true" {
 		return &storage.StoreMock{}, fmt.Errorf("not implemented")
 	}
 	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName],
-		flags[dbSSLMode], flags[updateExisitingDevices]))
+		flags[dbSSLMode], exisitingDeviceUpdateFlag))
 }
 
 func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, flagMap) {

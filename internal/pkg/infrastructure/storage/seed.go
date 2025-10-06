@@ -33,7 +33,7 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 	}
 
 	updateExisting := s.GetUpdateExistingDevices(ctx)
-	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.String("update_exisiting_device", updateExisting))
+	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("update_exisiting_device", updateExisting))
 
 	for _, record := range records {
 		device, _ := record.mapToDevice()
@@ -57,7 +57,7 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 			continue
 		}
 
-		if strings.EqualFold(updateExisting, "false") {
+		if !updateExisting {
 			continue
 		}
 

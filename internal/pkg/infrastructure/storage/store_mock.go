@@ -64,7 +64,7 @@ var _ Store = &StoreMock{}
 //			GetTenantsFunc: func(ctx context.Context) (types.Collection[string], error) {
 //				panic("mock out the GetTenants method")
 //			},
-//			GetUpdateExistingDevicesFunc: func(ctx context.Context) string {
+//			GetUpdateExistingDevicesFunc: func(ctx context.Context) bool {
 //				panic("mock out the GetUpdateExistingDevices method")
 //			},
 //			InitializeFunc: func(ctx context.Context) error {
@@ -141,7 +141,7 @@ type StoreMock struct {
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
 
 	// GetUpdateExistingDevicesFunc mocks the GetUpdateExistingDevices method.
-	GetUpdateExistingDevicesFunc func(ctx context.Context) string
+	GetUpdateExistingDevicesFunc func(ctx context.Context) bool
 
 	// InitializeFunc mocks the Initialize method.
 	InitializeFunc func(ctx context.Context) error
@@ -907,7 +907,7 @@ func (mock *StoreMock) GetTenantsCalls() []struct {
 }
 
 // GetUpdateExistingDevices calls GetUpdateExistingDevicesFunc.
-func (mock *StoreMock) GetUpdateExistingDevices(ctx context.Context) string {
+func (mock *StoreMock) GetUpdateExistingDevices(ctx context.Context) bool {
 	if mock.GetUpdateExistingDevicesFunc == nil {
 		panic("StoreMock.GetUpdateExistingDevicesFunc: method is nil but Store.GetUpdateExistingDevices was just called")
 	}

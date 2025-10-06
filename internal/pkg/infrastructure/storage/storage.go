@@ -21,14 +21,14 @@ type Config struct {
 	port                   string
 	dbname                 string
 	sslmode                string
-	updateExisitingDevices string
+	updateExisitingDevices bool
 }
 
 func (c Config) ConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
 }
 
-func NewConfig(host, user, password, port, dbname, sslmode, updateExisitingDevices string) Config {
+func NewConfig(host, user, password, port, dbname, sslmode string, updateExisitingDevices bool) Config {
 	return Config{
 		host:                   host,
 		user:                   user,
@@ -88,8 +88,7 @@ type Store interface {
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
-
-	GetUpdateExistingDevices(ctx context.Context) string
+	GetUpdateExistingDevices(ctx context.Context) bool
 
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
@@ -99,7 +98,7 @@ type Store interface {
 
 type storageImpl struct {
 	pool                   *pgxpool.Pool
-	updateExisitingDevices string
+	updateExisitingDevices bool
 }
 
 func NewWithPool(pool *pgxpool.Pool) Store {
@@ -1057,7 +1056,7 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 	}, nil
 }
 
-func (s *storageImpl) GetUpdateExistingDevices(ctx context.Context) string {
+func (s *storageImpl) GetUpdateExistingDevices(ctx context.Context) bool {
 	return s.updateExisitingDevices
 }
 
