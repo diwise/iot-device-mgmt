@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -18,7 +17,6 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/otel"
-	"gopkg.in/yaml.v2"
 )
 
 var tracer = otel.Tracer("iot-device-mgmt/device")
@@ -26,12 +24,13 @@ var tracer = otel.Tracer("iot-device-mgmt/device")
 var ErrDeviceNotFound = fmt.Errorf("device not found")
 var ErrDeviceAlreadyExist = fmt.Errorf("device already exists")
 var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
+var ErrMissingTenant = fmt.Errorf("missing tenant")
 
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 type DeviceManagement interface {
 	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
 
 	NewDevice(ctx context.Context, device types.Device) error
@@ -70,34 +69,6 @@ func (s service) Config() *DeviceManagementConfig {
 	return s.config
 }
 
-func NewConfig(config io.ReadCloser) (*DeviceManagementConfig, error) {
-	defer config.Close()
-
-	b, err := io.ReadAll(config)
-	if err != nil {
-		return nil, err
-	}
-
-	cfg := &DeviceManagementConfig{}
-	err = yaml.Unmarshal(b, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	i := slices.IndexFunc(cfg.DeviceProfiles, func(dp types.DeviceProfile) bool {
-		return dp.Decoder == "unknown"
-	})
-
-	if i < 0 {
-		cfg.DeviceProfiles = append(cfg.DeviceProfiles, types.DeviceProfile{
-			Name:    "unknown",
-			Decoder: "unknown",
-		})
-	}
-
-	return cfg, nil
-}
-
 //go:generate moq -rm -out devicestorage_mock.go . DeviceStorage
 type DeviceStorage interface {
 	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
@@ -108,7 +79,7 @@ type DeviceStorage interface {
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
 	GetTenants(ctx context.Context) (types.Collection[string], error)
-	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.Measurement], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
@@ -141,8 +112,8 @@ func (d deviceStorageImpl) SetDeviceState(ctx context.Context, deviceID string, 
 func (d deviceStorageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	return d.s.GetTenants(ctx)
 }
-func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
-	return d.s.GetDeviceStatus(ctx, deviceID)
+func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+	return d.s.GetDeviceStatus(ctx, deviceID, conditions...)
 }
 func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	return d.s.GetDeviceAlarms(ctx, deviceID)
@@ -229,13 +200,19 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	return result.Data[0], nil
 }
 
-func (s service) GetDeviceStatus(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.DeviceStatus], error) {
-	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
-	if err != nil {
-		return types.Collection[types.DeviceStatus]{}, err
+func (s service) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+	if deviceID == "" {
+		return types.Collection[types.DeviceStatus]{}, ErrDeviceNotFound
 	}
 
-	return s.storage.GetDeviceStatus(ctx, deviceID)
+	if len(tenants) == 0 {
+		return types.Collection[types.DeviceStatus]{}, ErrMissingTenant
+	}
+
+	conditions := storage.ParseConditions(ctx, params)
+	conditions = append(conditions, storage.WithTenants(tenants))
+
+	return s.storage.GetDeviceStatus(ctx, deviceID, conditions...)
 }
 
 func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
@@ -260,6 +237,18 @@ func (s service) NewDevice(ctx context.Context, device types.Device) error {
 	err = s.storage.CreateOrUpdateDevice(ctx, device)
 	if err != nil {
 		return err
+	}
+
+	if len(device.DeviceProfile.Types) > 0 {
+		l := []types.Lwm2mType{}
+		for _, t := range device.DeviceProfile.Types {
+			l = append(l, types.Lwm2mType{
+				Urn:  t,
+				Name: t,
+			})
+		}
+
+		s.storage.SetDeviceProfileTypes(ctx, device.DeviceID, l)
 	}
 
 	return nil

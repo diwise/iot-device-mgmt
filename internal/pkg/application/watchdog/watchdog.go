@@ -2,6 +2,7 @@ package watchdog
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -11,6 +12,10 @@ import (
 
 const DefaultTimespan = 3600
 
+type WatchdogConfig struct {
+	Interval int `yaml:"interval"`
+}
+
 type Watchdog interface {
 	Start(context.Context)
 	Stop(context.Context)
@@ -19,12 +24,14 @@ type Watchdog interface {
 type watchdogImpl struct {
 	done     chan bool
 	alarmSvc alarms.AlarmService
+	config   *WatchdogConfig
 }
 
-func New(a alarms.AlarmService) Watchdog {
+func New(a alarms.AlarmService, cfg *WatchdogConfig) Watchdog {
 	w := &watchdogImpl{
 		done:     make(chan bool),
 		alarmSvc: a,
+		config:   cfg,
 	}
 
 	return w
@@ -43,6 +50,10 @@ func (w *watchdogImpl) run(ctx context.Context) {
 		alarmSvc: w.alarmSvc,
 		running:  false,
 		interval: 10 * time.Minute,
+	}
+
+	if w.config.Interval > 0 {
+		l.interval = time.Duration(w.config.Interval) * time.Minute
 	}
 
 	go l.Watch(ctx)
@@ -107,10 +118,14 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
 	}
 
 	for _, d := range result.Data {
+
+		now := time.Now()
+		desc := fmt.Sprintf("current time: %s, interval: %d, last seen: %s, limit: %s", now.UTC().Format(time.RFC3339), d.Interval, d.DeviceState.ObservedAt.Format(time.RFC3339), d.DeviceState.ObservedAt.Add(time.Duration(d.Interval)*time.Second).Format(time.RFC3339))
+
 		l.alarmSvc.Add(ctx, d.DeviceID, types.AlarmDetails{
 			AlarmType:   alarms.AlarmDeviceNotObserved,
-			Description: "",
-			ObservedAt:  time.Now().UTC(),
+			Description: desc,
+			ObservedAt:  now.UTC(),
 			Severity:    types.AlarmSeverityUnknown,
 		})
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -83,7 +84,7 @@ type Store interface {
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
 	Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
@@ -342,12 +343,13 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 		"tenant":         strings.TrimSpace(d.Tenant),
 		"lat":            d.Location.Latitude,
 		"lon":            d.Location.Longitude,
+		"interval":       d.Interval,
 		"device_profile": strings.ToLower(strings.TrimSpace(d.DeviceProfile.Decoder)),
 	}
 
 	_, err = tx.Exec(ctx, `
-		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile)
-		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile)
+		INSERT INTO devices (device_id,sensor_id,active,name,description,environment,source,tenant,location,device_profile,interval)
+		VALUES (@device_id,@sensor_id,@active,@name,@description,@environment,@source,@tenant,point(@lon,@lat),@device_profile,@interval)
 		ON CONFLICT (device_id) DO UPDATE
 			SET
 				sensor_id = EXCLUDED.sensor_id,
@@ -359,6 +361,7 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 				tenant = EXCLUDED.tenant,
 				location = EXCLUDED.location,
 				device_profile = EXCLUDED.device_profile,
+				interval = EXCLUDED.interval,
 				modified_on = NOW()
 			WHERE devices.deleted = FALSE
 		`, args)
@@ -820,12 +823,16 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 
 	args := condition.NamedArgs()
 
+	now := time.Now()
+
 	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
 		log.Debug("failed to query database", "sql", sql, "args", args, "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 	defer rows.Close()
+
+	log.Debug("Query", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	var devices []types.Device
 	var count uint64
@@ -972,42 +979,72 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 	}, nil
 }
 
-func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
-	args := pgx.NamedArgs{
-		"device_id": deviceID,
+func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+	log := logging.GetFromContext(ctx)
+
+	condition := &Condition{}
+	for _, c := range conditions {
+		c(condition)
 	}
 
-	rows, err := s.pool.Query(ctx, `
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr
-		FROM device_status
-		WHERE device_id=@device_id
-		ORDER BY observed_at ASC
-		OFFSET 0 LIMIT 100`, args)
+	offsetLimitSql, offset, limit := condition.OffsetLimit(0, 100)
+
+	sql := fmt.Sprintf(`
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count 
+		FROM (
+			SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, count(*) OVER () AS total_count
+			FROM devices d
+			JOIN device_status ds ON d.device_id = ds.device_id
+			WHERE d.device_id=@device_id
+			  AND d.tenant=ANY(@tenants)
+			ORDER BY observed_at DESC
+			%s
+		) AS statuses
+		ORDER BY observed_at ASC;
+		`, offsetLimitSql)
+
+	args := condition.NamedArgs()
+	args["device_id"] = deviceID
+
+	now := time.Now()
+
+	rows, err := s.pool.Query(ctx, sql, args)
 	if err != nil {
+		log.Debug("failed to query device statuses", "sql", sql, "args", args, "err", err.Error())
 		return types.Collection[types.DeviceStatus]{}, err
 	}
 	defer rows.Close()
 
+	log.Debug("GetDeviceStatus", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
+
 	statuses := []types.DeviceStatus{}
 
-	for rows.Next() {
-		var observed_at time.Time
-		var battery_level, rssi, snr, sf *float64
-		var fq *int64
-		var dr *int
+	var count int64
+	var observed_at time.Time
+	var battery_level, rssi, snr, sf *float64
+	var fq *int64
+	var dr *int
 
-		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr)
+	for rows.Next() {
+		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr, &count)
 		if err != nil {
 			return types.Collection[types.DeviceStatus]{}, err
 		}
 
+		_rssi := rssi
+		_snr := snr
+		_fq := fq
+		_sf := sf
+		_dr := dr
+		_observedAt := observed_at
+
 		status := types.DeviceStatus{
-			RSSI:            rssi,
-			LoRaSNR:         snr,
-			Frequency:       fq,
-			SpreadingFactor: sf,
-			DR:              dr,
-			ObservedAt:      observed_at.UTC(),
+			RSSI:            _rssi,
+			LoRaSNR:         _snr,
+			Frequency:       _fq,
+			SpreadingFactor: _sf,
+			DR:              _dr,
+			ObservedAt:      _observedAt.UTC(),
 		}
 		if battery_level != nil {
 			status.BatteryLevel = int(*battery_level)
@@ -1019,9 +1056,9 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string) (typ
 	return types.Collection[types.DeviceStatus]{
 		Data:       statuses,
 		Count:      uint64(len(statuses)),
-		TotalCount: uint64(len(statuses)),
-		Offset:     0,
-		Limit:      uint64(len(statuses)),
+		TotalCount: uint64(count),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
 	}, nil
 }
 
@@ -1134,6 +1171,7 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 			FROM device_status
 			GROUP BY device_id
 		)
+			
 		SELECT
 			d.device_id,
 			d.sensor_id,
@@ -1147,7 +1185,8 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 		FROM devices d
 			LEFT JOIN device_profiles dp ON dp.device_profile_id = d.device_profile
 			LEFT JOIN last_status ls ON ls.device_id = d.device_id
-		WHERE ls.last_observed IS NULL OR ls.last_observed < NOW() - (COALESCE(NULLIF(d.interval, 0), dp.interval) * INTERVAL '1 second');`
+		WHERE ls.last_observed IS NOT NULL AND ls.last_observed < NOW() - (COALESCE(NULLIF(d.interval, 0), dp.interval) * INTERVAL '1 second');
+	`
 
 	rows, err := s.pool.Query(ctx, sql)
 	if err != nil {
@@ -1157,24 +1196,41 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 
 	devices := []types.Device{}
 
-	for rows.Next() {
-		var deviceID, tenant, profile string
-		var device_interval, profile_interval, effective_interval int
-		var sensorID *string
-		var active bool
-		var lastObserved *time.Time
+	var deviceID, tenant, profile string
+	var device_interval, profile_interval, effective_interval int
+	var sensorID *string
+	var active bool
+	var lastObserved *time.Time
 
+	for rows.Next() {
 		err := rows.Scan(&deviceID, &sensorID, &active, &tenant, &profile, &device_interval, &profile_interval, &lastObserved, &effective_interval)
 		if err != nil {
 			return types.Collection[types.Device]{}, err
 		}
 
-		devices = append(devices, types.Device{
-			Active:   active,
-			SensorID: *sensorID,
-			DeviceID: deviceID,
-			Tenant:   tenant,
-		})
+		_a := active
+		_sid := *sensorID
+		_did := deviceID
+		_tid := tenant
+		_ei := effective_interval
+		_l := lastObserved
+
+		d := types.Device{
+			Active:   _a,
+			SensorID: _sid,
+			DeviceID: _did,
+			Tenant:   _tid,
+			Interval: _ei,
+			DeviceState: types.DeviceState{
+				ObservedAt: time.Time{},
+			},
+		}
+
+		if _l != nil {
+			d.DeviceState.ObservedAt = *_l
+		}
+
+		devices = append(devices, d)
 	}
 
 	return types.Collection[types.Device]{

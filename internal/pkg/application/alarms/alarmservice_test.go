@@ -24,7 +24,14 @@ func TestDeviceStatusHandler(t *testing.T) {
 	}
 	m := &messaging.MsgContextMock{}
 
-	svc := New(s, m)
+	svc := New(s, m, &AlarmServiceConfig{
+		AlarmTypes: []types.AlarmType{
+			{
+				Name:    AlarmDeviceNotObserved,
+				Enabled: true,
+			},
+		},
+	})
 
 	msg := &messaging.IncomingTopicMessageMock{
 		BodyFunc: func() []byte {
@@ -58,7 +65,18 @@ func TestDeviceStatusHandlerWithMessages(t *testing.T) {
 	}
 	m := &messaging.MsgContextMock{}
 
-	svc := New(s, m)
+	svc := New(s, m, &AlarmServiceConfig{
+		AlarmTypes: []types.AlarmType{
+			{
+				Name:    "message1",
+				Enabled: true,
+			},
+			{
+				Name:    "message2",
+				Enabled: true,
+			},
+		},
+	})
 
 	msg := &messaging.IncomingTopicMessageMock{
 		BodyFunc: func() []byte {

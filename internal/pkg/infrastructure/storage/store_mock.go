@@ -55,7 +55,7 @@ var _ Store = &StoreMock{}
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
 //			},
-//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
 //				panic("mock out the GetDeviceStatus method")
 //			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
@@ -132,7 +132,7 @@ type StoreMock struct {
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
-	GetDeviceStatusFunc func(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error)
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
@@ -258,6 +258,8 @@ type StoreMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
+			// Conditions is the conditions argument value.
+			Conditions []ConditionFunc
 		}
 		// GetStaleDevices holds details about calls to the GetStaleDevices method.
 		GetStaleDevices []struct {
@@ -807,21 +809,23 @@ func (mock *StoreMock) GetDeviceMeasurementsCalls() []struct {
 }
 
 // GetDeviceStatus calls GetDeviceStatusFunc.
-func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string) (types.Collection[types.DeviceStatus], error) {
+func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
 	if mock.GetDeviceStatusFunc == nil {
 		panic("StoreMock.GetDeviceStatusFunc: method is nil but Store.GetDeviceStatus was just called")
 	}
 	callInfo := struct {
-		Ctx      context.Context
-		DeviceID string
+		Ctx        context.Context
+		DeviceID   string
+		Conditions []ConditionFunc
 	}{
-		Ctx:      ctx,
-		DeviceID: deviceID,
+		Ctx:        ctx,
+		DeviceID:   deviceID,
+		Conditions: conditions,
 	}
 	mock.lockGetDeviceStatus.Lock()
 	mock.calls.GetDeviceStatus = append(mock.calls.GetDeviceStatus, callInfo)
 	mock.lockGetDeviceStatus.Unlock()
-	return mock.GetDeviceStatusFunc(ctx, deviceID)
+	return mock.GetDeviceStatusFunc(ctx, deviceID, conditions...)
 }
 
 // GetDeviceStatusCalls gets all the calls that were made to GetDeviceStatus.
@@ -829,12 +833,14 @@ func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string) (ty
 //
 //	len(mockedStore.GetDeviceStatusCalls())
 func (mock *StoreMock) GetDeviceStatusCalls() []struct {
-	Ctx      context.Context
-	DeviceID string
+	Ctx        context.Context
+	DeviceID   string
+	Conditions []ConditionFunc
 } {
 	var calls []struct {
-		Ctx      context.Context
-		DeviceID string
+		Ctx        context.Context
+		DeviceID   string
+		Conditions []ConditionFunc
 	}
 	mock.lockGetDeviceStatus.RLock()
 	calls = mock.calls.GetDeviceStatus

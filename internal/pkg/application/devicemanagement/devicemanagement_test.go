@@ -32,6 +32,9 @@ func TestDeviceStatusHandler(t *testing.T) {
 		SetDeviceStateFunc: func(ctx context.Context, deviceID string, state types.DeviceState) error {
 			return nil
 		},
+		SetDeviceProfileTypesFunc:func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
+			return nil
+		},
 	}
 
 	msgCtx := messaging.MsgContextMock{

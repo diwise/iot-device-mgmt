@@ -213,11 +213,11 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
-
 		ctx, span := tracer.Start(r.Context(), "get-device-status")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		allowedTenants := auth.GetAllowedTenantsFromContext(ctx)
 
 		deviceID := r.PathValue("id")
 		if deviceID == "" {
@@ -227,7 +227,7 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		statuses, err := svc.GetDeviceStatus(ctx, deviceID, allowedTenants)
+		statuses, err := svc.GetDeviceStatus(ctx, deviceID, r.URL.Query(), allowedTenants)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)

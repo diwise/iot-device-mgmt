@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 	"go.opentelemetry.io/otel"
 
@@ -57,6 +59,7 @@ func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.
 type alarmSvc struct {
 	storage   AlarmStorage
 	messenger messaging.MsgContext
+	config    map[string]types.AlarmType
 }
 
 //go:generate moq -rm -out alarmservice_mock.go . AlarmService
@@ -68,8 +71,33 @@ type AlarmService interface {
 	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
 }
 
+type AlarmServiceConfig struct {
+	AlarmTypes []types.AlarmType `yaml:"alarmtypes"`
+}
+
 func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
-	alarm.AlarmType = strings.ToLower(strings.ReplaceAll(alarm.AlarmType, " ", "_"))
+	log := logging.GetFromContext(ctx)
+
+	alarmType := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(alarm.AlarmType, " ", "_")))
+
+	cfg, ok := svc.config[alarmType]
+	if !ok {
+		log.Debug("unknown alarm type", "alarm_type", alarmType)
+		return nil
+	}
+
+	if !cfg.Enabled {
+		log.Debug("alarm type is disabled", "alarm_type", alarmType)
+		return nil
+	}
+
+	alarm.AlarmType = alarmType
+	alarm.Severity = cfg.Severity
+
+	if alarm.ObservedAt.IsZero() {
+		alarm.ObservedAt = time.Now().UTC()
+	}
+
 	return svc.storage.AddAlarm(ctx, deviceID, alarm)
 }
 
@@ -98,6 +126,10 @@ func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, 
 			if o, err := strconv.Atoi(v[0]); err == nil {
 				conditions = append(conditions, storage.WithOffset(o))
 			}
+		case "alarmtype":
+			if v[0] != "" {
+				conditions = append(conditions, storage.WithAlarmType(v[0]))
+			}
 		}
 	}
 
@@ -106,10 +138,15 @@ func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, 
 	return svc.storage.GetAlarms(ctx, conditions...)
 }
 
-func New(s AlarmStorage, m messaging.MsgContext) AlarmService {
+func New(s AlarmStorage, m messaging.MsgContext, cfg *AlarmServiceConfig) AlarmService {
 	svc := &alarmSvc{
 		storage:   s,
 		messenger: m,
+		config:    make(map[string]types.AlarmType),
+	}
+
+	for _, at := range cfg.AlarmTypes {
+		svc.config[at.Name] = at
 	}
 
 	return svc
@@ -139,8 +176,6 @@ func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 			}
 			return
 		}
-
-		//log.Debug("received device status", "service", "alarmservice", "body", string(itm.Body()))
 
 		if m.Code != nil && *m.Code != "" {
 			err = svc.Add(ctx, m.DeviceID, types.AlarmDetails{

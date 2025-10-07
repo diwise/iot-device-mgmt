@@ -31,6 +31,7 @@ type DeviceManagementClient interface {
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 	Close(ctx context.Context)
 	CreateDevice(ctx context.Context, device types.Device) error
+	GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error)
 }
 
 type deviceState int
@@ -154,7 +155,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	ctx, span := tracer.Start(ctx, "create-device")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
-	url := dmc.url + "/api/v0/devices/"
+	url := dmc.url + "/api/v0/devices"
 
 	requestBody, err := json.Marshal(device)
 	if err != nil {
@@ -201,7 +202,78 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 		return err
 	}
 
+	if cached, ok := dmc.knownDevEUI[device.SensorID]; ok {
+		delete(dmc.cacheByInternalID, cached.internalID)
+		delete(dmc.knownDevEUI, device.SensorID)
+	}
+
 	return nil
+}
+
+func (dmc *devManagementClient) GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error) {
+	var err error
+	ctx, span := tracer.Start(ctx, "get-device-profile")
+	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
+
+	url := dmc.url + "/api/v0/admin/deviceprofiles/" + deviceProfileID
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		err = fmt.Errorf("failed to create http request: %w", err)
+		return nil, err
+	}
+
+	if dmc.clientCredentials != nil {
+		token, err := dmc.refreshToken(ctx)
+		if err != nil {
+			err = fmt.Errorf("failed to get client credentials from %s: %w", dmc.clientCredentials.TokenURL, err)
+			return nil, err
+		}
+
+		req.Header.Add("Authorization", "Bearer "+token.AccessToken)
+	}
+
+	resp, err := dmc.httpClient.Do(req)
+	if err != nil {
+		err = fmt.Errorf("failed to retrieve device information from devEUI: %w", err)
+		return nil, err
+	}
+	defer drainAndCloseResponseBody(resp)
+
+	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		err = fmt.Errorf("request failed, not authorized")
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, ErrNotFound
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("request failed with status code %d", resp.StatusCode)
+		return nil, err
+	}
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		err = fmt.Errorf("failed to read response body: %w", err)
+		return nil, err
+	}
+
+	responseData := struct {
+		Data types.DeviceProfile `json:"data"`
+	}{}
+
+	err = json.Unmarshal(respBody, &responseData)
+	if err != nil {
+		err = fmt.Errorf("failed to unmarshal response body: %w", err)
+		return nil, err
+	}
+
+	deviceprofile := responseData.Data
+	return &deviceprofile, nil
 }
 
 func (dmc *devManagementClient) run(ctx context.Context) {
@@ -234,7 +306,7 @@ func (dmc *devManagementClient) Close(ctx context.Context) {
 	dmc.wg.Wait()
 }
 
-var ErrDeviceNotFound error = errors.New("not found")
+var ErrNotFound error = errors.New("not found")
 
 var errInternal error = errors.New("internal error")
 var errRetry error = errors.New("retry")
@@ -294,7 +366,12 @@ func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context,
 	dmc.queue <- func() {
 		if err != nil {
 			log := logging.GetFromContext(ctx)
-			log.Error("failed to update device cache", "err", err.Error())
+
+			if errors.Is(err, ErrNotFound) {
+				log.Info("device not found", "devEUI", devEUI)
+			} else {
+				log.Error("failed to update device cache", "err", err.Error())
+			}
 
 			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
 		} else {
@@ -347,7 +424,7 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDeviceNotFound
+		return nil, ErrNotFound
 	}
 
 	if resp.StatusCode != http.StatusOK {
@@ -479,7 +556,7 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
-		return nil, ErrDeviceNotFound
+		return nil, ErrNotFound
 	}
 
 	if resp.StatusCode != http.StatusOK {

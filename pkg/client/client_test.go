@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -14,12 +15,69 @@ import (
 
 const UNKNOWN = "unknown"
 
+func TestGetProfile(t *testing.T) {
+	is := is.New(t)
+
+	dp := types.DeviceProfile{
+		Name:     "elsys",
+		Decoder:  "elsys",
+		Interval: 3600,
+		Types:    []string{"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"},
+	}
+
+	resBody := struct {
+		Data types.DeviceProfile `json:"data"`
+	}{
+		Data: dp,
+	}
+
+	b, _ := json.Marshal(resBody)
+
+	mockedService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/admin/deviceprofiles/elsys"),
+			expects.RequestMethod("GET"),
+		),
+		test.Returns(
+			response.Code(200),
+			response.Body(b),
+		),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/token"),
+		),
+		test.Returns(
+			response.ContentType("application/json"),
+			response.Code(200),
+			response.Body([]byte(TokenResponse)),
+		),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+
+	profile, err := client.GetDeviceProfile(ctx, "elsys")
+	is.NoErr(err)
+
+	is.Equal(profile.Name, "elsys")
+	is.Equal(profile.Decoder, "elsys")
+	is.Equal(profile.Interval, 3600)
+	is.Equal(profile.Types, []string{"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"})
+
+	client.Close(ctx)
+}
+
 func TestCreateUnknownDevice(t *testing.T) {
 	is := is.New(t)
 
 	mockedService := test.NewMockServiceThat(
 		test.Expects(is,
-			expects.RequestPath("/api/v0/devices/"),
+			expects.RequestPath("/api/v0/devices"),
 			expects.RequestMethod("POST"),
 			expects.RequestHeaderContains("Content-Type", "application/json"),
 			expects.RequestBodyContaining(`"active":false`,
