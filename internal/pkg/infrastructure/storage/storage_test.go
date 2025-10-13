@@ -170,6 +170,77 @@ func TestGetDeviceStatus(t *testing.T) {
 	is.NoErr(err)
 }
 
+func setupSeedDevices(t *testing.T, updateExistingDevices bool, deviceID map[string]bool) (createCalls int, updateCalls int) {
+	t.Helper()
+	mock := &StoreMock{
+		GetUpdateExistingDevicesFunc: func(ctx context.Context) bool {
+			return updateExistingDevices
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			if exists, ok := deviceID[sensorID]; ok && exists {
+				return types.Device{SensorID: sensorID}, nil
+			}
+			return types.Device{}, ErrNoRows
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			if exists, ok := deviceID[d.SensorID]; ok {
+				if !exists {
+					createCalls++
+				} else {
+					updateCalls++
+				}
+			}
+			return nil
+		},
+	}
+	err := SeedDevices(context.Background(), mock, io.NopCloser(strings.NewReader(devices_csv)), []string{"default"})
+	if err != nil {
+		t.Fatalf("SeedDevice returned unexpected error: %v", err)
+	}
+	return createCalls, updateCalls
+}
+
+func TestSeedDevices_CreatesWhenIdNotExistAndUpdateDeviceExistIsFalse(t *testing.T) {
+	deviceID := map[string]bool{
+		"70t589": false,
+	}
+	createCalls, updateCalls := setupSeedDevices(t, true, deviceID)
+	if createCalls != 1 {
+		t.Errorf("expected 1 CreateOrUpdateDevice calls, got %d", createCalls)
+	}
+	if updateCalls != 0 {
+		t.Errorf("expected 0 updates, got %d", updateCalls)
+	}
+}
+
+func TestSeedDevices_SkipUpdatesWhenIdExistsAndUpdateDeviceExistIsTrue(t *testing.T) {
+	deviceID := map[string]bool{
+		"70t589": true,
+	}
+	createCalls, updateCalls := setupSeedDevices(t, true, deviceID)
+	if createCalls != 0 {
+		t.Errorf("expected 0 CreateOrUpdateDevice calls, got %d", createCalls)
+	}
+	if updateCalls != 1 {
+		t.Errorf("expected 0 updates, got %d", updateCalls)
+	}
+}
+
+func TestSeedDevices_UpdateWhenIdExistAndUpdateDeviceIsFalse(t *testing.T) {
+	deviceID := map[string]bool{
+		"70t589": true,
+	}
+	createCalls, updateCalls := setupSeedDevices(t, false, deviceID)
+	if createCalls != 0 {
+		t.Errorf("expected 0 creates calls, got %d", createCalls)
+	}
+	if updateCalls != 0 {
+		t.Errorf("expected 1 updates, got %d", updateCalls)
+	}
+}
+
 const devices_csv string = `
 devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;`
+70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;
+50t555;intern-70t555;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t555;desc-70t555;true;default;3600;
+30t333;intern-70t333;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t333;desc-70t333;true;default;3600;`

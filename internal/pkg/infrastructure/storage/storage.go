@@ -16,26 +16,28 @@ import (
 )
 
 type Config struct {
-	host     string
-	user     string
-	password string
-	port     string
-	dbname   string
-	sslmode  string
+	host                   string
+	user                   string
+	password               string
+	port                   string
+	dbname                 string
+	sslmode                string
+	updateExisitingDevices bool
 }
 
 func (c Config) ConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
 }
 
-func NewConfig(host, user, password, port, dbname, sslmode string) Config {
+func NewConfig(host, user, password, port, dbname, sslmode string, updateExisitingDevices bool) Config {
 	return Config{
-		host:     host,
-		user:     user,
-		password: password,
-		port:     port,
-		dbname:   dbname,
-		sslmode:  sslmode,
+		host:                   host,
+		user:                   user,
+		password:               password,
+		port:                   port,
+		dbname:                 dbname,
+		sslmode:                sslmode,
+		updateExisitingDevices: updateExisitingDevices,
 	}
 }
 
@@ -87,6 +89,7 @@ type Store interface {
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
+	GetUpdateExistingDevices(ctx context.Context) bool
 
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
@@ -95,7 +98,8 @@ type Store interface {
 }
 
 type storageImpl struct {
-	pool *pgxpool.Pool
+	pool                   *pgxpool.Pool
+	updateExisitingDevices bool
 }
 
 func NewWithPool(pool *pgxpool.Pool) Store {
@@ -108,7 +112,7 @@ func New(ctx context.Context, config Config) (Store, error) {
 		return nil, err
 	}
 
-	return &storageImpl{pool: pool}, nil
+	return &storageImpl{pool: pool, updateExisitingDevices: config.updateExisitingDevices}, nil
 }
 
 func (s *storageImpl) Initialize(ctx context.Context) error {
@@ -1087,6 +1091,10 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 		Limit:      uint64(len(tenants)),
 		TotalCount: uint64(len(tenants)),
 	}, nil
+}
+
+func (s *storageImpl) GetUpdateExistingDevices(ctx context.Context) bool {
+	return s.updateExisitingDevices
 }
 
 func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {

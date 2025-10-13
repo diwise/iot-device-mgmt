@@ -28,6 +28,7 @@ const (
 	dbSSLMode
 
 	allowedSeedTenants
+	updateExisitingDevices
 
 	devmode
 )
