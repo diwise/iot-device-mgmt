@@ -116,6 +116,8 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	is := is.New(t)
 	ctx := context.Background()
 
+	exisitingDeviceUpdateFlag := true
+
 	config := storage.NewConfig(
 		"localhost",
 		"postgres",
@@ -123,6 +125,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 		"5432",
 		"postgres",
 		"disable",
+		exisitingDeviceUpdateFlag,
 	)
 
 	p, err := storage.NewPool(ctx, config)

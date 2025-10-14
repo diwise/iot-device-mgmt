@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -48,7 +49,8 @@ func defaultFlags() flagMap {
 		dbName:     "diwise",
 		dbSSLMode:  "disable",
 
-		allowedSeedTenants: "default",
+		seedExistingDevices: "true",
+		allowedSeedTenants:  "default",
 
 		devmode: "false",
 	}
@@ -171,10 +173,14 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 }
 
 func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
+
+	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
+
 	if flags[devmode] == "true" {
 		return &storage.StoreMock{}, fmt.Errorf("not implemented")
 	}
-	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
+
+	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode], seedExistingDevices))
 }
 
 func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConfig, error) {
@@ -215,6 +221,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 
 	flags[policiesFile] = envOrDef(ctx, "POLICIES_FILE", flags[policiesFile])
 	flags[allowedSeedTenants] = envOrDef(ctx, "ALLOWED_SEED_TENANTS", flags[allowedSeedTenants])
+	flags[seedExistingDevices] = envOrDef(ctx, "SEED_EXISTING_DEVICES", flags[seedExistingDevices])
 
 	flags[dbHost] = envOrDef(ctx, "POSTGRES_HOST", flags[dbHost])
 	flags[dbPort] = envOrDef(ctx, "POSTGRES_PORT", flags[dbPort])
@@ -222,6 +229,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flags[dbUser] = envOrDef(ctx, "POSTGRES_USER", flags[dbUser])
 	flags[dbPassword] = envOrDef(ctx, "POSTGRES_PASSWORD", flags[dbPassword])
 	flags[dbSSLMode] = envOrDef(ctx, "POSTGRES_SSLMODE", flags[dbSSLMode])
+
 	flags[enableTracing] = envOrDef(ctx, "ENABLE_TRACING", flags[enableTracing])
 
 	apply := func(f flagType) func(string) error {
