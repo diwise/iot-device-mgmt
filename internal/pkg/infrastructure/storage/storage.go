@@ -16,28 +16,28 @@ import (
 )
 
 type Config struct {
-	host                   string
-	user                   string
-	password               string
-	port                   string
-	dbname                 string
-	sslmode                string
-	updateExisitingDevices bool
+	host                string
+	user                string
+	password            string
+	port                string
+	dbname              string
+	sslmode             string
+	seedExistingDevices bool
 }
 
 func (c Config) ConnStr() string {
 	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
 }
 
-func NewConfig(host, user, password, port, dbname, sslmode string, updateExisitingDevices bool) Config {
+func NewConfig(host, user, password, port, dbname, sslmode string, seedExistingDevices bool) Config {
 	return Config{
-		host:                   host,
-		user:                   user,
-		password:               password,
-		port:                   port,
-		dbname:                 dbname,
-		sslmode:                sslmode,
-		updateExisitingDevices: updateExisitingDevices,
+		host:                host,
+		user:                user,
+		password:            password,
+		port:                port,
+		dbname:              dbname,
+		sslmode:             sslmode,
+		seedExistingDevices: seedExistingDevices,
 	}
 }
 
@@ -89,7 +89,7 @@ type Store interface {
 	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
 
 	GetTenants(ctx context.Context) (types.Collection[string], error)
-	GetUpdateExistingDevices(ctx context.Context) bool
+	IsSeedExistingDevicesEnabled(ctx context.Context) bool
 
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
@@ -114,7 +114,7 @@ func New(ctx context.Context, config Config) (Store, error) {
 
 	return &storageImpl{
 		pool:                   pool,
-		updateExisitingDevices: config.updateExisitingDevices,
+		updateExisitingDevices: config.seedExistingDevices,
 	}, nil
 }
 
@@ -1117,7 +1117,7 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 	}, nil
 }
 
-func (s *storageImpl) GetUpdateExistingDevices(ctx context.Context) bool {
+func (s *storageImpl) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
 	return s.updateExisitingDevices
 }
 

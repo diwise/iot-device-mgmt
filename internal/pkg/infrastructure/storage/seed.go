@@ -32,8 +32,8 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 		return err
 	}
 
-	updateExisting := s.GetUpdateExistingDevices(ctx)
-	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("update_exisiting_device", updateExisting))
+	shouldUpdate := s.IsSeedExistingDevicesEnabled(ctx)
+	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", shouldUpdate))
 
 	for _, record := range records {
 		device, _ := record.mapToDevice()
@@ -51,21 +51,27 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 
 			err := s.CreateOrUpdateDevice(ctx, device)
 			if err != nil {
-				log.Debug("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
+				log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
 				return err
 			}
+
+			log.Debug("seeded new device", slog.String("device_id", device.DeviceID), slog.Bool("seed_existing_devices", shouldUpdate))
+
 			continue
 		}
 
-		if !updateExisting {
+		if !shouldUpdate {
+			log.Debug("seed should not update existing devices", slog.String("device_id", device.DeviceID), slog.Bool("seed_existing_devices", shouldUpdate))
 			continue
 		}
 
 		err = s.CreateOrUpdateDevice(ctx, device)
 		if err != nil {
-			log.Debug("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
+			log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.DeviceProfile.Decoder)
 			return err
 		}
+
+		log.Debug("updated existing device", slog.String("device_id", device.DeviceID), slog.Bool("seed_existing_devices", shouldUpdate))
 	}
 	return nil
 }

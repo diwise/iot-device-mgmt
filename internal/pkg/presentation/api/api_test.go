@@ -409,30 +409,33 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 	}
 
 	db := &storage.StoreMock{
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			return types.Device{
+				SensorID: sensorID,
+				DeviceID: "intern-" + sensorID,
+			}, nil
+		},
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return true
+		},
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 			return nil
 		},
-
 		QueryFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
-
 		SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 			return nil
 		},
-
 		SetDeviceProfileFunc: func(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
 			return nil
 		},
-
 		SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
 			return nil
 		},
-
 		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
-
 		GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error) {
 			return types.Collection[types.DeviceStatus]{}, nil
 		},
