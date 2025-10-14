@@ -64,11 +64,11 @@ var _ Store = &StoreMock{}
 //			GetTenantsFunc: func(ctx context.Context) (types.Collection[string], error) {
 //				panic("mock out the GetTenants method")
 //			},
-//			GetUpdateExistingDevicesFunc: func(ctx context.Context) bool {
-//				panic("mock out the GetUpdateExistingDevices method")
-//			},
 //			InitializeFunc: func(ctx context.Context) error {
 //				panic("mock out the Initialize method")
+//			},
+//			IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+//				panic("mock out the IsSeedExistingDevicesEnabled method")
 //			},
 //			QueryFunc: func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
@@ -140,11 +140,11 @@ type StoreMock struct {
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
 
-	// GetUpdateExistingDevicesFunc mocks the GetUpdateExistingDevices method.
-	GetUpdateExistingDevicesFunc func(ctx context.Context) bool
-
 	// InitializeFunc mocks the Initialize method.
 	InitializeFunc func(ctx context.Context) error
+
+	// IsSeedExistingDevicesEnabledFunc mocks the IsSeedExistingDevicesEnabled method.
+	IsSeedExistingDevicesEnabledFunc func(ctx context.Context) bool
 
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
@@ -271,13 +271,13 @@ type StoreMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
-		// GetUpdateExistingDevices holds details about calls to the GetUpdateExistingDevices method.
-		GetUpdateExistingDevices []struct {
+		// Initialize holds details about calls to the Initialize method.
+		Initialize []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
-		// Initialize holds details about calls to the Initialize method.
-		Initialize []struct {
+		// IsSeedExistingDevicesEnabled holds details about calls to the IsSeedExistingDevicesEnabled method.
+		IsSeedExistingDevicesEnabled []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
@@ -348,29 +348,29 @@ type StoreMock struct {
 			State types.DeviceState
 		}
 	}
-	lockAddAlarm                 sync.RWMutex
-	lockAddDeviceStatus          sync.RWMutex
-	lockAddTag                   sync.RWMutex
-	lockClose                    sync.RWMutex
-	lockCreateDeviceProfile      sync.RWMutex
-	lockCreateDeviceProfileType  sync.RWMutex
-	lockCreateOrUpdateDevice     sync.RWMutex
-	lockCreateTag                sync.RWMutex
-	lockGetAlarms                sync.RWMutex
-	lockGetDeviceAlarms          sync.RWMutex
-	lockGetDeviceBySensorID      sync.RWMutex
-	lockGetDeviceMeasurements    sync.RWMutex
-	lockGetDeviceStatus          sync.RWMutex
-	lockGetStaleDevices          sync.RWMutex
-	lockGetTenants               sync.RWMutex
-	lockGetUpdateExistingDevices sync.RWMutex
-	lockInitialize               sync.RWMutex
-	lockQuery                    sync.RWMutex
-	lockRemoveAlarm              sync.RWMutex
-	lockSetDevice                sync.RWMutex
-	lockSetDeviceProfile         sync.RWMutex
-	lockSetDeviceProfileTypes    sync.RWMutex
-	lockSetDeviceState           sync.RWMutex
+	lockAddAlarm                     sync.RWMutex
+	lockAddDeviceStatus              sync.RWMutex
+	lockAddTag                       sync.RWMutex
+	lockClose                        sync.RWMutex
+	lockCreateDeviceProfile          sync.RWMutex
+	lockCreateDeviceProfileType      sync.RWMutex
+	lockCreateOrUpdateDevice         sync.RWMutex
+	lockCreateTag                    sync.RWMutex
+	lockGetAlarms                    sync.RWMutex
+	lockGetDeviceAlarms              sync.RWMutex
+	lockGetDeviceBySensorID          sync.RWMutex
+	lockGetDeviceMeasurements        sync.RWMutex
+	lockGetDeviceStatus              sync.RWMutex
+	lockGetStaleDevices              sync.RWMutex
+	lockGetTenants                   sync.RWMutex
+	lockInitialize                   sync.RWMutex
+	lockIsSeedExistingDevicesEnabled sync.RWMutex
+	lockQuery                        sync.RWMutex
+	lockRemoveAlarm                  sync.RWMutex
+	lockSetDevice                    sync.RWMutex
+	lockSetDeviceProfile             sync.RWMutex
+	lockSetDeviceProfileTypes        sync.RWMutex
+	lockSetDeviceState               sync.RWMutex
 }
 
 // AddAlarm calls AddAlarmFunc.
@@ -912,38 +912,6 @@ func (mock *StoreMock) GetTenantsCalls() []struct {
 	return calls
 }
 
-// GetUpdateExistingDevices calls GetUpdateExistingDevicesFunc.
-func (mock *StoreMock) GetUpdateExistingDevices(ctx context.Context) bool {
-	if mock.GetUpdateExistingDevicesFunc == nil {
-		panic("StoreMock.GetUpdateExistingDevicesFunc: method is nil but Store.GetUpdateExistingDevices was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-	}{
-		Ctx: ctx,
-	}
-	mock.lockGetUpdateExistingDevices.Lock()
-	mock.calls.GetUpdateExistingDevices = append(mock.calls.GetUpdateExistingDevices, callInfo)
-	mock.lockGetUpdateExistingDevices.Unlock()
-	return mock.GetUpdateExistingDevicesFunc(ctx)
-}
-
-// GetUpdateExistingDevicesCalls gets all the calls that were made to GetUpdateExistingDevices.
-// Check the length with:
-//
-//	len(mockedStore.GetUpdateExistingDevicesCalls())
-func (mock *StoreMock) GetUpdateExistingDevicesCalls() []struct {
-	Ctx context.Context
-} {
-	var calls []struct {
-		Ctx context.Context
-	}
-	mock.lockGetUpdateExistingDevices.RLock()
-	calls = mock.calls.GetUpdateExistingDevices
-	mock.lockGetUpdateExistingDevices.RUnlock()
-	return calls
-}
-
 // Initialize calls InitializeFunc.
 func (mock *StoreMock) Initialize(ctx context.Context) error {
 	if mock.InitializeFunc == nil {
@@ -973,6 +941,38 @@ func (mock *StoreMock) InitializeCalls() []struct {
 	mock.lockInitialize.RLock()
 	calls = mock.calls.Initialize
 	mock.lockInitialize.RUnlock()
+	return calls
+}
+
+// IsSeedExistingDevicesEnabled calls IsSeedExistingDevicesEnabledFunc.
+func (mock *StoreMock) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
+	if mock.IsSeedExistingDevicesEnabledFunc == nil {
+		panic("StoreMock.IsSeedExistingDevicesEnabledFunc: method is nil but Store.IsSeedExistingDevicesEnabled was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockIsSeedExistingDevicesEnabled.Lock()
+	mock.calls.IsSeedExistingDevicesEnabled = append(mock.calls.IsSeedExistingDevicesEnabled, callInfo)
+	mock.lockIsSeedExistingDevicesEnabled.Unlock()
+	return mock.IsSeedExistingDevicesEnabledFunc(ctx)
+}
+
+// IsSeedExistingDevicesEnabledCalls gets all the calls that were made to IsSeedExistingDevicesEnabled.
+// Check the length with:
+//
+//	len(mockedStore.IsSeedExistingDevicesEnabledCalls())
+func (mock *StoreMock) IsSeedExistingDevicesEnabledCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockIsSeedExistingDevicesEnabled.RLock()
+	calls = mock.calls.IsSeedExistingDevicesEnabled
+	mock.lockIsSeedExistingDevicesEnabled.RUnlock()
 	return calls
 }
 

@@ -3,11 +3,14 @@ package storage
 import (
 	"context"
 	"io"
+	"log/slog"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/matryer/is"
 )
 
@@ -170,73 +173,119 @@ func TestGetDeviceStatus(t *testing.T) {
 	is.NoErr(err)
 }
 
-func setupSeedDevices(t *testing.T, updateExistingDevices bool, deviceID map[string]bool) (createCalls int, updateCalls int) {
-	t.Helper()
-	mock := &StoreMock{
-		GetUpdateExistingDevicesFunc: func(ctx context.Context) bool {
-			return updateExistingDevices
+func setupTests(t *testing.T) (context.Context, *is.I, io.ReadCloser) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	h := &recordingHandler{}
+	logger := slog.New(h)
+
+	ctx = logging.NewContextWithLogger(ctx, logger)
+
+	csv := io.NopCloser(strings.NewReader(`
+devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
+70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;`))
+
+	return ctx, is, csv
+}
+
+func TestSeedDevices_NewDevice_And_ShouldNotSeedExistingDevices(t *testing.T) {
+	ctx, is, csv := setupTests(t)
+
+	s := &StoreMock{
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return false
 		},
 		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
-			if exists, ok := deviceID[sensorID]; ok && exists {
-				return types.Device{SensorID: sensorID}, nil
-			}
 			return types.Device{}, ErrNoRows
 		},
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
-			if exists, ok := deviceID[d.SensorID]; ok {
-				if !exists {
-					createCalls++
-				} else {
-					updateCalls++
-				}
-			}
 			return nil
 		},
 	}
-	err := SeedDevices(context.Background(), mock, io.NopCloser(strings.NewReader(devices_csv)), []string{"default"})
-	if err != nil {
-		t.Fatalf("SeedDevice returned unexpected error: %v", err)
-	}
-	return createCalls, updateCalls
+
+	err := SeedDevices(ctx, s, csv, []string{"default"})
+	is.NoErr(err)
+	is.Equal(1, len(s.CreateOrUpdateDeviceCalls()))
+	is.Equal("intern-70t589", s.CreateOrUpdateDeviceCalls()[0].D.DeviceID)
+
+	log := logging.GetFromContext(ctx)
+	h, ok := log.Handler().(*recordingHandler)
+	is.True(ok)
+	is.Equal("seeded new device", h.records[1].Message)
 }
 
-func TestSeedDevices_CreatesWhenIdNotExistAndUpdateDeviceExistIsFalse(t *testing.T) {
-	deviceID := map[string]bool{
-		"70t589": false,
+func TestSeedDevices_NewDevice_And_ShouldSeedExistingDevices(t *testing.T) {
+	ctx, is, csv := setupTests(t)
+	s := &StoreMock{
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return true
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			return types.Device{}, ErrNoRows
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			return nil
+		},
 	}
-	createCalls, updateCalls := setupSeedDevices(t, true, deviceID)
-	if createCalls != 1 {
-		t.Errorf("expected 1 CreateOrUpdateDevice calls, got %d", createCalls)
-	}
-	if updateCalls != 0 {
-		t.Errorf("expected 0 updates, got %d", updateCalls)
-	}
+
+	err := SeedDevices(ctx, s, csv, []string{"default"})
+	is.NoErr(err)
+	is.Equal(1, len(s.CreateOrUpdateDeviceCalls()))
+	is.Equal("intern-70t589", s.CreateOrUpdateDeviceCalls()[0].D.DeviceID)
+
+	log := logging.GetFromContext(ctx)
+	h, ok := log.Handler().(*recordingHandler)
+	is.True(ok)
+	is.Equal("seeded new device", h.records[1].Message)
 }
 
-func TestSeedDevices_SkipUpdatesWhenIdExistsAndUpdateDeviceExistIsTrue(t *testing.T) {
-	deviceID := map[string]bool{
-		"70t589": true,
+func TestSeedDevices_ExistingDevice_And_ShouldSeedExistingDevices(t *testing.T) {
+	ctx, is, csv := setupTests(t)
+	s := &StoreMock{
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return true
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			return types.Device{}, nil
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			return nil
+		},
 	}
-	createCalls, updateCalls := setupSeedDevices(t, true, deviceID)
-	if createCalls != 0 {
-		t.Errorf("expected 0 CreateOrUpdateDevice calls, got %d", createCalls)
-	}
-	if updateCalls != 1 {
-		t.Errorf("expected 0 updates, got %d", updateCalls)
-	}
+
+	err := SeedDevices(ctx, s, csv, []string{"default"})
+	is.NoErr(err)
+	is.Equal(1, len(s.CreateOrUpdateDeviceCalls()))
+
+	log := logging.GetFromContext(ctx)
+	h, ok := log.Handler().(*recordingHandler)
+	is.True(ok)
+	is.Equal("updated existing device", h.records[1].Message)
 }
 
-func TestSeedDevices_UpdateWhenIdExistAndUpdateDeviceIsFalse(t *testing.T) {
-	deviceID := map[string]bool{
-		"70t589": true,
+func TestSeedDevices_ExistingDevice_And_ShouldNotSeedExistingDevices(t *testing.T) {
+	ctx, is, csv := setupTests(t)
+	s := &StoreMock{
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return false
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			return types.Device{}, nil
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			return nil
+		},
 	}
-	createCalls, updateCalls := setupSeedDevices(t, false, deviceID)
-	if createCalls != 0 {
-		t.Errorf("expected 0 creates calls, got %d", createCalls)
-	}
-	if updateCalls != 0 {
-		t.Errorf("expected 1 updates, got %d", updateCalls)
-	}
+
+	err := SeedDevices(ctx, s, csv, []string{"default"})
+	is.NoErr(err)
+	is.Equal(0, len(s.CreateOrUpdateDeviceCalls()))
+
+	log := logging.GetFromContext(ctx)
+	h, ok := log.Handler().(*recordingHandler)
+	is.True(ok)
+	is.Equal("seed should not update existing devices", h.records[1].Message)
 }
 
 const devices_csv string = `
@@ -244,3 +293,28 @@ devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;
 70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;
 50t555;intern-70t555;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t555;desc-70t555;true;default;3600;
 30t333;intern-70t333;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t333;desc-70t333;true;default;3600;`
+
+type recordingHandler struct {
+	mu      sync.Mutex
+	records []slog.Record
+}
+
+func (h *recordingHandler) Enabled(context.Context, slog.Level) bool { return true }
+
+func (h *recordingHandler) Handle(_ context.Context, r slog.Record) error {
+	r2 := slog.Record{
+		Time:    r.Time,
+		Level:   r.Level,
+		PC:      r.PC,
+		Message: r.Message,
+	}
+	r.Attrs(func(a slog.Attr) bool { r2.AddAttrs(a); return true })
+
+	h.mu.Lock()
+	h.records = append(h.records, r2)
+	h.mu.Unlock()
+	return nil
+}
+
+func (h *recordingHandler) WithAttrs(as []slog.Attr) slog.Handler { return h }
+func (h *recordingHandler) WithGroup(string) slog.Handler         { return h }
