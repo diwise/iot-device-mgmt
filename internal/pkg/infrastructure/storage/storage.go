@@ -112,7 +112,10 @@ func New(ctx context.Context, config Config) (Store, error) {
 		return nil, err
 	}
 
-	return &storageImpl{pool: pool, updateExisitingDevices: config.updateExisitingDevices}, nil
+	return &storageImpl{
+		pool:                   pool,
+		updateExisitingDevices: config.updateExisitingDevices,
+	}, nil
 }
 
 func (s *storageImpl) Initialize(ctx context.Context) error {

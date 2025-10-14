@@ -5,8 +5,8 @@ package client
 
 import (
 	"context"
-	"github.com/diwise/iot-device-mgmt/pkg/types"	
 	. "github.com/diwise/iot-device-mgmt/pkg/client"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
 
