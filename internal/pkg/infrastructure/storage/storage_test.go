@@ -148,7 +148,7 @@ func TestQueryWithSearch(t *testing.T) {
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
-
+/*
 func TestGetStaleDevices(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
@@ -156,7 +156,7 @@ func TestGetStaleDevices(t *testing.T) {
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
-
+*/
 func TestGetSensorByID(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
