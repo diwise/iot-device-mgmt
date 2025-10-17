@@ -116,6 +116,7 @@ type deviceRecord struct {
 	tenant      string
 	interval    int
 	source      string
+	metadata    map[string]string
 }
 
 func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
@@ -155,6 +156,13 @@ func (dr deviceRecord) mapToDevice() (types.Device, types.DeviceProfile) {
 		Interval: dr.interval,
 	}
 
+	for k, v := range dr.metadata {
+		device.Metadata = append(device.Metadata, types.Metadata{
+			Key:   k,
+			Value: v,
+		})
+	}
+
 	return device, device.DeviceProfile
 }
 
@@ -189,6 +197,18 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		return def
 	}
 
+	strToMap := func(str string) map[string]string {
+		parts := strings.Split(str, ",")
+		m := make(map[string]string)
+		for _, part := range parts {
+			kv := strings.SplitN(part, "=", 2)
+			if len(kv) == 2 {
+				m[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+			}
+		}
+		return m
+	}
+
 	dr := deviceRecord{
 		devEUI:      strings.TrimSpace(r[0]),
 		internalID:  strings.TrimSpace(r[1]),
@@ -203,6 +223,7 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		tenant:      r[10],
 		interval:    strToInt(r[11], 3600),
 		source:      r[12],
+		metadata:    strToMap(r[13]),
 	}
 
 	err := validateDeviceRecord(dr)

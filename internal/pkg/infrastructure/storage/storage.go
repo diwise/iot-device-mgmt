@@ -421,6 +421,22 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 		}
 	}
 
+	for _, m := range d.Metadata {
+		args["meta_key"] = strings.TrimSpace(m.Key)
+		args["meta_value"] = strings.TrimSpace(m.Value)
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_metadata (device_id, key, vs)
+			VALUES (@device_id, @meta_key, @meta_value)
+			ON CONFLICT (device_id, key) DO UPDATE
+				SET	vs = EXCLUDED.vs;`, args)
+		if err != nil {
+			log.Error("could not add metadata to device", "args", args, "err", err.Error())
+			tx.Rollback(ctx)
+			return err
+		}
+	}
+
 	return tx.Commit(ctx)
 }
 

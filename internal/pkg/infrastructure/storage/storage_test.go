@@ -148,14 +148,15 @@ func TestQueryWithSearch(t *testing.T) {
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
+
 /*
-func TestGetStaleDevices(t *testing.T) {
-	is := is.New(t)
-	ctx, s := testSetup(t)
-	c, err := s.GetStaleDevices(ctx)
-	is.NoErr(err)
-	is.True(len(c.Data) > 0)
-}
+	func TestGetStaleDevices(t *testing.T) {
+		is := is.New(t)
+		ctx, s := testSetup(t)
+		c, err := s.GetStaleDevices(ctx)
+		is.NoErr(err)
+		is.True(len(c.Data) > 0)
+	}
 */
 func TestGetSensorByID(t *testing.T) {
 	is := is.New(t)
@@ -183,10 +184,38 @@ func setupTests(t *testing.T) (context.Context, *is.I, io.ReadCloser) {
 	ctx = logging.NewContextWithLogger(ctx, logger)
 
 	csv := io.NopCloser(strings.NewReader(`
-devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;`))
+sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
+70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;source;key1=value1,key2=value2`))
 
 	return ctx, is, csv
+}
+
+func TestSeedDevices_WithMetadata(t *testing.T) {
+	ctx, is, csv := setupTests(t)
+
+	s := &StoreMock{
+		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+			return true
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
+			return types.Device{}, ErrNoRows
+		},
+		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
+			return nil
+		},
+	}
+
+	err := SeedDevices(ctx, s, csv, []string{"default"})
+	is.NoErr(err)
+	is.Equal(1, len(s.CreateOrUpdateDeviceCalls()))
+	is.Equal("intern-70t589", s.CreateOrUpdateDeviceCalls()[0].D.DeviceID)
+	is.Equal("key1", s.CreateOrUpdateDeviceCalls()[0].D.Metadata[0].Key)
+	is.Equal("value2", s.CreateOrUpdateDeviceCalls()[0].D.Metadata[1].Value)
+
+	log := logging.GetFromContext(ctx)
+	h, ok := log.Handler().(*recordingHandler)
+	is.True(ok)
+	is.Equal("seeded new device", h.records[1].Message)
 }
 
 func TestSeedDevices_NewDevice_And_ShouldNotSeedExistingDevices(t *testing.T) {
@@ -289,10 +318,10 @@ func TestSeedDevices_ExistingDevice_And_ShouldNotSeedExistingDevices(t *testing.
 }
 
 const devices_csv string = `
-devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source
-70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;
-50t555;intern-70t555;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t555;desc-70t555;true;default;3600;
-30t333;intern-70t333;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t333;desc-70t333;true;default;3600;`
+devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
+70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;key1=value1;
+50t555;intern-70t555;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t555;desc-70t555;true;default;3600;;
+30t333;intern-70t333;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t333;desc-70t333;true;default;3600;;`
 
 type recordingHandler struct {
 	mu      sync.Mutex
