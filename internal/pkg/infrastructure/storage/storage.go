@@ -422,7 +422,7 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 	}
 
 	for _, m := range d.Metadata {
-		args["meta_key"] = strings.TrimSpace(m.Key)
+		args["meta_key"] = strings.ToLower(strings.TrimSpace(m.Key))
 		args["meta_value"] = strings.TrimSpace(m.Value)
 
 		_, err = tx.Exec(ctx, `
