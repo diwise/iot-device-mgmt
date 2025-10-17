@@ -18,12 +18,13 @@ func testSetup(t *testing.T) (context.Context, Store) {
 	ctx := context.Background()
 
 	config := Config{
-		host:     "localhost",
-		user:     "postgres",
-		password: "password",
-		port:     "5432",
-		dbname:   "postgres",
-		sslmode:  "disable",
+		host:                "localhost",
+		user:                "postgres",
+		password:            "password",
+		port:                "5432",
+		dbname:              "postgres",
+		sslmode:             "disable",
+		seedExistingDevices: true,
 	}
 
 	s, err := New(ctx, config)
@@ -319,7 +320,7 @@ func TestSeedDevices_ExistingDevice_And_ShouldNotSeedExistingDevices(t *testing.
 
 const devices_csv string = `
 devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
-70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;key1=value1;
+70t589;intern-70t589;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t589;desc-70t589;true;default;3600;;key1=value1
 50t555;intern-70t555;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t555;desc-70t555;true;default;3600;;
 30t333;intern-70t333;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-70t333;desc-70t333;true;default;3600;;`
 
