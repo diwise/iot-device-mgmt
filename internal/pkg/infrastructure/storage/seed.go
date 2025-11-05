@@ -223,7 +223,12 @@ func newDeviceRecord(r []string) (deviceRecord, error) {
 		tenant:      r[10],
 		interval:    strToInt(r[11], 3600),
 		source:      r[12],
-		metadata:    strToMap(r[13]),
+	}
+
+	if len(r) > 13 {
+		dr.metadata = strToMap(r[13])
+	} else {
+		dr.metadata = make(map[string]string)
 	}
 
 	err := validateDeviceRecord(dr)
