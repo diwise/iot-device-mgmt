@@ -10,6 +10,7 @@ import (
 
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
+	"github.com/google/uuid"
 	"github.com/open-policy-agent/opa/rego"
 	"go.opentelemetry.io/otel"
 )
@@ -128,7 +129,9 @@ func GetAllowedTenantsFromContext(ctx context.Context) []string {
 	tenants, ok := ctx.Value(allowedTenantsCtxKey).([]string)
 
 	if !ok {
-		return []string{}
+		return []string{
+			uuid.NewString(),
+		}
 	}
 
 	return tenants

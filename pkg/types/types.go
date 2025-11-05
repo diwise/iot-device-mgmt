@@ -19,6 +19,7 @@ type Device struct {
 
 	Lwm2mTypes []Lwm2mType `json:"types"`
 	Tags       []Tag       `json:"tags,omitzero"`
+	Metadata   []Metadata  `json:"metadata,omitzero"`
 
 	DeviceProfile DeviceProfile `json:"deviceProfile"`
 
@@ -26,6 +27,11 @@ type Device struct {
 	DeviceState  DeviceState  `json:"deviceState"`
 
 	Alarms []string `json:"alarms,omitzero"`
+}
+
+type Metadata struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
 }
 
 type Location struct {

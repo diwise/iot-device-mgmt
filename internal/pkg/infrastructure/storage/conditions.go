@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -26,6 +25,7 @@ type Condition struct {
 	Tenant      string
 	Tenants     []string
 	ProfileName []string
+	Metadata    map[string]string
 
 	AlarmType string
 
@@ -161,6 +161,12 @@ func (c Condition) NamedArgs() pgx.NamedArgs {
 	if c.Urn != "" {
 		args["urn"] = c.Urn
 	}
+	if len(c.Metadata) > 0 {
+		for k, v := range c.Metadata {
+			args[fmt.Sprintf("meta_key_%s", k)] = k
+			args[fmt.Sprintf("meta_value_%s", k)] = v
+		}
+	}
 
 	return args
 }
@@ -176,10 +182,10 @@ func (c Condition) Where() string {
 		where = append(where, "d.sensor_id = @sensor_id")
 	}
 
-	if len(c.Tenant) > 0 && len(c.Tenants) > 0 && slices.Contains(c.Tenants, c.Tenant) {
-		where = append(where, "d.tenant = @tenant")
-	} else if len(c.Tenants) > 0 {
+	if len(c.Tenants) > 0 {
 		where = append(where, "d.tenant = ANY(@tenants)")
+	} else if len(c.Tenant) > 0 {
+		where = append(where, "d.tenant = @tenant")
 	}
 
 	if c.Active != nil {
@@ -232,6 +238,17 @@ func (c Condition) Where() string {
 
 	if c.AlarmType != "" {
 		where = append(where, "a.type=@alarmtype")
+	}
+
+	if len(c.Metadata) > 0 {
+		for k := range c.Metadata {
+			metadataWhere := fmt.Sprintf("EXISTS (SELECT 1 FROM device_metadata dm WHERE dm.device_id = d.device_id AND dm.key = @meta_key_%s", k)
+			if c.Metadata[k] != "" {
+				metadataWhere += fmt.Sprintf(" AND dm.vs = @meta_value_%s", k)
+			}
+			metadataWhere += ")"
+			where = append(where, metadataWhere)
+		}
 	}
 
 	if len(where) == 0 {
@@ -411,6 +428,13 @@ func WithExport() ConditionFunc {
 	}
 }
 
+func WithMetadata(key, value string) ConditionFunc {
+	return func(c *Condition) *Condition {
+		c.Metadata = map[string]string{key: value}
+		return c
+	}
+}
+
 func unique(s []string) []string {
 	keys := make(map[string]bool)
 	list := []string{}
@@ -494,7 +518,13 @@ func ParseConditions(ctx context.Context, params map[string][]string) []Conditio
 				}
 			}
 		default:
-			log.Debug("unknown query parameter", "param", k, "value", v[0])
+
+			if strings.HasPrefix(k, "metadata[") && strings.HasSuffix(k, "]") {
+				metadataKey := strings.TrimPrefix(strings.TrimSuffix(k, "]"), "metadata[")
+				conditions = append(conditions, WithMetadata(metadataKey, v[0]))
+			} else {
+				log.Debug("unknown query parameter", "param", k, "value", v[0])
+			}
 		}
 	}
 	return conditions
