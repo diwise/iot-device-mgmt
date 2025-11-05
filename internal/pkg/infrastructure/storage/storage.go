@@ -220,8 +220,6 @@ func createTables(ctx context.Context, s *storageImpl) error {
 		CREATE TABLE IF NOT EXISTS device_metadata (
 			device_id	TEXT NOT NULL,
 			key			TEXT NOT NULL,
-			name		TEXT NOT NULL,
-			description	TEXT NULL,
 			v 			NUMERIC NULL,
 			vs			TEXT NULL,
 			vb			BOOLEAN NULL,
@@ -232,6 +230,9 @@ func createTables(ctx context.Context, s *storageImpl) error {
 			CONSTRAINT pk_device_metadata PRIMARY KEY (device_id, key),
 			CONSTRAINT fk_device_metadata FOREIGN KEY (device_id) REFERENCES devices (device_id) ON DELETE CASCADE
 		);
+
+		ALTER TABLE device_metadata DROP COLUMN IF EXISTS name;
+		ALTER TABLE device_metadata DROP COLUMN IF EXISTS description;
 
 		CREATE TABLE IF NOT EXISTS device_device_tags (
 			device_id 	TEXT NOT NULL,
@@ -415,6 +416,22 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			log.Error("could not add type to device", "args", args, "err", err.Error())
+			tx.Rollback(ctx)
+			return err
+		}
+	}
+
+	for _, m := range d.Metadata {
+		args["meta_key"] = strings.ToLower(strings.TrimSpace(m.Key))
+		args["meta_value"] = strings.TrimSpace(m.Value)
+
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_metadata (device_id, key, vs)
+			VALUES (@device_id, @meta_key, @meta_value)
+			ON CONFLICT (device_id, key) DO UPDATE
+				SET	vs = EXCLUDED.vs;`, args)
+		if err != nil {
+			log.Error("could not add metadata to device", "args", args, "err", err.Error())
 			tx.Rollback(ctx)
 			return err
 		}
@@ -761,6 +778,12 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			GROUP BY ddt.device_id
 		),
 
+		metadata_list AS (
+			SELECT dm.device_id, array_agg(ARRAY[dm.key, dm.vs]) AS meta
+			FROM device_metadata dm
+			GROUP BY dm.device_id
+		),
+
 		types_list AS (
 			SELECT ddpt.device_id, array_agg(ARRAY[dpt.device_profile_type_id, dpt.name]) AS types
 			FROM device_device_profile_types ddpt
@@ -807,6 +830,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			ls.observed_at  AS status_observed_at,
 
 			tl.tags,
+			ml.meta,
 			types_list.types,
 
 			alarms_list.alarms,
@@ -820,6 +844,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		LEFT JOIN tag_list tl ON tl.device_id = d.device_id
 		LEFT JOIN types_list ON types_list.device_id = d.device_id
 		LEFT JOIN alarms_list ON alarms_list.device_id = d.device_id
+		LEFT JOIN metadata_list ml ON ml.device_id = d.device_id
 		%s
 		%s
 		%s;`, condition.Where(), condition.OrderBy("ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
@@ -847,7 +872,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		var rssi, snr, sf, batteryLevel *float64
 		var statusObservedAt, stateObservedAt *time.Time
 		var tagList, alarmsList []string
-		var typesList [][]string
+		var typesList, metadataList [][]string
 		var decoder *string
 		var interval, deviceInterval, stateValue, dr *int
 		var fq *int64
@@ -879,6 +904,7 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 			&dr,
 			&statusObservedAt,
 			&tagList,
+			&metadataList,
 			&typesList,
 			&alarmsList,
 			&count,
@@ -951,6 +977,17 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 				device.Tags = append(device.Tags, types.Tag{
 					Name: t,
 				})
+			}
+		}
+		if len(metadataList) > 0 {
+			device.Metadata = make([]types.Metadata, 0)
+			for _, m := range metadataList {
+				if len(m) == 2 && m[0] != "" {
+					device.Metadata = append(device.Metadata, types.Metadata{
+						Key:   m[0],
+						Value: m[1],
+					})
+				}
 			}
 		}
 		if len(typesList) > 0 {
