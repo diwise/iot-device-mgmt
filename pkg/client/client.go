@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httputil"
+	"net/url"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -215,7 +216,10 @@ func (dmc *devManagementClient) GetDeviceProfile(ctx context.Context, deviceProf
 	ctx, span := tracer.Start(ctx, "get-device-profile")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
-	url := dmc.url + "/api/v0/admin/deviceprofiles/" + deviceProfileID
+	params := url.Values{}
+	params.Add("name", deviceProfileID)
+
+	url := dmc.url + "/api/v0/admin/deviceprofiles?" + params.Encode()
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
