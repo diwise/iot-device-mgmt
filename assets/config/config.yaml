@@ -20,6 +20,17 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3428
         - urn:oma:lwm2m:ext:3302
         - urn:oma:lwm2m:ext:3200
+    - name: elsys/elt/sht3x
+      decoder: elsys/elt/sht3x
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3301
+        - urn:oma:lwm2m:ext:3428
+        - urn:oma:lwm2m:ext:3302
+        - urn:oma:lwm2m:ext:3200        
     - name: elt_2_hp
       decoder: elt_2_hp
       interval: 3600
@@ -62,6 +73,27 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3
         - urn:oma:lwm2m:ext:3424
         - urn:oma:lwm2m:ext:3303
+    - name: qalcosonic/w1h
+      decoder: qalcosonic/w1h
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3424
+        - urn:oma:lwm2m:ext:3303
+    - name: qalcosonic/w1t
+      decoder: qalcosonic/w1t
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3424
+        - urn:oma:lwm2m:ext:3303
+    - name: qalcosonic/w1e 
+      decoder: qalcosonic/w1e
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3424
+        - urn:oma:lwm2m:ext:3303                        
     - name: senlabt
       decoder: senlabt
       interval: 3600

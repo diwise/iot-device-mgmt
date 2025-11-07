@@ -98,6 +98,7 @@ func SeedDeviceProfiles(ctx context.Context, s Store, profiles []types.DevicePro
 			log.Debug("failed to seed device profile", "decoder", p.Decoder, "name", p.Name)
 			errs = append(errs, err)
 		}
+		log.Debug("added device profile", "name", p.Name, "decoder", p.Decoder)
 	}
 	return errors.Join(errs...)
 }
@@ -244,7 +245,28 @@ func validateDeviceRecord(r deviceRecord) error {
 		return fmt.Errorf("row with %s contains invalid where parameter %s", r.devEUI, r.where)
 	}
 
-	if !slices.Contains([]string{"qalcosonic", "sensative", "presence", "elsys", "elsys_codec", "enviot", "senlabt", "tem_lab_14ns", "strips_lora_ms_h", "cube02", "milesight", "milesight_am100", "niab-fls", "virtual", "axsensor", "vegapuls_air_41", "airquality"}, r.sensorType) {
+	if !slices.Contains([]string{
+		"qalcosonic",
+		"qalcosonic/w1h",
+		"qalcosonic/w1t",
+		"qalcosonic/w1e",
+		"sensative",
+		"presence",
+		"elsys",
+		"elsys/elt/sht3x",
+		"elsys_codec",
+		"enviot",
+		"senlabt",
+		"tem_lab_14ns",
+		"strips_lora_ms_h",
+		"cube02",
+		"milesight",
+		"milesight_am100",
+		"niab-fls",
+		"virtual",
+		"axsensor",
+		"vegapuls_air_41",
+		"airquality"}, r.sensorType) {
 		return fmt.Errorf("row with %s contains invalid sensorType parameter %s", r.devEUI, r.sensorType)
 	}
 
