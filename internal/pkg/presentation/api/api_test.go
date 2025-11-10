@@ -24,6 +24,52 @@ import (
 	"github.com/matryer/is"
 )
 
+func TestExportDevices(t *testing.T) {
+	is, _, _, s, _, ctx, mux := testSetup(t)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	devices := []types.Device{}
+
+	s.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{
+			Data:       devices,
+			Count:      uint64(len(devices)),
+			Offset:     0,
+			Limit:      uint64(len(devices)),
+			TotalCount: uint64(len(devices)),
+		}, nil
+	}
+
+	s.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
+		return types.Device{}, storage.ErrNoRows
+	}
+
+	s.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		devices = append(devices, d)
+		return nil
+	}
+
+	storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+
+	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices?export=true", nil)
+	req.Header.Add("Authorization", "Bearer ????")
+	req.Header.Add("accept", "text/csv")
+
+	res, err := http.DefaultClient.Do(req)
+	is.NoErr(err)
+
+	is.Equal(200, res.StatusCode)
+
+	b, err := io.ReadAll(res.Body)
+	is.NoErr(err)
+
+	csv := strings.Split(string(b), "\n")
+
+	is.Equal("devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata", csv[0])
+	is.Equal("a81758fffe06bfa3;intern-a81758fffe06bfa3;62.391600;17.307230;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;elsys_codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0;source;key=value", csv[1])
+}
+
 func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
 	is, _, _, repo, _, _, mux := testSetup(t)
 	server := httptest.NewServer(mux)
@@ -185,9 +231,9 @@ func TestPutDeviceHandler(t *testing.T) {
 	}
 
 	body := strings.NewReader(`
-		{ 
+		{
 			"deviceID" : "33788389279",
-			"tenant" : "default" 
+			"tenant" : "default"
 		}
 	`)
 
@@ -454,7 +500,7 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 }
 
 const csvMock string = `sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;
+a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;key=value
 a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;_default;60;source;
 1234;intern-1234;0.0;0.0;air;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3304;enviot;name-1234;desc-1234;true;_test;60;källa;
 5678;intern-5678;0.0;0.0;soil;urn:oma:lwm2m:ext:3303;enviot;name-5678;desc-5678;true;_test;60;;

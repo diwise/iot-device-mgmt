@@ -1030,7 +1030,7 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 	offsetLimitSql, offset, limit := condition.OffsetLimit(0, 100)
 
 	sql := fmt.Sprintf(`
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count 
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count
 		FROM (
 			SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, count(*) OVER () AS total_count
 			FROM devices d
@@ -1211,7 +1211,7 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 			FROM device_status
 			GROUP BY device_id
 		)
-			
+
 		SELECT
 			d.device_id,
 			d.sensor_id,
