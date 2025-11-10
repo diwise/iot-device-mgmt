@@ -151,7 +151,6 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 					return
 				}
 
-				w.WriteHeader(http.StatusOK)
 				return
 			}
 

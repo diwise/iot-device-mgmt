@@ -209,9 +209,12 @@ func TestSeedDevices_WithMetadata(t *testing.T) {
 	err := SeedDevices(ctx, s, csv, []string{"default"})
 	is.NoErr(err)
 	is.Equal(1, len(s.CreateOrUpdateDeviceCalls()))
-	is.Equal("intern-70t589", s.CreateOrUpdateDeviceCalls()[0].D.DeviceID)
-	is.Equal("key1", s.CreateOrUpdateDeviceCalls()[0].D.Metadata[0].Key)
-	is.Equal("value2", s.CreateOrUpdateDeviceCalls()[0].D.Metadata[1].Value)
+
+	d := s.CreateOrUpdateDeviceCalls()[0].D
+
+	is.Equal("intern-70t589", d.DeviceID)
+	is.Equal("key1", d.Metadata[0].Key)
+	is.Equal("value2", d.Metadata[1].Value)
 
 	log := logging.GetFromContext(ctx)
 	h, ok := log.Handler().(*recordingHandler)

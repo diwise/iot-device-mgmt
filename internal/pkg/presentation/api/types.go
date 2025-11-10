@@ -240,10 +240,20 @@ func CreateGeoJSONPropertyFromMultiPolygon(coordinates [][][][]float64) *GeoJSON
 }
 
 func writeCsvWithDevices(w io.Writer, devices []types.Device) error {
-	header := []string{"devEUI", "internalID", "lat", "lon", "where", "types", "sensorType", "name", "description", "active", "tenant", "interval", "source"}
+	header := []string{"devEUI", "internalID", "lat", "lon", "where", "types", "sensorType", "name", "description", "active", "tenant", "interval", "source", "metadata"}
 	rows := [][]string{header}
 
-	types := func(d types.Device) string {
+	meta := func(d types.Device) string {
+		result := []string{}
+
+		for _, m := range d.Metadata {
+			result = append(result, fmt.Sprintf("%s=%s", m.Key, m.Value))
+		}
+
+		return strings.Join(result, ",")
+	}
+
+	lwm2mTypes := func(d types.Device) string {
 		urn := []string{}
 
 		for _, t := range d.Lwm2mTypes {
@@ -260,7 +270,7 @@ func writeCsvWithDevices(w io.Writer, devices []types.Device) error {
 			fmt.Sprintf("%f", d.Location.Latitude),
 			fmt.Sprintf("%f", d.Location.Longitude),
 			d.Environment,
-			types(d),
+			lwm2mTypes(d),
 			d.DeviceProfile.Decoder,
 			d.Name,
 			d.Description,
@@ -268,6 +278,7 @@ func writeCsvWithDevices(w io.Writer, devices []types.Device) error {
 			d.Tenant,
 			fmt.Sprintf("%d", d.DeviceProfile.Interval),
 			d.Source,
+			meta(d),
 		}
 		rows = append(rows, row)
 	}
