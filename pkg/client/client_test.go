@@ -35,7 +35,8 @@ func TestGetProfile(t *testing.T) {
 
 	mockedService := test.NewMockServiceThat(
 		test.Expects(is,
-			expects.RequestPath("/api/v0/admin/deviceprofiles/elsys"),
+			expects.RequestPath("/api/v0/admin/deviceprofiles"),
+			expects.QueryParamContains("name", "elsys"),
 			expects.RequestMethod("GET"),
 		),
 		test.Returns(
