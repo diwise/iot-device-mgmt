@@ -49,6 +49,7 @@ func NewPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 
 	err = p.Ping(ctx)
 	if err != nil {
+		p.Close()
 		return nil, err
 	}
 
@@ -296,6 +297,7 @@ func (s *storageImpl) CreateDeviceProfile(ctx context.Context, p types.DevicePro
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	args := pgx.NamedArgs{
 		"device_profile_id": strings.ToLower(strings.TrimSpace(p.Decoder)),
@@ -309,7 +311,6 @@ func (s *storageImpl) CreateDeviceProfile(ctx context.Context, p types.DevicePro
 		VALUES (@device_profile_id, @name, @decoder, @interval)
 		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -320,7 +321,6 @@ func (s *storageImpl) CreateDeviceProfile(ctx context.Context, p types.DevicePro
 			VALUES (@device_profile_id, @device_profile_type_id)
 			ON CONFLICT DO NOTHING`, args)
 		if err != nil {
-			tx.Rollback(ctx)
 			return err
 		}
 	}
@@ -335,6 +335,7 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	args := pgx.NamedArgs{
 		"device_id":      strings.TrimSpace(d.DeviceID),
@@ -370,20 +371,17 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 			WHERE devices.deleted = FALSE
 		`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_device_tags WHERE device_id=@device_id;`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
 	for _, t := range d.Tags {
 		err = createTagTx(ctx, tx, t)
 		if err != nil {
-			tx.Rollback(ctx)
 			return err
 		}
 
@@ -393,14 +391,12 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 			VALUES (@device_id, @tag_name)
 			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
-			tx.Rollback(ctx)
 			return err
 		}
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_device_profile_types WHERE device_id=@device_id;`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -416,7 +412,6 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			log.Error("could not add type to device", "args", args, "err", err.Error())
-			tx.Rollback(ctx)
 			return err
 		}
 	}
@@ -432,7 +427,6 @@ func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) 
 				SET	vs = EXCLUDED.vs;`, args)
 		if err != nil {
 			log.Error("could not add metadata to device", "args", args, "err", err.Error())
-			tx.Rollback(ctx)
 			return err
 		}
 	}
@@ -445,6 +439,7 @@ func (s *storageImpl) AddTag(ctx context.Context, deviceID string, t types.Tag) 
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
@@ -453,7 +448,6 @@ func (s *storageImpl) AddTag(ctx context.Context, deviceID string, t types.Tag) 
 
 	_, err = tx.Exec(ctx, `INSERT INTO device_device_tags (device_id, name) VALUES (@device_id, @tag_name) ON CONFLICT DO NOTHING;`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -465,10 +459,10 @@ func (s *storageImpl) CreateTag(ctx context.Context, t types.Tag) error {
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	err = createTagTx(ctx, tx, t)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -499,18 +493,18 @@ func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMe
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO device_status (observed_at, device_id, battery_level, rssi, snr, fq, sf, dr)
-		VALUES (@observed_at, @device_id, @battery_level, @rssi, @snr, @fq, @sf, @dr);`, args)
+		VALUES (@observed_at, @device_id, @battery_level, @rssi, @snr, @fq, @sf, @dr)
+		ON CONFLICT DO NOTHING;`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_status WHERE device_id=@device_id AND observed_at < NOW() - INTERVAL '3 weeks'`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -529,6 +523,7 @@ func (s *storageImpl) SetDeviceState(ctx context.Context, deviceID string, state
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO device_state (device_id, observed_at, online, state)
@@ -541,7 +536,6 @@ func (s *storageImpl) SetDeviceState(ctx context.Context, deviceID string, state
 				modified_on = NOW();
 		`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -557,6 +551,7 @@ func (s *storageImpl) SetDeviceProfile(ctx context.Context, deviceID string, dp 
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	args := pgx.NamedArgs{
 		"device_profile": strings.ToLower(dp.Decoder),
@@ -571,7 +566,6 @@ func (s *storageImpl) SetDeviceProfile(ctx context.Context, deviceID string, dp 
 			modified_on=NOW()
 		WHERE device_id=@device_id AND deleted=FALSE`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -585,6 +579,7 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
@@ -592,7 +587,6 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_device_profile_types WHERE device_id=@device_id;`, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
@@ -608,7 +602,6 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
 			log.Error("could not add type to device", "args", args, "err", err.Error())
-			tx.Rollback(ctx)
 			return err
 		}
 	}
@@ -672,12 +665,12 @@ func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bo
 	if err != nil {
 		return err
 	}
+	defer tx.Rollback(ctx)
 
 	sql := "UPDATE devices SET " + strings.Join(values, ",") + " WHERE device_id=@device_id AND deleted=FALSE"
 
 	_, err = tx.Exec(ctx, sql, args)
 	if err != nil {
-		tx.Rollback(ctx)
 		return err
 	}
 
