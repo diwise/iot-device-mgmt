@@ -43,7 +43,18 @@ func NewConfig(host, user, password, port, dbname, sslmode string, seedExistingD
 }
 
 func NewPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
-	p, err := pgxpool.New(ctx, config.ConnStr())
+	poolConfig, err := pgxpool.ParseConfig(config.ConnStr())
+	if err != nil {
+		return nil, err
+	}
+
+	poolConfig.MaxConns = 25
+	poolConfig.MinConns = 5
+	poolConfig.MaxConnLifetime = time.Hour
+	poolConfig.MaxConnIdleTime = 30 * time.Minute
+	poolConfig.HealthCheckPeriod = time.Minute
+
+	p, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -759,10 +770,10 @@ func (s *storageImpl) SetDevice(ctx context.Context, deviceID string, active *bo
 }
 
 func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
-	if sensorID == ""{
+	if sensorID == "" {
 		return types.Device{}, ErrNoID
 	}
-	
+
 	args := pgx.NamedArgs{
 		"sensor_id": sensorID,
 	}
@@ -1096,6 +1107,10 @@ func (s *storageImpl) Query(ctx context.Context, conditions ...ConditionFunc) (t
 		devices = append(devices, device)
 	}
 
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.Device]{}, err
+	}
+
 	if condition.Export {
 		limit = len(devices)
 	}
@@ -1189,6 +1204,10 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 		statuses = append(statuses, status)
 	}
 
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.DeviceStatus]{}, err
+	}
+
 	return types.Collection[types.DeviceStatus]{
 		Data:       statuses,
 		Count:      uint64(len(statuses)),
@@ -1224,6 +1243,10 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 		if tenant != "" {
 			tenants = append(tenants, tenant)
 		}
+	}
+
+	if err := rows.Err(); err != nil {
+		return types.Collection[string]{}, err
 	}
 
 	return types.Collection[string]{
@@ -1329,6 +1352,10 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 		})
 	}
 
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.AlarmDetails]{}, err
+	}
+
 	return types.Collection[types.AlarmDetails]{
 		Data:       alarms,
 		Count:      uint64(len(alarms)),
@@ -1413,6 +1440,10 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 		devices = append(devices, d)
 	}
 
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.Device]{}, err
+	}
+
 	return types.Collection[types.Device]{
 		Data:       devices,
 		Count:      uint64(len(devices)),
@@ -1490,13 +1521,17 @@ func (s *storageImpl) GetAlarms(ctx context.Context, conditions ...ConditionFunc
 
 		err := rows.Scan(&deviceID, &typs, &severity, &observedAt, &totalCount)
 		if err != nil {
-			return types.Collection[types.Alarms]{}, nil
+			return types.Collection[types.Alarms]{}, err
 		}
 		alarms = append(alarms, types.Alarms{
 			DeviceID:   deviceID,
 			AlarmTypes: typs,
 			ObservedAt: observedAt.UTC(),
 		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.Alarms]{}, err
 	}
 
 	return types.Collection[types.Alarms]{
@@ -1580,6 +1615,10 @@ func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string
 		}
 
 		measurements = append(measurements, m)
+	}
+
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.Measurement]{}, err
 	}
 
 	return types.Collection[types.Measurement]{
