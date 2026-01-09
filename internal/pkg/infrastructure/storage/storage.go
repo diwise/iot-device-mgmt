@@ -48,11 +48,12 @@ func NewPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	poolConfig.MaxConns = 25
-	poolConfig.MinConns = 5
+	poolConfig.MaxConns = 10
+	poolConfig.MinConns = 0
 	poolConfig.MaxConnLifetime = time.Hour
 	poolConfig.MaxConnIdleTime = 30 * time.Minute
 	poolConfig.HealthCheckPeriod = time.Minute
+	poolConfig.ConnConfig.RuntimeParams["application_name"] = "iot-device-mgmt"
 
 	p, err := pgxpool.NewWithConfig(ctx, poolConfig)
 	if err != nil {
