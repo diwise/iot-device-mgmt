@@ -24,3 +24,4 @@
 *.develop.rego
 *.develop.csv
 
+.specs/
