@@ -255,6 +255,7 @@ func validateDeviceRecord(r deviceRecord) error {
 		"elsys",
 		"elsys/elt/sht3x",
 		"elsys_codec",
+		"talkpool/o1210",
 		"enviot",
 		"senlabt",
 		"tem_lab_14ns",
