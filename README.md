@@ -1,6 +1,6 @@
 # iot-device-mgmt
 
-Device management service.
+Device management service
 
 # Design
 ```mermaid
