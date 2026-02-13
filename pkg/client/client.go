@@ -47,6 +47,7 @@ type devEUIState struct {
 	state      deviceState
 	err        error
 	internalID string
+	when       time.Time
 }
 
 type lookupResult struct {
@@ -66,6 +67,7 @@ type devManagementClient struct {
 	queue             chan (func())
 	httpClient        http.Client
 	debugClient       bool
+	errorCacheTTL     time.Duration
 
 	keepRunning *atomic.Bool
 	wg          sync.WaitGroup
@@ -116,8 +118,9 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 		queue:             make(chan func()),
 		keepRunning:       &atomic.Bool{},
 
-		httpClient:  *httpClient,
-		debugClient: env.GetVariableOrDefault(ctx, "DEVMGMT_CLIENT_DEBUG", "false") == "true",
+		httpClient:    *httpClient,
+		debugClient:   env.GetVariableOrDefault(ctx, "DEVMGMT_CLIENT_DEBUG", "false") == "true",
+		errorCacheTTL: 30 * time.Second,
 	}
 
 	go dmc.run(ctx)
@@ -335,6 +338,14 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 					}
 				}()
 			case Error:
+				if time.Since(device.when) > dmc.errorCacheTTL {
+					dmc.knownDevEUI[devEUI] = devEUIState{state: Refreshing, when: time.Now()}
+					go func() {
+						dmc.updateDeviceCacheFromDevEUI(ctx, devEUI)
+					}()
+					errchan <- errRetry
+					return
+				}
 				errchan <- device.err
 			case Refreshing:
 				errchan <- errRetry
@@ -345,7 +356,7 @@ func (dmc *devManagementClient) FindDeviceFromDevEUI(ctx context.Context, devEUI
 			return
 		}
 
-		dmc.knownDevEUI[devEUI] = devEUIState{state: Refreshing}
+		dmc.knownDevEUI[devEUI] = devEUIState{state: Refreshing, when: time.Now()}
 		go func() {
 			dmc.updateDeviceCacheFromDevEUI(ctx, devEUI)
 		}()
@@ -377,9 +388,9 @@ func (dmc *devManagementClient) updateDeviceCacheFromDevEUI(ctx context.Context,
 				log.Error("failed to update device cache", "err", err.Error())
 			}
 
-			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err}
+			dmc.knownDevEUI[devEUI] = devEUIState{state: Error, err: err, when: time.Now()}
 		} else {
-			dmc.knownDevEUI[devEUI] = devEUIState{state: Ready, internalID: device.ID()}
+			dmc.knownDevEUI[devEUI] = devEUIState{state: Ready, internalID: device.ID(), when: time.Now()}
 			dmc.cacheByInternalID[device.ID()] = lookupResult{state: Ready, device: device, when: time.Now()}
 		}
 	}
@@ -469,6 +480,14 @@ func (dmc *devManagementClient) FindDeviceFromInternalID(ctx context.Context, de
 			case Ready:
 				resultchan <- r.device
 			case Error:
+				if time.Since(r.when) > dmc.errorCacheTTL {
+					dmc.cacheByInternalID[deviceID] = lookupResult{state: Refreshing, when: time.Now()}
+					go func() {
+						dmc.updateDeviceCacheFromInternalID(ctx, deviceID)
+					}()
+					errchan <- errRetry
+					return
+				}
 				errchan <- r.err
 			case Refreshing:
 				errchan <- errRetry
