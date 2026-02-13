@@ -188,21 +188,24 @@ func TestFindDeviceFromDevEUIRetriesAfterErrorCacheTTL(t *testing.T) {
 	dmc := client.(*devManagementClient)
 	dmc.errorCacheTTL = 20 * time.Millisecond
 
+	// First call gets 401, automatically retries with fresh token, then gets 404
 	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
 	is.True(err != nil)
-	is.True(!errors.Is(err, ErrNotFound))
-	is.Equal(requests.Load(), int32(1))
+	is.True(errors.Is(err, ErrNotFound)) // Now expects NotFound due to automatic retry
+	is.Equal(requests.Load(), int32(2))  // Should have made 2 requests (401 + retry)
 
+	// Second call uses cached error, no new requests
 	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
 	is.True(err != nil)
-	is.True(!errors.Is(err, ErrNotFound))
-	is.Equal(requests.Load(), int32(1))
+	is.True(errors.Is(err, ErrNotFound))
+	is.Equal(requests.Load(), int32(2)) // Still 2 requests (cached)
 
 	time.Sleep(35 * time.Millisecond)
 
+	// After TTL expires, tries again and gets 404
 	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
 	is.True(errors.Is(err, ErrNotFound))
-	is.True(requests.Load() >= int32(2))
+	is.True(requests.Load() >= int32(3))
 
 	client.Close(ctx)
 }

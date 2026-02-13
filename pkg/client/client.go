@@ -69,6 +69,11 @@ type devManagementClient struct {
 	debugClient       bool
 	errorCacheTTL     time.Duration
 
+	// OAuth token management
+	oauthCtx    context.Context
+	cachedToken *oauth2.Token
+	tokenMutex  sync.RWMutex
+
 	keepRunning *atomic.Bool
 	wg          sync.WaitGroup
 }
@@ -97,9 +102,10 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 		Transport: otelhttp.NewTransport(httpTransport),
 	}
 
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, httpClient)
+	// Create OAuth context that will be reused for all token operations
+	oauthCtx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
 
-	token, err := oauthConfig.Token(ctx)
+	token, err := oauthConfig.Token(oauthCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get client credentials from %s: %w", oauthConfig.TokenURL, err)
 	}
@@ -121,6 +127,9 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 		httpClient:    *httpClient,
 		debugClient:   env.GetVariableOrDefault(ctx, "DEVMGMT_CLIENT_DEBUG", "false") == "true",
 		errorCacheTTL: 30 * time.Second,
+
+		oauthCtx:    oauthCtx,
+		cachedToken: token,
 	}
 
 	go dmc.run(ctx)
@@ -133,6 +142,13 @@ var ErrDeviceExist = errors.New("device already exists")
 func drainAndCloseResponseBody(r *http.Response) {
 	defer r.Body.Close()
 	io.Copy(io.Discard, r.Body)
+}
+
+// invalidateTokenCache clears the cached token to force a refresh on next request
+func (dmc *devManagementClient) invalidateTokenCache() {
+	dmc.tokenMutex.Lock()
+	defer dmc.tokenMutex.Unlock()
+	dmc.cachedToken = nil
 }
 
 func (dmc *devManagementClient) dumpRequestResponseIfNon200AndDebugEnabled(ctx context.Context, req *http.Request, resp *http.Response) {
@@ -149,9 +165,55 @@ func (dmc *devManagementClient) refreshToken(ctx context.Context) (token *oauth2
 	ctx, span := tracer.Start(ctx, "refresh-token")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
-	ctx = context.WithValue(ctx, oauth2.HTTPClient, dmc.httpClient)
-	token, err = dmc.clientCredentials.Token(ctx)
-	return
+	// Check if cached token is still valid
+	dmc.tokenMutex.RLock()
+	if dmc.cachedToken != nil && dmc.cachedToken.Valid() {
+		token = dmc.cachedToken
+		dmc.tokenMutex.RUnlock()
+		return token, nil
+	}
+	dmc.tokenMutex.RUnlock()
+
+	// Need to refresh - acquire write lock
+	dmc.tokenMutex.Lock()
+	defer dmc.tokenMutex.Unlock()
+
+	// Double-check after acquiring write lock (another goroutine might have refreshed)
+	if dmc.cachedToken != nil && dmc.cachedToken.Valid() {
+		return dmc.cachedToken, nil
+	}
+
+	log := logging.GetFromContext(ctx)
+
+	// Retry logic with exponential backoff
+	var lastErr error
+	maxRetries := 3
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(attempt*attempt) * 100 * time.Millisecond
+			log.Debug("retrying token refresh", "attempt", attempt+1, "backoff", backoff)
+			time.Sleep(backoff)
+		}
+
+		// Use the persistent OAuth context
+		token, lastErr = dmc.clientCredentials.Token(dmc.oauthCtx)
+		if lastErr == nil {
+			if !token.Valid() {
+				lastErr = fmt.Errorf("received invalid token from %s", dmc.clientCredentials.TokenURL)
+				log.Warn("received invalid token", "attempt", attempt+1)
+				continue
+			}
+			// Success - cache the token
+			dmc.cachedToken = token
+			log.Debug("token refreshed successfully", "expires", token.Expiry)
+			return token, nil
+		}
+
+		log.Warn("failed to refresh token", "attempt", attempt+1, "err", lastErr.Error())
+	}
+
+	err = fmt.Errorf("failed to refresh token after %d attempts: %w", maxRetries, lastErr)
+	return nil, err
 }
 
 func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.Device) error {
@@ -194,6 +256,27 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
+		// Invalidate cached token and try once more with fresh token
+		dmc.invalidateTokenCache()
+		token, retryErr := dmc.refreshToken(ctx)
+		if retryErr == nil {
+			// Retry the request with fresh token
+			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			resp2, retryErr2 := dmc.httpClient.Do(req)
+			if retryErr2 == nil {
+				defer drainAndCloseResponseBody(resp2)
+				if resp2.StatusCode == http.StatusCreated {
+					if cached, ok := dmc.knownDevEUI[device.SensorID]; ok {
+						delete(dmc.cacheByInternalID, cached.internalID)
+						delete(dmc.knownDevEUI, device.SensorID)
+					}
+					return nil
+				}
+				if resp2.StatusCode == http.StatusConflict {
+					return ErrDeviceExist
+				}
+			}
+		}
 		err = fmt.Errorf("request failed, not authorized")
 		return err
 	}
@@ -434,6 +517,37 @@ func (dmc *devManagementClient) findDeviceFromDevEUI(ctx context.Context, devEUI
 	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
+		// Invalidate cached token and try once more with fresh token
+		dmc.invalidateTokenCache()
+		token, retryErr := dmc.refreshToken(ctx)
+		if retryErr == nil {
+			// Retry the request with fresh token
+			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			resp2, retryErr2 := dmc.httpClient.Do(req)
+			if retryErr2 == nil {
+				defer drainAndCloseResponseBody(resp2)
+				if resp2.StatusCode == http.StatusOK {
+					respBody, err := io.ReadAll(resp2.Body)
+					if err != nil {
+						err = fmt.Errorf("failed to read response body: %w", err)
+						return nil, err
+					}
+					impls := struct {
+						Data types.Device `json:"data"`
+					}{}
+					err = json.Unmarshal(respBody, &impls)
+					if err != nil {
+						err = fmt.Errorf("failed to unmarshal response body: %w", err)
+						return nil, err
+					}
+					device := impls.Data
+					return &deviceWrapper{&device}, nil
+				}
+				if resp2.StatusCode == http.StatusNotFound {
+					return nil, ErrNotFound
+				}
+			}
+		}
 		err = fmt.Errorf("request failed, not authorized")
 		return nil, err
 	}
@@ -574,6 +688,36 @@ func (dmc *devManagementClient) findDeviceFromInternalID(ctx context.Context, de
 	dmc.dumpRequestResponseIfNon200AndDebugEnabled(ctx, req, resp)
 
 	if resp.StatusCode == http.StatusUnauthorized {
+		// Invalidate cached token and try once more with fresh token
+		dmc.invalidateTokenCache()
+		token, retryErr := dmc.refreshToken(ctx)
+		if retryErr == nil {
+			// Retry the request with fresh token
+			req.Header.Set("Authorization", "Bearer "+token.AccessToken)
+			resp2, retryErr2 := dmc.httpClient.Do(req)
+			if retryErr2 == nil {
+				defer drainAndCloseResponseBody(resp2)
+				if resp2.StatusCode == http.StatusOK {
+					respBody, err := io.ReadAll(resp2.Body)
+					if err != nil {
+						err = fmt.Errorf("failed to read response body: %w", err)
+						return nil, err
+					}
+					impl := struct {
+						Data types.Device `json:"data"`
+					}{}
+					err = json.Unmarshal(respBody, &impl)
+					if err != nil {
+						err = fmt.Errorf("failed to unmarshal response body: %w", err)
+						return nil, err
+					}
+					return &deviceWrapper{&impl.Data}, nil
+				}
+				if resp2.StatusCode == http.StatusNotFound {
+					return nil, ErrNotFound
+				}
+			}
+		}
 		err = fmt.Errorf("request failed, not authorized")
 		return nil, err
 	}
