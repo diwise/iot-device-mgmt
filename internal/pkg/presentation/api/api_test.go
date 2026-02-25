@@ -513,8 +513,14 @@ package example.authz
 
 default allow := false
 
-allow = response {
+allow = response if {
 	response := {
-		"tenants": ["default"]
+		"access": {
+            "default": [
+                "devices.create",
+                "devices.read",
+                "devices.update"
+            ]
+        }
 	}
 }`
