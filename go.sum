@@ -28,8 +28,10 @@ github.com/diwise/messaging-golang v0.0.0-20250628135946-f23f34d06003 h1:ihc06l5
 github.com/diwise/messaging-golang v0.0.0-20250628135946-f23f34d06003/go.mod h1:oxItnOgjQbbE2Qn2nSC/qNL3eAUGy6lzGZjcjUd7nQY=
 github.com/diwise/service-chassis v0.0.0-20250910115917-3609c77c5355 h1:/+iGo/B22c1jHrdpxUNtsNF1CU4OGpNKUIXBKpWZfH4=
 github.com/diwise/service-chassis v0.0.0-20250910115917-3609c77c5355/go.mod h1:Iei5leO4Re039tNFQN87hJfHvJ+RfjMtjmv+RutKU8k=
-github.com/diwise/service-chassis v0.0.0-20250910115917-3609c77c5355 h1:/+iGo/B22c1jHrdpxUNtsNF1CU4OGpNKUIXBKpWZfH4=
-github.com/diwise/service-chassis v0.0.0-20250910115917-3609c77c5355/go.mod h1:Iei5leO4Re039tNFQN87hJfHvJ+RfjMtjmv+RutKU8k=
+github.com/diwise/service-chassis v0.0.0-20251125074453-ebec507404cf h1:Pi5w5wfjv3vXUA4HPy0Rh8tK7FMnMtQj/5BYLSfriPE=
+github.com/diwise/service-chassis v0.0.0-20251125074453-ebec507404cf/go.mod h1:N1KHP6gWc1ZjaulRHiH3Jpjrn6sWFEaN6cAkqf/oX2I=
+github.com/diwise/service-chassis v0.0.0-20251125215328-756f9a9ea2d8 h1:SW8F4UHtjvTI8u/xrHtaEe3HVmt2u69eHCUDzs3rxaA=
+github.com/diwise/service-chassis v0.0.0-20251125215328-756f9a9ea2d8/go.mod h1:N1KHP6gWc1ZjaulRHiH3Jpjrn6sWFEaN6cAkqf/oX2I=
 github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkpeCY=
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2Wg=
@@ -112,8 +114,6 @@ github.com/open-policy-agent/opa v1.9.0/go.mod h1:72+lKmTda0O48m1VKAxxYl7MjP/EWF
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
-github.com/prometheus/client_golang v1.23.2 h1:Je96obch5RDVy3FDMndoUsjAhG5Edi49h0RJWRi/o0o=
-github.com/prometheus/client_golang v1.23.2/go.mod h1:Tb1a6LWHB3/SPIzCoaDXI4I8UHKeFTEQ1YCr+0Gyqmg=
 github.com/prometheus/client_golang v1.23.2 h1:Je96obch5RDVy3FDMndoUsjAhG5Edi49h0RJWRi/o0o=
 github.com/prometheus/client_golang v1.23.2/go.mod h1:Tb1a6LWHB3/SPIzCoaDXI4I8UHKeFTEQ1YCr+0Gyqmg=
 github.com/prometheus/client_model v0.6.2 h1:oBsgwpGs7iVziMvrGhE53c/GrLUsZdHnqNwqPLxwZyk=
