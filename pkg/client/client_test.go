@@ -3,7 +3,12 @@ package client
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	test "github.com/diwise/service-chassis/pkg/test/http"
@@ -143,6 +148,66 @@ func TestMe(t *testing.T) {
 	is.NoErr(err)
 
 	c.Close(ctx)
+}
+
+func TestFindDeviceFromDevEUIRetriesAfterErrorCacheTTL(t *testing.T) {
+	is := is.New(t)
+
+	var requests atomic.Int32
+	mockedService := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		is.Equal(r.URL.Path, "/api/v0/devices")
+		is.Equal(r.Method, http.MethodGet)
+		is.Equal(r.URL.Query().Get("devEUI"), "retry-device")
+
+		count := requests.Add(1)
+		if count == 1 {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer mockedService.Close()
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/token"),
+		),
+		test.Returns(
+			response.ContentType("application/json"),
+			response.Code(200),
+			response.Body([]byte(TokenResponse)),
+		),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+
+	client, err := New(ctx, mockedService.URL, mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+	dmc := client.(*devManagementClient)
+	dmc.errorCacheTTL = 20 * time.Millisecond
+
+	// First call gets 401, automatically retries with fresh token, then gets 404
+	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
+	is.True(err != nil)
+	is.True(errors.Is(err, ErrNotFound)) // Now expects NotFound due to automatic retry
+	is.Equal(requests.Load(), int32(2))  // Should have made 2 requests (401 + retry)
+
+	// Second call uses cached error, no new requests
+	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
+	is.True(err != nil)
+	is.True(errors.Is(err, ErrNotFound))
+	is.Equal(requests.Load(), int32(2)) // Still 2 requests (cached)
+
+	time.Sleep(35 * time.Millisecond)
+
+	// After TTL expires, tries again and gets 404
+	_, err = client.FindDeviceFromDevEUI(ctx, "retry-device")
+	is.True(errors.Is(err, ErrNotFound))
+	is.True(requests.Load() >= int32(3))
+
+	client.Close(ctx)
 }
 
 const TokenResponse string = `{"access_token":"testtoken","expires_in":300,"refresh_expires_in":0,"token_type":"Bearer","not-before-policy":0,"scope":"email profile"}`
