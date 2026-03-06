@@ -105,6 +105,8 @@ github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 h1:C3w9PqII01/Oq
 github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822/go.mod h1:+n7T8mK8HuQTcFwEeznm/DIxMOiR9yIdICNftLE1DvQ=
 github.com/open-policy-agent/opa v1.13.2 h1:c72l7DhxP4g8DEUBOdaU9QBKyA24dZxCcIuZNRZ0yP4=
 github.com/open-policy-agent/opa v1.13.2/go.mod h1:M3Asy9yp1YTusUU5VQuENDe92GLmamIuceqjw+C8PHY=
+github.com/pashagolub/pgxmock/v5 v5.0.1 h1:RKamNSbowobsnr5wxgbZXxyfjXdqpu0GpmTtj9vm8vY=
+github.com/pashagolub/pgxmock/v5 v5.0.1/go.mod h1:r6+4UtZyoFp7R2ZAqXFKSasMlf2DFJg3BX/rYY1RTAI=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 h1:Jamvg5psRIccs7FGNTlIRMkT8wgtp5eCXdBlqhYGL6U=
 github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

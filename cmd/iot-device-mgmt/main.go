@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -92,7 +91,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	}
 
 	s, err := newStorage(ctx, flags)
-	exitIf(err, log, "could not create or connect to database")
+	exitIf(err, log, "could not connrect to, or create, database")
 
 	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
 	exitIf(err, log, "failed to init messenger")
@@ -114,8 +113,8 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
-			dm = devicemanagement.New(devicemanagement.NewStorage(s), messenger, &ac.DeviceManagementConfig)
-			as = alarms.New(alarms.NewStorage(s), messenger, &ac.AlarmServiceConfig)
+			dm = devicemanagement.New(s, messenger, &ac.DeviceManagementConfig)
+			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(as, &ac.WatchdogConfig)
 
 			return nil
@@ -123,10 +122,6 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
 
-			err = s.Initialize(ctx)
-			if err != nil {
-				return
-			}
 			err = storage.SeedLwm2mTypes(ctx, s, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
@@ -172,13 +167,9 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	return runner, nil
 }
 
-func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
+func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
 
 	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
-
-	if flags[devmode] == "true" {
-		return &storage.StoreMock{}, fmt.Errorf("not implemented")
-	}
 
 	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode], seedExistingDevices))
 }

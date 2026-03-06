@@ -16,7 +16,7 @@ import (
 	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 )
 
-func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenants []string) error {
+func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTenants []string) error {
 	log := logging.GetFromContext(ctx)
 	defer devices.Close()
 
@@ -90,7 +90,7 @@ func SeedDevices(ctx context.Context, s Store, devices io.ReadCloser, validTenan
 	return nil
 }
 
-func SeedLwm2mTypes(ctx context.Context, s Store, lwm2m []types.Lwm2mType) error {
+func SeedLwm2mTypes(ctx context.Context, s *Storage, lwm2m []types.Lwm2mType) error {
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, t := range lwm2m {
@@ -103,7 +103,7 @@ func SeedLwm2mTypes(ctx context.Context, s Store, lwm2m []types.Lwm2mType) error
 	return errors.Join(errs...)
 }
 
-func SeedSensorProfiles(ctx context.Context, s Store, profiles []types.SensorProfile) error {
+func SeedSensorProfiles(ctx context.Context, s *Storage, profiles []types.SensorProfile) error {
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, p := range profiles {

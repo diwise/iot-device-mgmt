@@ -101,52 +101,6 @@ type DeviceStorage interface {
 
 	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
 }
-type deviceStorageImpl struct {
-	s storage.Store
-}
-
-func (d deviceStorageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
-	return d.s.AddDeviceStatus(ctx, status)
-}
-func (d deviceStorageImpl) Query(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-	return d.s.Query(ctx, conditions...)
-}
-func (d deviceStorageImpl) CreateOrUpdateDevice(ctx context.Context, device types.Device) error {
-	return d.s.CreateOrUpdateDevice(ctx, device)
-}
-func (d deviceStorageImpl) UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
-	return d.s.UpdateDevice(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
-}
-func (d deviceStorageImpl) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-	return d.s.SetSensorProfile(ctx, deviceID, dp)
-}
-func (d deviceStorageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error {
-	return d.s.SetDeviceProfileTypes(ctx, deviceID, types)
-}
-func (d deviceStorageImpl) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
-	return d.s.SetDeviceState(ctx, deviceID, state)
-}
-func (d deviceStorageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
-	return d.s.GetTenants(ctx)
-}
-func (d deviceStorageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
-	return d.s.GetDeviceStatus(ctx, deviceID, conditions...)
-}
-func (d deviceStorageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
-	return d.s.GetDeviceAlarms(ctx, deviceID)
-}
-func (d deviceStorageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
-	return d.s.GetDeviceMeasurements(ctx, deviceID, conditions...)
-}
-func (d deviceStorageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
-	return d.s.GetDeviceBySensorID(ctx, sensorID)
-}
-
-func NewStorage(s storage.Store) DeviceStorage {
-	return &deviceStorageImpl{
-		s: s,
-	}
-}
 
 func New(storage DeviceStorage, messenger messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
 	s := service{

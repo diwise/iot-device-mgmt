@@ -14,6 +14,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -85,8 +86,16 @@ var (
 //go:embed migrate.sql
 var migrateSQL string
 
+type dbPool interface {
+	Acquire(ctx context.Context) (*pgxpool.Conn, error)
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)	
+	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
+	Close()
+}
+
 type Storage struct {
-	pool                  *pgxpool.Pool
+	pool                  dbPool
 	updateExistingDevices bool
 	mu                    sync.Mutex
 }
@@ -1143,7 +1152,7 @@ func (s *Storage) GetTenants(ctx context.Context) (types.Collection[string], err
 }
 
 func (s *Storage) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
-	return s.updateExisitingDevices
+	return s.updateExistingDevices
 }
 
 func (s *Storage) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {

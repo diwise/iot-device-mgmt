@@ -30,7 +30,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s storage.Store) error {
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s *storage.Storage) error {
 	const apiPrefix string = "/api/v0"
 
 	log := logging.GetFromContext(ctx)
@@ -344,7 +344,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceM
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement, s storage.Store) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement, s *storage.Storage) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 

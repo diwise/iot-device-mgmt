@@ -9,9 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
@@ -32,29 +31,6 @@ type AlarmStorage interface {
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
 	GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
-}
-
-func NewStorage(s storage.Store) AlarmStorage {
-	return &alarmStorageImpl{
-		s: s,
-	}
-}
-
-type alarmStorageImpl struct {
-	s storage.Store
-}
-
-func (s *alarmStorageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
-	return s.s.AddAlarm(ctx, deviceID, a)
-}
-func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
-	return s.s.GetStaleDevices(ctx)
-}
-func (s *alarmStorageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
-	return s.s.RemoveAlarm(ctx, deviceID, alarmType)
-}
-func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-	return s.s.GetAlarms(ctx, conditions...)
 }
 
 type alarmSvc struct {
