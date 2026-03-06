@@ -85,68 +85,27 @@ var (
 //go:embed migrate.sql
 var migrateSQL string
 
-//go:generate moq -rm -out store_mock.go . Store
-type Store interface {
-	Initialize(ctx context.Context) error
-	Close()
-
-	CreateSensorProfile(ctx context.Context, p types.SensorProfile) error
-	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
-	CreateOrUpdateDevice(ctx context.Context, d types.Device) error
-	CreateTag(ctx context.Context, t types.Tag) error
-
-	AddTag(ctx context.Context, deviceID string, t types.Tag) error
-	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
-
-	UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
-
-	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
-	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
-	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
-
-	Query(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error)
-	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
-	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.Measurement], error)
-
-	GetTenants(ctx context.Context) (types.Collection[string], error)
-	IsSeedExistingDevicesEnabled(ctx context.Context) bool
-
-	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
-	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
-	GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
-
-	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
+type Storage struct {
+	pool                  *pgxpool.Pool
+	updateExistingDevices bool
+	mu                    sync.Mutex
 }
 
-type storageImpl struct {
-	pool                   *pgxpool.Pool
-	updateExisitingDevices bool
-	mu                     sync.Mutex
-}
-
-func NewWithPool(pool *pgxpool.Pool) Store {
-	return &storageImpl{pool: pool}
-}
-
-func New(ctx context.Context, config Config) (Store, error) {
+func New(ctx context.Context, config Config) (*Storage, error) {
 	pool, err := NewPool(ctx, config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &storageImpl{
-		pool:                   pool,
-		updateExisitingDevices: config.seedExistingDevices,
-	}, nil
+	s := &Storage{
+		pool:                  pool,
+		updateExistingDevices: config.seedExistingDevices,
+	}
+
+	return s, initialize(ctx, s)
 }
 
-func (s *storageImpl) Initialize(ctx context.Context) error {
-	return createTables(ctx, s)
-}
-
-func createTables(ctx context.Context, s *storageImpl) error {
+func initialize(ctx context.Context, s *Storage) error {
 	_, err := s.pool.Exec(ctx, migrateSQL)
 	if err != nil {
 		return err
@@ -155,11 +114,11 @@ func createTables(ctx context.Context, s *storageImpl) error {
 	return nil
 }
 
-func (s *storageImpl) Close() {
+func (s *Storage) Close() {
 	s.pool.Close()
 }
 
-func (s *storageImpl) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
+func (s *Storage) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
 	args := pgx.NamedArgs{
 		"sensor_profile_type_id": strings.ToLower(strings.TrimSpace(t.Urn)),
 		"name":                   strings.TrimSpace(t.Name),
@@ -188,7 +147,7 @@ func (s *storageImpl) CreateSensorProfileType(ctx context.Context, t types.Lwm2m
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
+func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
 	c, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -230,7 +189,7 @@ func (s *storageImpl) CreateSensorProfile(ctx context.Context, p types.SensorPro
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) CreateOrUpdateDevice(ctx context.Context, d types.Device) error {
+func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) error {
 	log := logging.GetFromContext(ctx)
 
 	c, err := s.pool.Acquire(ctx)
@@ -381,7 +340,7 @@ func createOrUpdateSensorTx(ctx context.Context, tx pgx.Tx, sensorID, sensorProf
 	return nil
 }
 
-func (s *storageImpl) AddTag(ctx context.Context, deviceID string, t types.Tag) error {
+func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) error {
 	if deviceID == "" {
 		return ErrNoID
 	}
@@ -411,7 +370,7 @@ func (s *storageImpl) AddTag(ctx context.Context, deviceID string, t types.Tag) 
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) CreateTag(ctx context.Context, t types.Tag) error {
+func (s *Storage) CreateTag(ctx context.Context, t types.Tag) error {
 	c, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return err
@@ -440,7 +399,7 @@ func createTagTx(ctx context.Context, tx pgx.Tx, t types.Tag) error {
 	return err
 }
 
-func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
 	args := pgx.NamedArgs{
 		"observed_at":   status.Timestamp.UTC(),
 		"lookup_id":     status.DeviceID,
@@ -494,7 +453,7 @@ func (s *storageImpl) AddDeviceStatus(ctx context.Context, status types.StatusMe
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
+func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
 	args := pgx.NamedArgs{
 		"device_id":   deviceID,
 		"observed_at": state.ObservedAt.UTC(),
@@ -531,7 +490,7 @@ func (s *storageImpl) SetDeviceState(ctx context.Context, deviceID string, state
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
+func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
 	if dp.Decoder == "" {
 		return fmt.Errorf("device profile contains no decoder")
 	}
@@ -578,7 +537,7 @@ func (s *storageImpl) SetSensorProfile(ctx context.Context, deviceID string, dp 
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error {
+func (s *Storage) SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error {
 	log := logging.GetFromContext(ctx)
 
 	c, err := s.pool.Acquire(ctx)
@@ -621,7 +580,7 @@ func (s *storageImpl) SetDeviceProfileTypes(ctx context.Context, deviceID string
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 	if deviceID == "" {
 		return ErrNoID
 	}
@@ -699,7 +658,7 @@ func (s *storageImpl) UpdateDevice(ctx context.Context, deviceID string, active 
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
 	if sensorID == "" {
 		return types.Device{}, ErrNoID
 	}
@@ -774,7 +733,7 @@ func (s *storageImpl) GetDeviceBySensorID(ctx context.Context, sensorID string) 
 	return d, nil
 }
 
-func (s *storageImpl) Query(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+func (s *Storage) Query(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := conditions.NewCondition(conds...)
@@ -1052,7 +1011,7 @@ func (s *storageImpl) Query(ctx context.Context, conds ...conditions.ConditionFu
 	}, nil
 }
 
-func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := conditions.NewCondition(conds...)
@@ -1142,7 +1101,7 @@ func (s *storageImpl) GetDeviceStatus(ctx context.Context, deviceID string, cond
 	}, nil
 }
 
-func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string], error) {
+func (s *Storage) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	c, err := s.pool.Acquire(ctx)
 	if err != nil {
 		return types.Collection[string]{}, err
@@ -1183,11 +1142,11 @@ func (s *storageImpl) GetTenants(ctx context.Context) (types.Collection[string],
 	}, nil
 }
 
-func (s *storageImpl) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
+func (s *Storage) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
 	return s.updateExisitingDevices
 }
 
-func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+func (s *Storage) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 	if deviceID == "" {
 		return ErrNoID
 	}
@@ -1232,7 +1191,7 @@ func (s *storageImpl) AddAlarm(ctx context.Context, deviceID string, a types.Ala
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
+func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 	if deviceID == "" {
 		return types.Collection[types.AlarmDetails]{}, ErrNoID
 	}
@@ -1290,7 +1249,7 @@ func (s *storageImpl) GetDeviceAlarms(ctx context.Context, deviceID string) (typ
 	}, nil
 }
 
-func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
+func (s *Storage) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
 	sql := `
 		WITH last_status AS (
 			SELECT sensor_id, MAX(observed_at) AS last_observed
@@ -1382,7 +1341,7 @@ func (s *storageImpl) GetStaleDevices(ctx context.Context) (types.Collection[typ
 	}, nil
 }
 
-func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
+func (s *Storage) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
 	args := pgx.NamedArgs{
 		"device_id":  deviceID,
 		"alarm_type": alarmType,
@@ -1408,7 +1367,7 @@ func (s *storageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmTyp
 	return tx.Commit(ctx)
 }
 
-func (s *storageImpl) GetAlarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+func (s *Storage) GetAlarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 	condition := conditions.NewCondition(conds...)
 
 	args := NamedArgs(condition)
@@ -1469,7 +1428,7 @@ func (s *storageImpl) GetAlarms(ctx context.Context, conds ...conditions.Conditi
 	}, nil
 }
 
-func (s *storageImpl) GetDeviceMeasurements(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
+func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
 
 	// HACK: to remove where clause for non existing deleted flag
 	conds = append(conds, conditions.WithDeleted())
