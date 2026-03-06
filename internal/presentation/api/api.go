@@ -14,15 +14,17 @@ import (
 
 	"log/slog"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api/auth"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
+
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/net/http/router"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
+
 	"go.opentelemetry.io/otel"
 )
 
@@ -527,7 +529,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 			name = deviceprofileId
 		}
 
-		var profiles types.Collection[types.DeviceProfile]
+		var profiles types.Collection[types.SensorProfile]
 
 		if name != "" {
 			names := []string{name}

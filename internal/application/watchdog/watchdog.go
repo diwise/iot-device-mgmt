@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 

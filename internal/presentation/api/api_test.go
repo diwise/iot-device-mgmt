@@ -15,10 +15,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
 	"github.com/matryer/is"
@@ -31,7 +32,7 @@ func TestExportDevices(t *testing.T) {
 
 	devices := []types.Device{}
 
-	s.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	s.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data:       devices,
 			Count:      uint64(len(devices)),
@@ -76,7 +77,7 @@ func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
 	defer server.Close()
 
 	c := 0
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		c = len(conditions)
 		return types.Collection[types.Device]{}, nil
 	}
@@ -128,7 +129,7 @@ func TestGetDeviceHandler(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{
 				{
@@ -163,7 +164,7 @@ func TestGetDeviceStatusHandler(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{
 				{
@@ -190,7 +191,7 @@ func TestPatchDeviceHandler(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{
 				{
@@ -211,7 +212,7 @@ func TestPatchDeviceHandler(t *testing.T) {
 	is.NoErr(err)
 
 	is.Equal(200, res.StatusCode)
-	is.Equal(1, len(repo.SetDeviceCalls()))
+	is.Equal(1, len(repo.UpdateDeviceCalls()))
 }
 
 func TestPutDeviceHandler(t *testing.T) {
@@ -220,7 +221,7 @@ func TestPutDeviceHandler(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{
 				{
@@ -267,7 +268,7 @@ func TestPatchDeviceWithPayloadHandler(t *testing.T) {
 
 	is, _, _, repo, _, _, mux := testSetup(t)
 
-	repo.QueryFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{
 				{
@@ -283,7 +284,7 @@ func TestPatchDeviceWithPayloadHandler(t *testing.T) {
 		}, nil
 	}
 
-	repo.SetDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+	repo.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 		return nil
 	}
 
@@ -355,7 +356,7 @@ func TestGetAlarmsHandler(t *testing.T) {
 
 	deviceID := uuid.NewString()
 
-	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 		return types.Collection[types.Alarms]{
 			Data: []types.Alarms{
 				{
@@ -400,7 +401,7 @@ func TestGetAlarmsWithFilterHandler(t *testing.T) {
 
 	endpoint := fmt.Sprintf("%s/api/v0/alarms?alarmtype=%s", server.URL, alarms.AlarmDeviceNotObserved)
 
-	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+	repo.GetAlarmsFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 		return types.Collection[types.Alarms]{
 			Data: []types.Alarms{
 				{
@@ -437,8 +438,8 @@ func TestGetAlarmsWithFilterHandler(t *testing.T) {
 	is.Equal(response.Data[0].DeviceID, deviceID)
 
 	calls := repo.GetAlarmsCalls()
-	c := (&storage.Condition{})
-	for _, f := range calls[0].Conditions {
+	c := &conditions.Condition{}
+	for _, f := range calls[0].ConditionsMoqParam {
 		c = f(c)
 	}
 	is.Equal(c.AlarmType, "device_not_observed")
@@ -467,13 +468,13 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 			return nil
 		},
-		QueryFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
-		SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+		UpdateDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 			return nil
 		},
-		SetDeviceProfileFunc: func(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
+		SetSensorProfileFunc: func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
 			return nil
 		},
 		SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
@@ -482,8 +483,8 @@ func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messagi
 		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
-		GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditions ...storage.ConditionFunc) (types.Collection[types.DeviceStatus], error) {
-			return types.Collection[types.DeviceStatus]{}, nil
+		GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+			return types.Collection[types.SensorStatus]{}, nil
 		},
 	}
 	repo := devicemanagement.NewStorage(db)

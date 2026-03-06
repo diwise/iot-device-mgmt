@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -83,7 +83,6 @@ func main() {
 }
 
 func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
-	defer policies.Close()
 
 	log := logging.GetFromContext(ctx)
 
@@ -108,6 +107,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		),
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
+				defer policies.Close()
 				return api.RegisterHandlers(ctx, handler, policies, dm, as, s)
 			}),
 		),
@@ -132,7 +132,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 				return
 			}
 
-			err = storage.SeedDeviceProfiles(ctx, s, appCfg.DeviceManagementConfig.DeviceProfiles)
+			err = storage.SeedSensorProfiles(ctx, s, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
@@ -197,12 +197,12 @@ func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConf
 		return nil, err
 	}
 
-	i := slices.IndexFunc(cfg.DeviceManagementConfig.DeviceProfiles, func(dp types.DeviceProfile) bool {
+	i := slices.IndexFunc(cfg.DeviceManagementConfig.DeviceProfiles, func(dp types.SensorProfile) bool {
 		return dp.Decoder == "unknown"
 	})
 
 	if i < 0 {
-		cfg.DeviceManagementConfig.DeviceProfiles = append(cfg.DeviceManagementConfig.DeviceProfiles, types.DeviceProfile{
+		cfg.DeviceManagementConfig.DeviceProfiles = append(cfg.DeviceManagementConfig.DeviceProfiles, types.SensorProfile{
 			Name:    "unknown",
 			Decoder: "unknown",
 		})

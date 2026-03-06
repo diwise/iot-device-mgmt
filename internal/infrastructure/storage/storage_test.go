@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/matryer/is"
 )
@@ -55,7 +56,7 @@ func testSetup(t *testing.T) (context.Context, Store) {
 		t.SkipNow()
 	}
 
-	err = SeedDeviceProfiles(ctx, s, []types.DeviceProfile{
+	err = SeedSensorProfiles(ctx, s, []types.SensorProfile{
 		{
 			Name:     "Elsys_Codec",
 			Decoder:  "Elsys_Codec",
@@ -96,14 +97,14 @@ func TestSetDevice(t *testing.T) {
 
 	d := c.Data[0]
 	env := "air"
-	err = s.SetDevice(ctx, d.DeviceID, nil, nil, nil, &env, nil, nil, nil, nil)
+	err = s.UpdateDevice(ctx, d.DeviceID, nil, nil, nil, &env, nil, nil, nil, nil)
 	is.NoErr(err)
 }
 
 func TestQueryWithDeviceID(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
-	c, err := s.Query(ctx, WithDeviceID("intern-70t589"))
+	c, err := s.Query(ctx, conditions.WithDeviceID("intern-70t589"))
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
@@ -111,7 +112,7 @@ func TestQueryWithDeviceID(t *testing.T) {
 func TestQueryWithSensorID(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
-	c, err := s.Query(ctx, WithSensorID("70t589"))
+	c, err := s.Query(ctx, conditions.WithSensorID("70t589"))
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
@@ -119,7 +120,7 @@ func TestQueryWithSensorID(t *testing.T) {
 func TestQueryWithSensorIDAndDeviceID(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
-	c, err := s.Query(ctx, WithDeviceID("intern-70t589"), WithSensorID("70t589"))
+	c, err := s.Query(ctx, conditions.WithDeviceID("intern-70t589"), conditions.WithSensorID("70t589"))
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }
@@ -128,13 +129,13 @@ func TestQueryWithActive(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
 
-	c, err := s.Query(ctx, WithActive(true))
+	c, err := s.Query(ctx, conditions.WithActive(true))
 	is.NoErr(err)
 	is.True(!slices.ContainsFunc(c.Data, func(d types.Device) bool {
 		return d.Active == false
 	}))
 
-	c, err = s.Query(ctx, WithActive(false))
+	c, err = s.Query(ctx, conditions.WithActive(false))
 	is.NoErr(err)
 
 	is.True(!slices.ContainsFunc(c.Data, func(d types.Device) bool {
@@ -145,7 +146,7 @@ func TestQueryWithActive(t *testing.T) {
 func TestQueryWithSearch(t *testing.T) {
 	is := is.New(t)
 	ctx, s := testSetup(t)
-	c, err := s.Query(ctx, WithSearch("70t589"))
+	c, err := s.Query(ctx, conditions.WithSearch("70t589"))
 	is.NoErr(err)
 	is.True(len(c.Data) > 0)
 }

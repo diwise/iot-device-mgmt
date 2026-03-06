@@ -5,6 +5,7 @@ package storage
 
 import (
 	"context"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
@@ -31,19 +32,19 @@ var _ Store = &StoreMock{}
 //			CloseFunc: func()  {
 //				panic("mock out the Close method")
 //			},
-//			CreateDeviceProfileFunc: func(ctx context.Context, p types.DeviceProfile) error {
-//				panic("mock out the CreateDeviceProfile method")
-//			},
-//			CreateDeviceProfileTypeFunc: func(ctx context.Context, t types.Lwm2mType) error {
-//				panic("mock out the CreateDeviceProfileType method")
-//			},
 //			CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 //				panic("mock out the CreateOrUpdateDevice method")
+//			},
+//			CreateSensorProfileFunc: func(ctx context.Context, p types.SensorProfile) error {
+//				panic("mock out the CreateSensorProfile method")
+//			},
+//			CreateSensorProfileTypeFunc: func(ctx context.Context, t types.Lwm2mType) error {
+//				panic("mock out the CreateSensorProfileType method")
 //			},
 //			CreateTagFunc: func(ctx context.Context, t types.Tag) error {
 //				panic("mock out the CreateTag method")
 //			},
-//			GetAlarmsFunc: func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarms], error) {
+//			GetAlarmsFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 //				panic("mock out the GetAlarms method")
 //			},
 //			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
@@ -52,10 +53,10 @@ var _ Store = &StoreMock{}
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
 //				panic("mock out the GetDeviceBySensorID method")
 //			},
-//			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
+//			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
 //			},
-//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
 //				panic("mock out the GetDeviceStatus method")
 //			},
 //			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
@@ -70,23 +71,23 @@ var _ Store = &StoreMock{}
 //			IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
 //				panic("mock out the IsSeedExistingDevicesEnabled method")
 //			},
-//			QueryFunc: func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
+//			QueryFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
 //			},
 //			RemoveAlarmFunc: func(ctx context.Context, deviceID string, alarmType string) error {
 //				panic("mock out the RemoveAlarm method")
-//			},
-//			SetDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
-//				panic("mock out the SetDevice method")
-//			},
-//			SetDeviceProfileFunc: func(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
-//				panic("mock out the SetDeviceProfile method")
 //			},
 //			SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
 //				panic("mock out the SetDeviceProfileTypes method")
 //			},
 //			SetDeviceStateFunc: func(ctx context.Context, deviceID string, state types.DeviceState) error {
 //				panic("mock out the SetDeviceState method")
+//			},
+//			SetSensorProfileFunc: func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
+//				panic("mock out the SetSensorProfile method")
+//			},
+//			UpdateDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
+//				panic("mock out the UpdateDevice method")
 //			},
 //		}
 //
@@ -107,20 +108,20 @@ type StoreMock struct {
 	// CloseFunc mocks the Close method.
 	CloseFunc func()
 
-	// CreateDeviceProfileFunc mocks the CreateDeviceProfile method.
-	CreateDeviceProfileFunc func(ctx context.Context, p types.DeviceProfile) error
-
-	// CreateDeviceProfileTypeFunc mocks the CreateDeviceProfileType method.
-	CreateDeviceProfileTypeFunc func(ctx context.Context, t types.Lwm2mType) error
-
 	// CreateOrUpdateDeviceFunc mocks the CreateOrUpdateDevice method.
 	CreateOrUpdateDeviceFunc func(ctx context.Context, d types.Device) error
+
+	// CreateSensorProfileFunc mocks the CreateSensorProfile method.
+	CreateSensorProfileFunc func(ctx context.Context, p types.SensorProfile) error
+
+	// CreateSensorProfileTypeFunc mocks the CreateSensorProfileType method.
+	CreateSensorProfileTypeFunc func(ctx context.Context, t types.Lwm2mType) error
 
 	// CreateTagFunc mocks the CreateTag method.
 	CreateTagFunc func(ctx context.Context, t types.Tag) error
 
 	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarms], error)
+	GetAlarmsFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
 
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
 	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
@@ -129,10 +130,10 @@ type StoreMock struct {
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
-	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error)
+	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Measurement], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
-	GetDeviceStatusFunc func(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error)
 
 	// GetStaleDevicesFunc mocks the GetStaleDevices method.
 	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
@@ -147,22 +148,22 @@ type StoreMock struct {
 	IsSeedExistingDevicesEnabledFunc func(ctx context.Context) bool
 
 	// QueryFunc mocks the Query method.
-	QueryFunc func(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error)
+	QueryFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error)
 
 	// RemoveAlarmFunc mocks the RemoveAlarm method.
 	RemoveAlarmFunc func(ctx context.Context, deviceID string, alarmType string) error
-
-	// SetDeviceFunc mocks the SetDevice method.
-	SetDeviceFunc func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error
-
-	// SetDeviceProfileFunc mocks the SetDeviceProfile method.
-	SetDeviceProfileFunc func(ctx context.Context, deviceID string, dp types.DeviceProfile) error
 
 	// SetDeviceProfileTypesFunc mocks the SetDeviceProfileTypes method.
 	SetDeviceProfileTypesFunc func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error
 
 	// SetDeviceStateFunc mocks the SetDeviceState method.
 	SetDeviceStateFunc func(ctx context.Context, deviceID string, state types.DeviceState) error
+
+	// SetSensorProfileFunc mocks the SetSensorProfile method.
+	SetSensorProfileFunc func(ctx context.Context, deviceID string, dp types.SensorProfile) error
+
+	// UpdateDeviceFunc mocks the UpdateDevice method.
+	UpdateDeviceFunc func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -194,26 +195,26 @@ type StoreMock struct {
 		// Close holds details about calls to the Close method.
 		Close []struct {
 		}
-		// CreateDeviceProfile holds details about calls to the CreateDeviceProfile method.
-		CreateDeviceProfile []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// P is the p argument value.
-			P types.DeviceProfile
-		}
-		// CreateDeviceProfileType holds details about calls to the CreateDeviceProfileType method.
-		CreateDeviceProfileType []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// T is the t argument value.
-			T types.Lwm2mType
-		}
 		// CreateOrUpdateDevice holds details about calls to the CreateOrUpdateDevice method.
 		CreateOrUpdateDevice []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// D is the d argument value.
 			D types.Device
+		}
+		// CreateSensorProfile holds details about calls to the CreateSensorProfile method.
+		CreateSensorProfile []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// P is the p argument value.
+			P types.SensorProfile
+		}
+		// CreateSensorProfileType holds details about calls to the CreateSensorProfileType method.
+		CreateSensorProfileType []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// T is the t argument value.
+			T types.Lwm2mType
 		}
 		// CreateTag holds details about calls to the CreateTag method.
 		CreateTag []struct {
@@ -226,8 +227,8 @@ type StoreMock struct {
 		GetAlarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Conditions is the conditions argument value.
-			Conditions []ConditionFunc
+			// ConditionsMoqParam is the conditionsMoqParam argument value.
+			ConditionsMoqParam []conditions.ConditionFunc
 		}
 		// GetDeviceAlarms holds details about calls to the GetDeviceAlarms method.
 		GetDeviceAlarms []struct {
@@ -249,8 +250,8 @@ type StoreMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
-			// Conditions is the conditions argument value.
-			Conditions []ConditionFunc
+			// ConditionsMoqParam is the conditionsMoqParam argument value.
+			ConditionsMoqParam []conditions.ConditionFunc
 		}
 		// GetDeviceStatus holds details about calls to the GetDeviceStatus method.
 		GetDeviceStatus []struct {
@@ -258,8 +259,8 @@ type StoreMock struct {
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
-			// Conditions is the conditions argument value.
-			Conditions []ConditionFunc
+			// ConditionsMoqParam is the conditionsMoqParam argument value.
+			ConditionsMoqParam []conditions.ConditionFunc
 		}
 		// GetStaleDevices holds details about calls to the GetStaleDevices method.
 		GetStaleDevices []struct {
@@ -285,8 +286,8 @@ type StoreMock struct {
 		Query []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Conditions is the conditions argument value.
-			Conditions []ConditionFunc
+			// ConditionsMoqParam is the conditionsMoqParam argument value.
+			ConditionsMoqParam []conditions.ConditionFunc
 		}
 		// RemoveAlarm holds details about calls to the RemoveAlarm method.
 		RemoveAlarm []struct {
@@ -297,8 +298,35 @@ type StoreMock struct {
 			// AlarmType is the alarmType argument value.
 			AlarmType string
 		}
-		// SetDevice holds details about calls to the SetDevice method.
-		SetDevice []struct {
+		// SetDeviceProfileTypes holds details about calls to the SetDeviceProfileTypes method.
+		SetDeviceProfileTypes []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// TypesMoqParam is the typesMoqParam argument value.
+			TypesMoqParam []types.Lwm2mType
+		}
+		// SetDeviceState holds details about calls to the SetDeviceState method.
+		SetDeviceState []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// State is the state argument value.
+			State types.DeviceState
+		}
+		// SetSensorProfile holds details about calls to the SetSensorProfile method.
+		SetSensorProfile []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// Dp is the dp argument value.
+			Dp types.SensorProfile
+		}
+		// UpdateDevice holds details about calls to the UpdateDevice method.
+		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -320,41 +348,14 @@ type StoreMock struct {
 			// Interval is the interval argument value.
 			Interval *int
 		}
-		// SetDeviceProfile holds details about calls to the SetDeviceProfile method.
-		SetDeviceProfile []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// Dp is the dp argument value.
-			Dp types.DeviceProfile
-		}
-		// SetDeviceProfileTypes holds details about calls to the SetDeviceProfileTypes method.
-		SetDeviceProfileTypes []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// TypesMoqParam is the typesMoqParam argument value.
-			TypesMoqParam []types.Lwm2mType
-		}
-		// SetDeviceState holds details about calls to the SetDeviceState method.
-		SetDeviceState []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// DeviceID is the deviceID argument value.
-			DeviceID string
-			// State is the state argument value.
-			State types.DeviceState
-		}
 	}
 	lockAddAlarm                     sync.RWMutex
 	lockAddDeviceStatus              sync.RWMutex
 	lockAddTag                       sync.RWMutex
 	lockClose                        sync.RWMutex
-	lockCreateDeviceProfile          sync.RWMutex
-	lockCreateDeviceProfileType      sync.RWMutex
 	lockCreateOrUpdateDevice         sync.RWMutex
+	lockCreateSensorProfile          sync.RWMutex
+	lockCreateSensorProfileType      sync.RWMutex
 	lockCreateTag                    sync.RWMutex
 	lockGetAlarms                    sync.RWMutex
 	lockGetDeviceAlarms              sync.RWMutex
@@ -367,10 +368,10 @@ type StoreMock struct {
 	lockIsSeedExistingDevicesEnabled sync.RWMutex
 	lockQuery                        sync.RWMutex
 	lockRemoveAlarm                  sync.RWMutex
-	lockSetDevice                    sync.RWMutex
-	lockSetDeviceProfile             sync.RWMutex
 	lockSetDeviceProfileTypes        sync.RWMutex
 	lockSetDeviceState               sync.RWMutex
+	lockSetSensorProfile             sync.RWMutex
+	lockUpdateDevice                 sync.RWMutex
 }
 
 // AddAlarm calls AddAlarmFunc.
@@ -516,78 +517,6 @@ func (mock *StoreMock) CloseCalls() []struct {
 	return calls
 }
 
-// CreateDeviceProfile calls CreateDeviceProfileFunc.
-func (mock *StoreMock) CreateDeviceProfile(ctx context.Context, p types.DeviceProfile) error {
-	if mock.CreateDeviceProfileFunc == nil {
-		panic("StoreMock.CreateDeviceProfileFunc: method is nil but Store.CreateDeviceProfile was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-		P   types.DeviceProfile
-	}{
-		Ctx: ctx,
-		P:   p,
-	}
-	mock.lockCreateDeviceProfile.Lock()
-	mock.calls.CreateDeviceProfile = append(mock.calls.CreateDeviceProfile, callInfo)
-	mock.lockCreateDeviceProfile.Unlock()
-	return mock.CreateDeviceProfileFunc(ctx, p)
-}
-
-// CreateDeviceProfileCalls gets all the calls that were made to CreateDeviceProfile.
-// Check the length with:
-//
-//	len(mockedStore.CreateDeviceProfileCalls())
-func (mock *StoreMock) CreateDeviceProfileCalls() []struct {
-	Ctx context.Context
-	P   types.DeviceProfile
-} {
-	var calls []struct {
-		Ctx context.Context
-		P   types.DeviceProfile
-	}
-	mock.lockCreateDeviceProfile.RLock()
-	calls = mock.calls.CreateDeviceProfile
-	mock.lockCreateDeviceProfile.RUnlock()
-	return calls
-}
-
-// CreateDeviceProfileType calls CreateDeviceProfileTypeFunc.
-func (mock *StoreMock) CreateDeviceProfileType(ctx context.Context, t types.Lwm2mType) error {
-	if mock.CreateDeviceProfileTypeFunc == nil {
-		panic("StoreMock.CreateDeviceProfileTypeFunc: method is nil but Store.CreateDeviceProfileType was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-		T   types.Lwm2mType
-	}{
-		Ctx: ctx,
-		T:   t,
-	}
-	mock.lockCreateDeviceProfileType.Lock()
-	mock.calls.CreateDeviceProfileType = append(mock.calls.CreateDeviceProfileType, callInfo)
-	mock.lockCreateDeviceProfileType.Unlock()
-	return mock.CreateDeviceProfileTypeFunc(ctx, t)
-}
-
-// CreateDeviceProfileTypeCalls gets all the calls that were made to CreateDeviceProfileType.
-// Check the length with:
-//
-//	len(mockedStore.CreateDeviceProfileTypeCalls())
-func (mock *StoreMock) CreateDeviceProfileTypeCalls() []struct {
-	Ctx context.Context
-	T   types.Lwm2mType
-} {
-	var calls []struct {
-		Ctx context.Context
-		T   types.Lwm2mType
-	}
-	mock.lockCreateDeviceProfileType.RLock()
-	calls = mock.calls.CreateDeviceProfileType
-	mock.lockCreateDeviceProfileType.RUnlock()
-	return calls
-}
-
 // CreateOrUpdateDevice calls CreateOrUpdateDeviceFunc.
 func (mock *StoreMock) CreateOrUpdateDevice(ctx context.Context, d types.Device) error {
 	if mock.CreateOrUpdateDeviceFunc == nil {
@@ -621,6 +550,78 @@ func (mock *StoreMock) CreateOrUpdateDeviceCalls() []struct {
 	mock.lockCreateOrUpdateDevice.RLock()
 	calls = mock.calls.CreateOrUpdateDevice
 	mock.lockCreateOrUpdateDevice.RUnlock()
+	return calls
+}
+
+// CreateSensorProfile calls CreateSensorProfileFunc.
+func (mock *StoreMock) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
+	if mock.CreateSensorProfileFunc == nil {
+		panic("StoreMock.CreateSensorProfileFunc: method is nil but Store.CreateSensorProfile was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		P   types.SensorProfile
+	}{
+		Ctx: ctx,
+		P:   p,
+	}
+	mock.lockCreateSensorProfile.Lock()
+	mock.calls.CreateSensorProfile = append(mock.calls.CreateSensorProfile, callInfo)
+	mock.lockCreateSensorProfile.Unlock()
+	return mock.CreateSensorProfileFunc(ctx, p)
+}
+
+// CreateSensorProfileCalls gets all the calls that were made to CreateSensorProfile.
+// Check the length with:
+//
+//	len(mockedStore.CreateSensorProfileCalls())
+func (mock *StoreMock) CreateSensorProfileCalls() []struct {
+	Ctx context.Context
+	P   types.SensorProfile
+} {
+	var calls []struct {
+		Ctx context.Context
+		P   types.SensorProfile
+	}
+	mock.lockCreateSensorProfile.RLock()
+	calls = mock.calls.CreateSensorProfile
+	mock.lockCreateSensorProfile.RUnlock()
+	return calls
+}
+
+// CreateSensorProfileType calls CreateSensorProfileTypeFunc.
+func (mock *StoreMock) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
+	if mock.CreateSensorProfileTypeFunc == nil {
+		panic("StoreMock.CreateSensorProfileTypeFunc: method is nil but Store.CreateSensorProfileType was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		T   types.Lwm2mType
+	}{
+		Ctx: ctx,
+		T:   t,
+	}
+	mock.lockCreateSensorProfileType.Lock()
+	mock.calls.CreateSensorProfileType = append(mock.calls.CreateSensorProfileType, callInfo)
+	mock.lockCreateSensorProfileType.Unlock()
+	return mock.CreateSensorProfileTypeFunc(ctx, t)
+}
+
+// CreateSensorProfileTypeCalls gets all the calls that were made to CreateSensorProfileType.
+// Check the length with:
+//
+//	len(mockedStore.CreateSensorProfileTypeCalls())
+func (mock *StoreMock) CreateSensorProfileTypeCalls() []struct {
+	Ctx context.Context
+	T   types.Lwm2mType
+} {
+	var calls []struct {
+		Ctx context.Context
+		T   types.Lwm2mType
+	}
+	mock.lockCreateSensorProfileType.RLock()
+	calls = mock.calls.CreateSensorProfileType
+	mock.lockCreateSensorProfileType.RUnlock()
 	return calls
 }
 
@@ -661,21 +662,21 @@ func (mock *StoreMock) CreateTagCalls() []struct {
 }
 
 // GetAlarms calls GetAlarmsFunc.
-func (mock *StoreMock) GetAlarms(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Alarms], error) {
+func (mock *StoreMock) GetAlarms(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 	if mock.GetAlarmsFunc == nil {
 		panic("StoreMock.GetAlarmsFunc: method is nil but Store.GetAlarms was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		ConditionsMoqParam []conditions.ConditionFunc
 	}{
-		Ctx:        ctx,
-		Conditions: conditions,
+		Ctx:                ctx,
+		ConditionsMoqParam: conditionsMoqParam,
 	}
 	mock.lockGetAlarms.Lock()
 	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
 	mock.lockGetAlarms.Unlock()
-	return mock.GetAlarmsFunc(ctx, conditions...)
+	return mock.GetAlarmsFunc(ctx, conditionsMoqParam...)
 }
 
 // GetAlarmsCalls gets all the calls that were made to GetAlarms.
@@ -683,12 +684,12 @@ func (mock *StoreMock) GetAlarms(ctx context.Context, conditions ...ConditionFun
 //
 //	len(mockedStore.GetAlarmsCalls())
 func (mock *StoreMock) GetAlarmsCalls() []struct {
-	Ctx        context.Context
-	Conditions []ConditionFunc
+	Ctx                context.Context
+	ConditionsMoqParam []conditions.ConditionFunc
 } {
 	var calls []struct {
-		Ctx        context.Context
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		ConditionsMoqParam []conditions.ConditionFunc
 	}
 	mock.lockGetAlarms.RLock()
 	calls = mock.calls.GetAlarms
@@ -769,23 +770,23 @@ func (mock *StoreMock) GetDeviceBySensorIDCalls() []struct {
 }
 
 // GetDeviceMeasurements calls GetDeviceMeasurementsFunc.
-func (mock *StoreMock) GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.Measurement], error) {
+func (mock *StoreMock) GetDeviceMeasurements(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
 	if mock.GetDeviceMeasurementsFunc == nil {
 		panic("StoreMock.GetDeviceMeasurementsFunc: method is nil but Store.GetDeviceMeasurements was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		DeviceID   string
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		DeviceID           string
+		ConditionsMoqParam []conditions.ConditionFunc
 	}{
-		Ctx:        ctx,
-		DeviceID:   deviceID,
-		Conditions: conditions,
+		Ctx:                ctx,
+		DeviceID:           deviceID,
+		ConditionsMoqParam: conditionsMoqParam,
 	}
 	mock.lockGetDeviceMeasurements.Lock()
 	mock.calls.GetDeviceMeasurements = append(mock.calls.GetDeviceMeasurements, callInfo)
 	mock.lockGetDeviceMeasurements.Unlock()
-	return mock.GetDeviceMeasurementsFunc(ctx, deviceID, conditions...)
+	return mock.GetDeviceMeasurementsFunc(ctx, deviceID, conditionsMoqParam...)
 }
 
 // GetDeviceMeasurementsCalls gets all the calls that were made to GetDeviceMeasurements.
@@ -793,14 +794,14 @@ func (mock *StoreMock) GetDeviceMeasurements(ctx context.Context, deviceID strin
 //
 //	len(mockedStore.GetDeviceMeasurementsCalls())
 func (mock *StoreMock) GetDeviceMeasurementsCalls() []struct {
-	Ctx        context.Context
-	DeviceID   string
-	Conditions []ConditionFunc
+	Ctx                context.Context
+	DeviceID           string
+	ConditionsMoqParam []conditions.ConditionFunc
 } {
 	var calls []struct {
-		Ctx        context.Context
-		DeviceID   string
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		DeviceID           string
+		ConditionsMoqParam []conditions.ConditionFunc
 	}
 	mock.lockGetDeviceMeasurements.RLock()
 	calls = mock.calls.GetDeviceMeasurements
@@ -809,23 +810,23 @@ func (mock *StoreMock) GetDeviceMeasurementsCalls() []struct {
 }
 
 // GetDeviceStatus calls GetDeviceStatusFunc.
-func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string, conditions ...ConditionFunc) (types.Collection[types.DeviceStatus], error) {
+func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
 	if mock.GetDeviceStatusFunc == nil {
 		panic("StoreMock.GetDeviceStatusFunc: method is nil but Store.GetDeviceStatus was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		DeviceID   string
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		DeviceID           string
+		ConditionsMoqParam []conditions.ConditionFunc
 	}{
-		Ctx:        ctx,
-		DeviceID:   deviceID,
-		Conditions: conditions,
+		Ctx:                ctx,
+		DeviceID:           deviceID,
+		ConditionsMoqParam: conditionsMoqParam,
 	}
 	mock.lockGetDeviceStatus.Lock()
 	mock.calls.GetDeviceStatus = append(mock.calls.GetDeviceStatus, callInfo)
 	mock.lockGetDeviceStatus.Unlock()
-	return mock.GetDeviceStatusFunc(ctx, deviceID, conditions...)
+	return mock.GetDeviceStatusFunc(ctx, deviceID, conditionsMoqParam...)
 }
 
 // GetDeviceStatusCalls gets all the calls that were made to GetDeviceStatus.
@@ -833,14 +834,14 @@ func (mock *StoreMock) GetDeviceStatus(ctx context.Context, deviceID string, con
 //
 //	len(mockedStore.GetDeviceStatusCalls())
 func (mock *StoreMock) GetDeviceStatusCalls() []struct {
-	Ctx        context.Context
-	DeviceID   string
-	Conditions []ConditionFunc
+	Ctx                context.Context
+	DeviceID           string
+	ConditionsMoqParam []conditions.ConditionFunc
 } {
 	var calls []struct {
-		Ctx        context.Context
-		DeviceID   string
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		DeviceID           string
+		ConditionsMoqParam []conditions.ConditionFunc
 	}
 	mock.lockGetDeviceStatus.RLock()
 	calls = mock.calls.GetDeviceStatus
@@ -977,21 +978,21 @@ func (mock *StoreMock) IsSeedExistingDevicesEnabledCalls() []struct {
 }
 
 // Query calls QueryFunc.
-func (mock *StoreMock) Query(ctx context.Context, conditions ...ConditionFunc) (types.Collection[types.Device], error) {
+func (mock *StoreMock) Query(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 	if mock.QueryFunc == nil {
 		panic("StoreMock.QueryFunc: method is nil but Store.Query was just called")
 	}
 	callInfo := struct {
-		Ctx        context.Context
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		ConditionsMoqParam []conditions.ConditionFunc
 	}{
-		Ctx:        ctx,
-		Conditions: conditions,
+		Ctx:                ctx,
+		ConditionsMoqParam: conditionsMoqParam,
 	}
 	mock.lockQuery.Lock()
 	mock.calls.Query = append(mock.calls.Query, callInfo)
 	mock.lockQuery.Unlock()
-	return mock.QueryFunc(ctx, conditions...)
+	return mock.QueryFunc(ctx, conditionsMoqParam...)
 }
 
 // QueryCalls gets all the calls that were made to Query.
@@ -999,12 +1000,12 @@ func (mock *StoreMock) Query(ctx context.Context, conditions ...ConditionFunc) (
 //
 //	len(mockedStore.QueryCalls())
 func (mock *StoreMock) QueryCalls() []struct {
-	Ctx        context.Context
-	Conditions []ConditionFunc
+	Ctx                context.Context
+	ConditionsMoqParam []conditions.ConditionFunc
 } {
 	var calls []struct {
-		Ctx        context.Context
-		Conditions []ConditionFunc
+		Ctx                context.Context
+		ConditionsMoqParam []conditions.ConditionFunc
 	}
 	mock.lockQuery.RLock()
 	calls = mock.calls.Query
@@ -1049,114 +1050,6 @@ func (mock *StoreMock) RemoveAlarmCalls() []struct {
 	mock.lockRemoveAlarm.RLock()
 	calls = mock.calls.RemoveAlarm
 	mock.lockRemoveAlarm.RUnlock()
-	return calls
-}
-
-// SetDevice calls SetDeviceFunc.
-func (mock *StoreMock) SetDevice(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
-	if mock.SetDeviceFunc == nil {
-		panic("StoreMock.SetDeviceFunc: method is nil but Store.SetDevice was just called")
-	}
-	callInfo := struct {
-		Ctx         context.Context
-		DeviceID    string
-		Active      *bool
-		Name        *string
-		Description *string
-		Environment *string
-		Source      *string
-		Tenant      *string
-		Location    *types.Location
-		Interval    *int
-	}{
-		Ctx:         ctx,
-		DeviceID:    deviceID,
-		Active:      active,
-		Name:        name,
-		Description: description,
-		Environment: environment,
-		Source:      source,
-		Tenant:      tenant,
-		Location:    location,
-		Interval:    interval,
-	}
-	mock.lockSetDevice.Lock()
-	mock.calls.SetDevice = append(mock.calls.SetDevice, callInfo)
-	mock.lockSetDevice.Unlock()
-	return mock.SetDeviceFunc(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
-}
-
-// SetDeviceCalls gets all the calls that were made to SetDevice.
-// Check the length with:
-//
-//	len(mockedStore.SetDeviceCalls())
-func (mock *StoreMock) SetDeviceCalls() []struct {
-	Ctx         context.Context
-	DeviceID    string
-	Active      *bool
-	Name        *string
-	Description *string
-	Environment *string
-	Source      *string
-	Tenant      *string
-	Location    *types.Location
-	Interval    *int
-} {
-	var calls []struct {
-		Ctx         context.Context
-		DeviceID    string
-		Active      *bool
-		Name        *string
-		Description *string
-		Environment *string
-		Source      *string
-		Tenant      *string
-		Location    *types.Location
-		Interval    *int
-	}
-	mock.lockSetDevice.RLock()
-	calls = mock.calls.SetDevice
-	mock.lockSetDevice.RUnlock()
-	return calls
-}
-
-// SetDeviceProfile calls SetDeviceProfileFunc.
-func (mock *StoreMock) SetDeviceProfile(ctx context.Context, deviceID string, dp types.DeviceProfile) error {
-	if mock.SetDeviceProfileFunc == nil {
-		panic("StoreMock.SetDeviceProfileFunc: method is nil but Store.SetDeviceProfile was just called")
-	}
-	callInfo := struct {
-		Ctx      context.Context
-		DeviceID string
-		Dp       types.DeviceProfile
-	}{
-		Ctx:      ctx,
-		DeviceID: deviceID,
-		Dp:       dp,
-	}
-	mock.lockSetDeviceProfile.Lock()
-	mock.calls.SetDeviceProfile = append(mock.calls.SetDeviceProfile, callInfo)
-	mock.lockSetDeviceProfile.Unlock()
-	return mock.SetDeviceProfileFunc(ctx, deviceID, dp)
-}
-
-// SetDeviceProfileCalls gets all the calls that were made to SetDeviceProfile.
-// Check the length with:
-//
-//	len(mockedStore.SetDeviceProfileCalls())
-func (mock *StoreMock) SetDeviceProfileCalls() []struct {
-	Ctx      context.Context
-	DeviceID string
-	Dp       types.DeviceProfile
-} {
-	var calls []struct {
-		Ctx      context.Context
-		DeviceID string
-		Dp       types.DeviceProfile
-	}
-	mock.lockSetDeviceProfile.RLock()
-	calls = mock.calls.SetDeviceProfile
-	mock.lockSetDeviceProfile.RUnlock()
 	return calls
 }
 
@@ -1237,5 +1130,113 @@ func (mock *StoreMock) SetDeviceStateCalls() []struct {
 	mock.lockSetDeviceState.RLock()
 	calls = mock.calls.SetDeviceState
 	mock.lockSetDeviceState.RUnlock()
+	return calls
+}
+
+// SetSensorProfile calls SetSensorProfileFunc.
+func (mock *StoreMock) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
+	if mock.SetSensorProfileFunc == nil {
+		panic("StoreMock.SetSensorProfileFunc: method is nil but Store.SetSensorProfile was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		Dp       types.SensorProfile
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		Dp:       dp,
+	}
+	mock.lockSetSensorProfile.Lock()
+	mock.calls.SetSensorProfile = append(mock.calls.SetSensorProfile, callInfo)
+	mock.lockSetSensorProfile.Unlock()
+	return mock.SetSensorProfileFunc(ctx, deviceID, dp)
+}
+
+// SetSensorProfileCalls gets all the calls that were made to SetSensorProfile.
+// Check the length with:
+//
+//	len(mockedStore.SetSensorProfileCalls())
+func (mock *StoreMock) SetSensorProfileCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	Dp       types.SensorProfile
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+		Dp       types.SensorProfile
+	}
+	mock.lockSetSensorProfile.RLock()
+	calls = mock.calls.SetSensorProfile
+	mock.lockSetSensorProfile.RUnlock()
+	return calls
+}
+
+// UpdateDevice calls UpdateDeviceFunc.
+func (mock *StoreMock) UpdateDevice(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
+	if mock.UpdateDeviceFunc == nil {
+		panic("StoreMock.UpdateDeviceFunc: method is nil but Store.UpdateDevice was just called")
+	}
+	callInfo := struct {
+		Ctx         context.Context
+		DeviceID    string
+		Active      *bool
+		Name        *string
+		Description *string
+		Environment *string
+		Source      *string
+		Tenant      *string
+		Location    *types.Location
+		Interval    *int
+	}{
+		Ctx:         ctx,
+		DeviceID:    deviceID,
+		Active:      active,
+		Name:        name,
+		Description: description,
+		Environment: environment,
+		Source:      source,
+		Tenant:      tenant,
+		Location:    location,
+		Interval:    interval,
+	}
+	mock.lockUpdateDevice.Lock()
+	mock.calls.UpdateDevice = append(mock.calls.UpdateDevice, callInfo)
+	mock.lockUpdateDevice.Unlock()
+	return mock.UpdateDeviceFunc(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
+}
+
+// UpdateDeviceCalls gets all the calls that were made to UpdateDevice.
+// Check the length with:
+//
+//	len(mockedStore.UpdateDeviceCalls())
+func (mock *StoreMock) UpdateDeviceCalls() []struct {
+	Ctx         context.Context
+	DeviceID    string
+	Active      *bool
+	Name        *string
+	Description *string
+	Environment *string
+	Source      *string
+	Tenant      *string
+	Location    *types.Location
+	Interval    *int
+} {
+	var calls []struct {
+		Ctx         context.Context
+		DeviceID    string
+		Active      *bool
+		Name        *string
+		Description *string
+		Environment *string
+		Source      *string
+		Tenant      *string
+		Location    *types.Location
+		Interval    *int
+	}
+	mock.lockUpdateDevice.RLock()
+	calls = mock.calls.UpdateDevice
+	mock.lockUpdateDevice.RUnlock()
 	return calls
 }

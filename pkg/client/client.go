@@ -32,7 +32,7 @@ type DeviceManagementClient interface {
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 	Close(ctx context.Context)
 	CreateDevice(ctx context.Context, device types.Device) error
-	GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error)
+	GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
 }
 
 type deviceState int
@@ -297,7 +297,7 @@ func (dmc *devManagementClient) CreateDevice(ctx context.Context, device types.D
 	return nil
 }
 
-func (dmc *devManagementClient) GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error) {
+func (dmc *devManagementClient) GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error) {
 	var err error
 	ctx, span := tracer.Start(ctx, "get-device-profile")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -353,7 +353,7 @@ func (dmc *devManagementClient) GetDeviceProfile(ctx context.Context, deviceProf
 	}
 
 	responseData := struct {
-		Data types.DeviceProfile `json:"data"`
+		Data types.SensorProfile `json:"data"`
 	}{}
 
 	err = json.Unmarshal(respBody, &responseData)
@@ -788,7 +788,7 @@ func (d *deviceWrapper) Environment() string {
 }
 
 func (d *deviceWrapper) SensorType() string {
-	return d.impl.DeviceProfile.Decoder
+	return d.impl.SensorProfile.Decoder
 }
 
 func (d *deviceWrapper) Types() []string {

@@ -5,15 +5,16 @@ import (
 )
 
 type Device struct {
+	SensorID string `json:"sensorID,omitzero"`
+	DeviceID string `json:"deviceID"`
+
 	Active      bool     `json:"active"`
-	SensorID    string   `json:"sensorID,omitzero"`
-	DeviceID    string   `json:"deviceID"`
-	Tenant      string   `json:"tenant"`
 	Name        string   `json:"name,omitzero"`
 	Description string   `json:"description,omitzero"`
 	Location    Location `json:"location"`
 	Environment string   `json:"environment,omitzero"`
 	Source      string   `json:"source,omitzero"`
+	Tenant      string   `json:"tenant"`
 
 	Interval int `json:"interval,omitzero"`
 
@@ -21,10 +22,10 @@ type Device struct {
 	Tags       []Tag       `json:"tags,omitzero"`
 	Metadata   []Metadata  `json:"metadata,omitzero"`
 
-	DeviceProfile DeviceProfile `json:"deviceProfile"`
+	DeviceState DeviceState `json:"deviceState"`
 
-	DeviceStatus DeviceStatus `json:"deviceStatus"`
-	DeviceState  DeviceState  `json:"deviceState"`
+	SensorProfile SensorProfile `json:"sensorProfile"`
+	SensorStatus  SensorStatus  `json:"sensorStatus"`
 
 	Alarms []string `json:"alarms,omitzero"`
 }
@@ -43,7 +44,7 @@ type Tag struct {
 	Name string `json:"name"`
 }
 
-type DeviceProfile struct {
+type SensorProfile struct {
 	Name     string   `json:"name" yaml:"name"`
 	Decoder  string   `json:"decoder" yaml:"decoder"`
 	Interval int      `json:"interval" yaml:"interval"`
@@ -55,7 +56,7 @@ type Lwm2mType struct {
 	Name string `json:"name" yaml:"name"`
 }
 
-type DeviceStatus struct {
+type SensorStatus struct {
 	BatteryLevel    int       `json:"batteryLevel,omitzero"`
 	RSSI            *float64  `json:"rssi,omitempty"`
 	LoRaSNR         *float64  `json:"loRaSNR,omitempty"`

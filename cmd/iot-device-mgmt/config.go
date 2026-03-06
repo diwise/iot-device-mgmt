@@ -1,9 +1,9 @@
 package main
 
 import (
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/service-chassis/pkg/infrastructure/servicerunner"
 )
 

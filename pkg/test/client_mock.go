@@ -5,9 +5,10 @@ package test
 
 import (
 	"context"
+	"sync"
+
 	. "github.com/diwise/iot-device-mgmt/pkg/client"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
-	"sync"
 )
 
 // Ensure, that DeviceManagementClientMock does implement DeviceManagementClient.
@@ -55,7 +56,7 @@ type DeviceManagementClientMock struct {
 	FindDeviceFromInternalIDFunc func(ctx context.Context, deviceID string) (Device, error)
 
 	// GetDeviceProfileFunc mocks the GetDeviceProfile method.
-	GetDeviceProfileFunc func(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error)
+	GetDeviceProfileFunc func(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -241,7 +242,7 @@ func (mock *DeviceManagementClientMock) FindDeviceFromInternalIDCalls() []struct
 }
 
 // GetDeviceProfile calls GetDeviceProfileFunc.
-func (mock *DeviceManagementClientMock) GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.DeviceProfile, error) {
+func (mock *DeviceManagementClientMock) GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error) {
 	if mock.GetDeviceProfileFunc == nil {
 		panic("DeviceManagementClientMock.GetDeviceProfileFunc: method is nil but DeviceManagementClient.GetDeviceProfile was just called")
 	}

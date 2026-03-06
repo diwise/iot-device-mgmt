@@ -42,7 +42,7 @@ func (d DeviceUpdated) Body() []byte {
 
 type DeviceStatusUpdated struct {
 	DeviceID     string       `json:"deviceID"`
-	DeviceStatus DeviceStatus `json:"status"`
+	DeviceStatus SensorStatus `json:"status"`
 	Tenant       string       `json:"tenant,omitempty"`
 	Timestamp    time.Time    `json:"timestamp"`
 }

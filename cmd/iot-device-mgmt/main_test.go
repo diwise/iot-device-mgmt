@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/go-chi/jwtauth/v5"
@@ -158,7 +158,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
 	is.NoErr(err)
 
-	err = storage.SeedDeviceProfiles(ctx, s, dm.Config().DeviceProfiles)
+	err = storage.SeedSensorProfiles(ctx, s, dm.Config().DeviceProfiles)
 	is.NoErr(err)
 
 	err = storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})

@@ -23,7 +23,7 @@ const UNKNOWN = "unknown"
 func TestGetProfile(t *testing.T) {
 	is := is.New(t)
 
-	dp := types.DeviceProfile{
+	dp := types.SensorProfile{
 		Name:     "elsys",
 		Decoder:  "elsys",
 		Interval: 3600,
@@ -31,7 +31,7 @@ func TestGetProfile(t *testing.T) {
 	}
 
 	resBody := struct {
-		Data types.DeviceProfile `json:"data"`
+		Data types.SensorProfile `json:"data"`
 	}{
 		Data: dp,
 	}
@@ -117,7 +117,7 @@ func TestCreateUnknownDevice(t *testing.T) {
 		DeviceID: uuid.New().String(),
 		SensorID: "testsensorid",
 		Name:     "testdevice",
-		DeviceProfile: types.DeviceProfile{
+		SensorProfile: types.SensorProfile{
 			Name: UNKNOWN,
 		},
 	}

@@ -34,10 +34,10 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
 //			},
-//			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
+//			GetDeviceProfilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
 //				panic("mock out the GetDeviceProfiles method")
 //			},
-//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error) {
 //				panic("mock out the GetDeviceStatus method")
 //			},
 //			GetLwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
@@ -90,10 +90,10 @@ type DeviceManagementMock struct {
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 
 	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
-	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error)
+	GetDeviceProfilesFunc func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
-	GetDeviceStatusFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error)
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
 
 	// GetLwm2mTypesFunc mocks the GetLwm2mTypes method.
 	GetLwm2mTypesFunc func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
@@ -463,7 +463,7 @@ func (mock *DeviceManagementMock) GetDeviceMeasurementsCalls() []struct {
 }
 
 // GetDeviceProfiles calls GetDeviceProfilesFunc.
-func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.DeviceProfile], error) {
+func (mock *DeviceManagementMock) GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
 	if mock.GetDeviceProfilesFunc == nil {
 		panic("DeviceManagementMock.GetDeviceProfilesFunc: method is nil but DeviceManagement.GetDeviceProfiles was just called")
 	}
@@ -499,7 +499,7 @@ func (mock *DeviceManagementMock) GetDeviceProfilesCalls() []struct {
 }
 
 // GetDeviceStatus calls GetDeviceStatusFunc.
-func (mock *DeviceManagementMock) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.DeviceStatus], error) {
+func (mock *DeviceManagementMock) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error) {
 	if mock.GetDeviceStatusFunc == nil {
 		panic("DeviceManagementMock.GetDeviceStatusFunc: method is nil but DeviceManagement.GetDeviceStatus was just called")
 	}

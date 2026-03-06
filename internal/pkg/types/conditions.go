@@ -1,8 +1,7 @@
-package storage
+package types
 
 import (
 	"context"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -10,10 +9,17 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	"github.com/jackc/pgx/v5"
 )
 
 type ConditionFunc func(*Condition) *Condition
+
+func NewCondition(funcs ...ConditionFunc) *Condition {
+	c := &Condition{}
+	for _, f := range funcs {
+		c = f(c)
+	}
+	return c
+}
 
 type Condition struct {
 	DeviceID string
@@ -42,11 +48,11 @@ type Condition struct {
 
 	Export bool
 
-	sortBy    string
-	sortOrder string
+	SortBy    string
+	SortOrder string
 
-	offset *int
-	limit  *int
+	Offset *int
+	Limit  *int
 }
 
 type Box struct {
@@ -54,212 +60,6 @@ type Box struct {
 	MaxX float64 // east
 	MinY float64 // south
 	MaxY float64 // north
-}
-
-func (c Condition) OrderBy(fallback string) string {
-	orderBy := ""
-
-	if c.sortBy != "" {
-		orderBy += fmt.Sprintf("ORDER BY %s ", c.sortBy)
-		if c.sortOrder != "" {
-			orderBy += c.sortOrder
-		} else {
-			orderBy += "ASC "
-		}
-	}
-
-	if orderBy == "" && fallback != "" {
-		return fallback
-	}
-
-	return orderBy
-}
-
-func (c Condition) OffsetLimit(i ...int) (string, int, int) {
-	offsetLimit := ""
-	offset := 0
-	limit := 10
-
-	if len(i) > 0 {
-		offset = i[0]
-		if len(i) > 1 {
-			limit = i[1]
-		}
-	}
-
-	if c.offset != nil {
-		offsetLimit += "OFFSET @offset "
-		offset = *c.offset
-	} else {
-		offsetLimit += fmt.Sprintf("OFFSET %d ", offset)
-	}
-
-	if c.limit != nil {
-		offsetLimit += "LIMIT @limit "
-		limit = *c.limit
-	} else {
-		offsetLimit += fmt.Sprintf("LIMIT %d ", limit)
-	}
-
-	return offsetLimit, offset, limit
-}
-
-func (c Condition) NamedArgs() pgx.NamedArgs {
-	args := pgx.NamedArgs{}
-
-	if c.DeviceID != "" {
-		args["device_id"] = c.DeviceID
-	}
-	if c.SensorID != "" {
-		args["sensor_id"] = c.SensorID
-	}
-	if c.Tenants != nil {
-		args["tenants"] = c.Tenants
-	}
-	if c.Tenant != "" {
-		args["tenant"] = c.Tenant
-	}
-	if c.Active != nil {
-		args["active"] = *c.Active
-	}
-	if c.Online != nil {
-		args["online"] = *c.Online
-	}
-	if c.AlarmType != "" {
-		args["alarmtype"] = c.AlarmType
-	}
-	if len(c.Types) == 1 {
-		args["profile"] = c.Types[0]
-	}
-	if len(c.Types) > 1 {
-		args["profiles"] = c.Types
-	}
-	if len(c.ProfileName) > 0 {
-		args["profile_name"] = c.ProfileName
-	}
-	if !c.LastSeen.IsZero() {
-		args["last_seen"] = c.LastSeen.UTC().Format(time.RFC3339)
-	}
-	if c.Search != "" {
-		term := c.Search
-
-		if !strings.Contains(term, "%") {
-			term = "%" + strings.TrimSpace(term) + "%"
-		}
-
-		args["search"] = term
-	}
-	if c.offset != nil {
-		args["offset"] = *c.offset
-	}
-	if c.limit != nil {
-		args["limit"] = *c.limit
-	}
-	if c.Name != "" {
-		args["name"] = c.Name
-	}
-	if c.Urn != "" {
-		args["urn"] = c.Urn
-	}
-	if len(c.Metadata) > 0 {
-		for k, v := range c.Metadata {
-			args[fmt.Sprintf("meta_key_%s", k)] = k
-			args[fmt.Sprintf("meta_value_%s", k)] = v
-		}
-	}
-
-	return args
-}
-
-func (c Condition) Where() string {
-	where := []string{}
-
-	if c.DeviceID != "" {
-		where = append(where, "d.device_id = @device_id")
-	}
-
-	if c.SensorID != "" {
-		where = append(where, "d.sensor_id = @sensor_id")
-	}
-
-	if len(c.Tenants) > 0 {
-		where = append(where, "d.tenant = ANY(@tenants)")
-	} else if len(c.Tenant) > 0 {
-		where = append(where, "d.tenant = @tenant")
-	}
-
-	if c.Active != nil {
-		where = append(where, "d.active = @active")
-	}
-
-	if c.Online != nil {
-		if !*c.Online {
-			where = append(where, "(dst.online = @online OR dst.online IS NULL)")
-		} else {
-			where = append(where, "dst.online = @online")
-		}
-	}
-
-	if len(c.Types) == 1 {
-		where = append(where, "dp.decoder = @profile")
-	}
-
-	if len(c.Types) > 1 {
-		where = append(where, "dp.decoder = ANY(@profiles)")
-	}
-
-	if len(c.ProfileName) > 0 {
-		where = append(where, "dp.name = ANY(@profile_name)")
-	}
-
-	if c.Bounds != nil {
-		where = append(where, fmt.Sprintf("location <@ BOX '((%f,%f),(%f,%f))'", c.Bounds.MinX, c.Bounds.MinY, c.Bounds.MaxX, c.Bounds.MaxY))
-	}
-
-	if c.Search != "" {
-		where = append(where, "(d.device_id ILIKE @search OR d.sensor_id ILIKE @search OR d.name ILIKE @search)")
-	}
-
-	if !c.LastSeen.IsZero() {
-		where = append(where, "dst.observed_at >= @last_seen")
-	}
-
-	if !c.IncludeDeleted {
-		where = append(where, "d.deleted=FALSE")
-	}
-
-	if c.Name != "" {
-		where = append(where, "d.name=@name")
-	}
-
-	if c.Urn != "" {
-		where = append(where, "d.urn=@urn")
-	}
-
-	if c.AlarmType != "" {
-		where = append(where, "a.type=@alarmtype")
-	}
-
-	if len(c.Metadata) > 0 {
-		for k := range c.Metadata {
-			metadataWhere := fmt.Sprintf("EXISTS (SELECT 1 FROM device_metadata dm WHERE dm.device_id = d.device_id AND dm.key = @meta_key_%s", k)
-			if c.Metadata[k] != "" {
-				metadataWhere += fmt.Sprintf(" AND dm.vs = @meta_value_%s", k)
-			}
-			metadataWhere += ")"
-			where = append(where, metadataWhere)
-		}
-	}
-
-	if len(where) == 0 {
-		return ""
-	}
-
-	if len(where) == 1 {
-		return "WHERE " + where[0]
-	}
-
-	return "WHERE " + strings.Join(where, " AND ")
 }
 
 var re = regexp.MustCompile(`[^a-zA-ZåäöÅÄÖ0-9 _,;().]+|[%]`)
@@ -284,19 +84,21 @@ func WithSortBy(sortBy string) ConditionFunc {
 
 		switch strings.ToLower(sortBy) {
 		case "device_id":
-			c.sortBy = "d.device_id"
+			c.SortBy = "d.device_id"
 		case "deveui":
 			fallthrough
 		case "sensor_id":
-			c.sortBy = "d.sensor_id"
+			c.SortBy = "d.sensor_id"
 		case "name":
-			c.sortBy = "d.name"
+			c.SortBy = "d.name"
 		case "decoder":
 			fallthrough
 		case "profile":
 			fallthrough
 		case "device_profile_id":
-			c.sortBy = "dp.device_profile_id"
+			fallthrough
+		case "sensor_profile_id":
+			c.SortBy = "sp.sensor_profile_id"
 		}
 
 		return c
@@ -306,9 +108,9 @@ func WithSortBy(sortBy string) ConditionFunc {
 func WithSortDesc(desc bool) ConditionFunc {
 	return func(c *Condition) *Condition {
 		if desc {
-			c.sortOrder = "DESC"
+			c.SortOrder = "DESC"
 		} else {
-			c.sortOrder = "ASC"
+			c.SortOrder = "ASC"
 		}
 		return c
 	}
@@ -323,14 +125,14 @@ func WithTypes(types []string) ConditionFunc {
 
 func WithOffset(offset int) ConditionFunc {
 	return func(c *Condition) *Condition {
-		c.offset = &offset
+		c.Offset = &offset
 		return c
 	}
 }
 
 func WithLimit(limit int) ConditionFunc {
 	return func(c *Condition) *Condition {
-		c.limit = &limit
+		c.Limit = &limit
 		return c
 	}
 }
@@ -447,7 +249,7 @@ func unique(s []string) []string {
 	return list
 }
 
-func ParseConditions(ctx context.Context, params map[string][]string) []ConditionFunc {
+func Parse(ctx context.Context, params map[string][]string) []ConditionFunc {
 	log := logging.GetFromContext(ctx)
 
 	conditions := make([]ConditionFunc, 0)

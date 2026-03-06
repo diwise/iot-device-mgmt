@@ -9,8 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
@@ -30,7 +31,7 @@ type AlarmStorage interface {
 	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
 	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
-	GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error)
+	GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
 }
 
 func NewStorage(s storage.Store) AlarmStorage {
@@ -52,7 +53,7 @@ func (s *alarmStorageImpl) GetStaleDevices(ctx context.Context) (types.Collectio
 func (s *alarmStorageImpl) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
 	return s.s.RemoveAlarm(ctx, deviceID, alarmType)
 }
-func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Alarms], error) {
+func (s *alarmStorageImpl) GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 	return s.s.GetAlarms(ctx, conditions...)
 }
 
@@ -114,28 +115,28 @@ func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
 }
 
 func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
-	conditions := []storage.ConditionFunc{}
+	conds := []conditions.ConditionFunc{}
 
 	for k, v := range params {
 		switch strings.ToLower(k) {
 		case "limit":
 			if i, err := strconv.Atoi(v[0]); err == nil {
-				conditions = append(conditions, storage.WithLimit(i))
+				conds = append(conds, conditions.WithLimit(i))
 			}
 		case "offset":
 			if o, err := strconv.Atoi(v[0]); err == nil {
-				conditions = append(conditions, storage.WithOffset(o))
+				conds = append(conds, conditions.WithOffset(o))
 			}
 		case "alarmtype":
 			if v[0] != "" {
-				conditions = append(conditions, storage.WithAlarmType(v[0]))
+				conds = append(conds, conditions.WithAlarmType(v[0]))
 			}
 		}
 	}
 
-	conditions = append(conditions, storage.WithActive(true), storage.WithTenants(tenants))
+	conds = append(conds, conditions.WithActive(true), conditions.WithTenants(tenants))
 
-	return svc.storage.GetAlarms(ctx, conditions...)
+	return svc.storage.GetAlarms(ctx, conds...)
 }
 
 func New(s AlarmStorage, m messaging.MsgContext, cfg *AlarmServiceConfig) AlarmService {

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
@@ -20,7 +20,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 	ctx := context.Background()
 
 	storage := &DeviceStorageMock{
-		QueryFunc: func(ctx context.Context, conditions ...storage.ConditionFunc) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
@@ -74,13 +74,13 @@ func TestDeviceStatusHandler(t *testing.T) {
 			},
 		},
 		Tags: []types.Tag{},
-		DeviceProfile: types.DeviceProfile{
+		SensorProfile: types.SensorProfile{
 			Name:     "test",
 			Decoder:  "test",
 			Interval: 0,
 			Types:    []string{"urn:xxx:1"},
 		},
-		DeviceStatus: types.DeviceStatus{},
+		SensorStatus: types.SensorStatus{},
 		DeviceState:  types.DeviceState{},
 		Alarms:       []string{},
 	})
