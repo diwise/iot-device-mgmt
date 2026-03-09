@@ -29,7 +29,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService) error {
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceAPIService, alarm alarms.AlarmService) error {
 	const apiPrefix string = "/api/v0"
 
 	log := logging.GetFromContext(ctx)
@@ -64,7 +64,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	return nil
 }
 
-func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -169,7 +169,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 	}
 }
 
-func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -209,7 +209,7 @@ func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) h
 	}
 }
 
-func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -253,7 +253,7 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 	}
 }
 
-func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -297,7 +297,7 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceManagem
 	}
 }
 
-func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -343,7 +343,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceM
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -361,7 +361,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			err = svc.SeedDevices(ctx, file, allowedTenants)
+			err = svc.CreateMany(ctx, file, allowedTenants)
 			if err != nil {
 				logger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -415,7 +415,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 	}
 }
 
-func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -468,7 +468,7 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 	}
 }
 
-func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -513,7 +513,7 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement)
 	}
 }
 
-func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -581,7 +581,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceMan
 	}
 }
 
-func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
+func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 

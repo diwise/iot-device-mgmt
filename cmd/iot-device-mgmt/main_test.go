@@ -140,13 +140,13 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	dm := devicemanagement.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
 	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
-	err = dm.SeedLwm2mTypes(ctx, dm.Config().Types)
+	err = dm.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
 	is.NoErr(err)
 
-	err = dm.SeedSensorProfiles(ctx, dm.Config().DeviceProfiles)
+	err = dm.SeedSensorProfiles(ctx, cfg.DeviceManagementConfig.DeviceProfiles)
 	is.NoErr(err)
 
-	err = dm.SeedDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	err = dm.Seed(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)

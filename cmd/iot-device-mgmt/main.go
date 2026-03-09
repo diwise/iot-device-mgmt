@@ -98,7 +98,9 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
 	exitIf(err, log, "failed to init messenger")
 
-	var dm devicemanagement.DeviceManagement
+	var deviceAPI devicemanagement.DeviceAPIService
+	var deviceBootstrap devicemanagement.DeviceBootstrapService
+	var deviceStatusHandler devicemanagement.DeviceStatusHandler
 	var as alarms.AlarmService
 	var wd watchdog.Watchdog
 
@@ -109,13 +111,16 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policies.Close()
-				return api.RegisterHandlers(ctx, handler, policies, dm, as)
+				return api.RegisterHandlers(ctx, handler, policies, deviceAPI, as)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
-			dm = devicemanagement.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
+			svc := devicemanagement.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
+			deviceAPI = svc
+			deviceBootstrap = svc
+			deviceStatusHandler = svc
 			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(as, &ac.WatchdogConfig)
 
@@ -124,24 +129,24 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
 
-			err = dm.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
+			err = deviceBootstrap.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
 			}
 
-			err = dm.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
+			err = deviceBootstrap.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = dm.SeedDevices(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = deviceBootstrap.Seed(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}
 
 			messenger.Start()
 
-			err = devicemanagement.RegisterTopicMessageHandler(ctx, dm, messenger)
+			err = devicemanagement.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
 			if err != nil {
 				return
 			}

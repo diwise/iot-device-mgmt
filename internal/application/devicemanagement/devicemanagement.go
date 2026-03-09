@@ -54,6 +54,45 @@ type DeviceProfileStore interface {
 	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
 }
 
+type DeviceQueryService interface {
+	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
+	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
+	GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
+	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
+	GetTenants(ctx context.Context) (types.Collection[string], error)
+	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
+	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
+}
+
+type DeviceCommandService interface {
+	NewDevice(ctx context.Context, device types.Device) error
+	UpdateDevice(ctx context.Context, device types.Device) error
+	MergeDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
+	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
+}
+
+type DeviceBulkCreateService interface {
+	CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+}
+
+type DeviceBootstrapService interface {
+	Seed(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+	SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error
+	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
+}
+
+type DeviceStatusHandler interface {
+	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
+}
+
+type DeviceAPIService interface {
+	DeviceQueryService
+	DeviceCommandService
+	DeviceBulkCreateService
+}
+
 //go:generate moq -rm -out devicereader_mock.go . DeviceReader
 //go:generate moq -rm -out devicewriter_mock.go . DeviceWriter
 //go:generate moq -rm -out devicestatuswriter_mock.go . DeviceStatusWriter
@@ -61,32 +100,9 @@ type DeviceProfileStore interface {
 //go:generate moq -rm -out devicemanagement_mock.go . DeviceManagement
 
 type DeviceManagement interface {
-	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
-	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
-
-	NewDevice(ctx context.Context, device types.Device) error
-	UpdateDevice(ctx context.Context, device types.Device) error
-	MergeDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
-
-	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
-
-	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
-	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
-	GetTenants(ctx context.Context) (types.Collection[string], error)
-
-	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
-
-	Config() *Config
-	
-	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
-	
-	SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error
-	SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error
-	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
-	
-	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
+	DeviceAPIService
+	DeviceBootstrapService
+	DeviceStatusHandler
 }
 
 type Config struct {
@@ -104,10 +120,6 @@ type service struct {
 	messenger    messaging.MsgContext
 }
 
-func (s service) Config() *Config {
-	return s.config
-}
-
 func New(reader DeviceReader, writer DeviceWriter, statusWriter DeviceStatusWriter, profiles DeviceProfileStore, messenger messaging.MsgContext, config *Config) DeviceManagement {
 	return service{
 		reader:       reader,
@@ -119,7 +131,7 @@ func New(reader DeviceReader, writer DeviceWriter, statusWriter DeviceStatusWrit
 	}
 }
 
-func RegisterTopicMessageHandler(ctx context.Context, svc DeviceManagement, messenger messaging.MsgContext) error {
+func RegisterTopicMessageHandler(ctx context.Context, svc DeviceStatusHandler, messenger messaging.MsgContext) error {
 	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc))
 }
 
@@ -474,7 +486,7 @@ func (s service) GetDeviceMeasurements(ctx context.Context, deviceID string, par
 	return s.reader.GetDeviceMeasurements(ctx, deviceID, conds...)
 }
 
-func newDeviceStatusHandler(svc DeviceManagement) messaging.TopicMessageHandler {
+func newDeviceStatusHandler(svc DeviceStatusHandler) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
 		var err error
 

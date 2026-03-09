@@ -20,8 +20,8 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			ConfigFunc: func() *Config {
-//				panic("mock out the Config method")
+//			CreateManyFunc: func(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+//				panic("mock out the CreateMany method")
 //			},
 //			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
 //				panic("mock out the GetByDeviceID method")
@@ -59,8 +59,8 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			QueryFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
 //			},
-//			SeedDevicesFunc: func(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
-//				panic("mock out the SeedDevices method")
+//			SeedFunc: func(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+//				panic("mock out the Seed method")
 //			},
 //			SeedLwm2mTypesFunc: func(ctx context.Context, lwm2m []types.Lwm2mType) error {
 //				panic("mock out the SeedLwm2mTypes method")
@@ -81,8 +81,8 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //	}
 type DeviceManagementMock struct {
-	// ConfigFunc mocks the Config method.
-	ConfigFunc func() *Config
+	// CreateManyFunc mocks the CreateMany method.
+	CreateManyFunc func(ctx context.Context, devices io.ReadCloser, validTenants []string) error
 
 	// GetByDeviceIDFunc mocks the GetByDeviceID method.
 	GetByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
@@ -120,8 +120,8 @@ type DeviceManagementMock struct {
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
 
-	// SeedDevicesFunc mocks the SeedDevices method.
-	SeedDevicesFunc func(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+	// SeedFunc mocks the Seed method.
+	SeedFunc func(ctx context.Context, devices io.ReadCloser, validTenants []string) error
 
 	// SeedLwm2mTypesFunc mocks the SeedLwm2mTypes method.
 	SeedLwm2mTypesFunc func(ctx context.Context, lwm2m []types.Lwm2mType) error
@@ -137,8 +137,14 @@ type DeviceManagementMock struct {
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// Config holds details about calls to the Config method.
-		Config []struct {
+		// CreateMany holds details about calls to the CreateMany method.
+		CreateMany []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Devices is the devices argument value.
+			Devices io.ReadCloser
+			// ValidTenants is the validTenants argument value.
+			ValidTenants []string
 		}
 		// GetByDeviceID holds details about calls to the GetByDeviceID method.
 		GetByDeviceID []struct {
@@ -242,8 +248,8 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// SeedDevices holds details about calls to the SeedDevices method.
-		SeedDevices []struct {
+		// Seed holds details about calls to the Seed method.
+		Seed []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Devices is the devices argument value.
@@ -284,7 +290,7 @@ type DeviceManagementMock struct {
 			DeviceState types.DeviceState
 		}
 	}
-	lockConfig                sync.RWMutex
+	lockCreateMany            sync.RWMutex
 	lockGetByDeviceID         sync.RWMutex
 	lockGetBySensorID         sync.RWMutex
 	lockGetDeviceAlarms       sync.RWMutex
@@ -297,37 +303,50 @@ type DeviceManagementMock struct {
 	lockMergeDevice           sync.RWMutex
 	lockNewDevice             sync.RWMutex
 	lockQuery                 sync.RWMutex
-	lockSeedDevices           sync.RWMutex
+	lockSeed                  sync.RWMutex
 	lockSeedLwm2mTypes        sync.RWMutex
 	lockSeedSensorProfiles    sync.RWMutex
 	lockUpdateDevice          sync.RWMutex
 	lockUpdateState           sync.RWMutex
 }
 
-// Config calls ConfigFunc.
-func (mock *DeviceManagementMock) Config() *Config {
-	if mock.ConfigFunc == nil {
-		panic("DeviceManagementMock.ConfigFunc: method is nil but DeviceManagement.Config was just called")
+// CreateMany calls CreateManyFunc.
+func (mock *DeviceManagementMock) CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+	if mock.CreateManyFunc == nil {
+		panic("DeviceManagementMock.CreateManyFunc: method is nil but DeviceManagement.CreateMany was just called")
 	}
 	callInfo := struct {
-	}{}
-	mock.lockConfig.Lock()
-	mock.calls.Config = append(mock.calls.Config, callInfo)
-	mock.lockConfig.Unlock()
-	return mock.ConfigFunc()
+		Ctx          context.Context
+		Devices      io.ReadCloser
+		ValidTenants []string
+	}{
+		Ctx:          ctx,
+		Devices:      devices,
+		ValidTenants: validTenants,
+	}
+	mock.lockCreateMany.Lock()
+	mock.calls.CreateMany = append(mock.calls.CreateMany, callInfo)
+	mock.lockCreateMany.Unlock()
+	return mock.CreateManyFunc(ctx, devices, validTenants)
 }
 
-// ConfigCalls gets all the calls that were made to Config.
+// CreateManyCalls gets all the calls that were made to CreateMany.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.ConfigCalls())
-func (mock *DeviceManagementMock) ConfigCalls() []struct {
+//	len(mockedDeviceManagement.CreateManyCalls())
+func (mock *DeviceManagementMock) CreateManyCalls() []struct {
+	Ctx          context.Context
+	Devices      io.ReadCloser
+	ValidTenants []string
 } {
 	var calls []struct {
+		Ctx          context.Context
+		Devices      io.ReadCloser
+		ValidTenants []string
 	}
-	mock.lockConfig.RLock()
-	calls = mock.calls.Config
-	mock.lockConfig.RUnlock()
+	mock.lockCreateMany.RLock()
+	calls = mock.calls.CreateMany
+	mock.lockCreateMany.RUnlock()
 	return calls
 }
 
@@ -799,10 +818,10 @@ func (mock *DeviceManagementMock) QueryCalls() []struct {
 	return calls
 }
 
-// SeedDevices calls SeedDevicesFunc.
-func (mock *DeviceManagementMock) SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
-	if mock.SeedDevicesFunc == nil {
-		panic("DeviceManagementMock.SeedDevicesFunc: method is nil but DeviceManagement.SeedDevices was just called")
+// Seed calls SeedFunc.
+func (mock *DeviceManagementMock) Seed(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+	if mock.SeedFunc == nil {
+		panic("DeviceManagementMock.SeedFunc: method is nil but DeviceManagement.Seed was just called")
 	}
 	callInfo := struct {
 		Ctx          context.Context
@@ -813,17 +832,17 @@ func (mock *DeviceManagementMock) SeedDevices(ctx context.Context, devices io.Re
 		Devices:      devices,
 		ValidTenants: validTenants,
 	}
-	mock.lockSeedDevices.Lock()
-	mock.calls.SeedDevices = append(mock.calls.SeedDevices, callInfo)
-	mock.lockSeedDevices.Unlock()
-	return mock.SeedDevicesFunc(ctx, devices, validTenants)
+	mock.lockSeed.Lock()
+	mock.calls.Seed = append(mock.calls.Seed, callInfo)
+	mock.lockSeed.Unlock()
+	return mock.SeedFunc(ctx, devices, validTenants)
 }
 
-// SeedDevicesCalls gets all the calls that were made to SeedDevices.
+// SeedCalls gets all the calls that were made to Seed.
 // Check the length with:
 //
-//	len(mockedDeviceManagement.SeedDevicesCalls())
-func (mock *DeviceManagementMock) SeedDevicesCalls() []struct {
+//	len(mockedDeviceManagement.SeedCalls())
+func (mock *DeviceManagementMock) SeedCalls() []struct {
 	Ctx          context.Context
 	Devices      io.ReadCloser
 	ValidTenants []string
@@ -833,9 +852,9 @@ func (mock *DeviceManagementMock) SeedDevicesCalls() []struct {
 		Devices      io.ReadCloser
 		ValidTenants []string
 	}
-	mock.lockSeedDevices.RLock()
-	calls = mock.calls.SeedDevices
-	mock.lockSeedDevices.RUnlock()
+	mock.lockSeed.RLock()
+	calls = mock.calls.Seed
+	mock.lockSeed.RUnlock()
 	return calls
 }
 

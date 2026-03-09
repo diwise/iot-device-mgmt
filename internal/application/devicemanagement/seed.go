@@ -17,7 +17,23 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
-func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+func (s service) Seed(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+	return s.importDevices(ctx, devices, validTenants, s.shouldUpdateExistingDevices())
+}
+
+func (s service) CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+	return s.importDevices(ctx, devices, validTenants, s.shouldUpdateExistingDevices())
+}
+
+func (s service) shouldUpdateExistingDevices() bool {
+	if s.config == nil {
+		return false
+	}
+
+	return s.config.SeedExistingDevices
+}
+
+func (s service) importDevices(ctx context.Context, devices io.ReadCloser, validTenants []string, shouldUpdate bool) error {
 
 	log := logging.GetFromContext(ctx)
 	defer devices.Close()
@@ -35,10 +51,6 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 		return err
 	}
 
-	shouldUpdate := false
-	if s.config != nil {
-		shouldUpdate = s.config.SeedExistingDevices
-	}
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", shouldUpdate))
 
 	for _, record := range records {
@@ -94,7 +106,6 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 	}
 
 	return nil
-
 }
 
 func (s service) SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error {
