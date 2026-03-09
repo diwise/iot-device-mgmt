@@ -40,7 +40,7 @@ type appConfig struct {
 	/*
 	   messenger              messaging.MsgContext
 	   db                     storage.Store
-	   dm                     devicemanagement.DeviceManagement
+	   deviceAPI              devicemanagement.DeviceAPIService
 	   alarm                  alarms.AlarmService
 	   watchdog               watchdog.Watchdog
 	*/
