@@ -35,7 +35,10 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 		return err
 	}
 
-	shouldUpdate := s.storage.IsSeedExistingDevicesEnabled(ctx)
+	shouldUpdate := false
+	if s.config != nil {
+		shouldUpdate = s.config.SeedExistingDevices
+	}
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", shouldUpdate))
 
 	for _, record := range records {
@@ -48,7 +51,7 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 
 		exists := false
 		if strings.TrimSpace(device.SensorID) != "" {
-			_, err := s.storage.GetDeviceBySensorID(ctx, device.SensorID)
+			_, err := s.reader.GetDeviceBySensorID(ctx, device.SensorID)
 			if err != nil {
 				if !errors.Is(err, storage.ErrNoRows) {
 					return err
@@ -57,7 +60,7 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 				exists = true
 			}
 		} else {
-			existing, err := s.storage.Query(ctx, conditions.WithDeviceID(device.DeviceID))
+			existing, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
 			if err != nil {
 				return err
 			}
@@ -65,7 +68,7 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 		}
 
 		if !exists {
-			err := s.storage.CreateOrUpdateDevice(ctx, device)
+			err := s.writer.CreateOrUpdateDevice(ctx, device)
 			if err != nil {
 				log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 				return err
@@ -81,7 +84,7 @@ func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTe
 			continue
 		}
 
-		err = s.storage.CreateOrUpdateDevice(ctx, device)
+		err = s.writer.CreateOrUpdateDevice(ctx, device)
 		if err != nil {
 			log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 			return err
@@ -99,7 +102,7 @@ func (s service) SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) er
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, t := range lwm2m {
-		err := s.storage.CreateSensorProfileType(ctx, t)
+		err := s.profiles.CreateSensorProfileType(ctx, t)
 		if err != nil {
 			log.Debug("failed to seed lwm2m type", "name", t.Name, "urn", t.Urn)
 			errs = append(errs, err)
@@ -114,7 +117,7 @@ func (s service) SeedSensorProfiles(ctx context.Context, profiles []types.Sensor
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, p := range profiles {
-		err := s.storage.CreateSensorProfile(ctx, p)
+		err := s.profiles.CreateSensorProfile(ctx, p)
 		if err != nil {
 			log.Debug("failed to seed device profile", "decoder", p.Decoder, "name", p.Name)
 			errs = append(errs, err)

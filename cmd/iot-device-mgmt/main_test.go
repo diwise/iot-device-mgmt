@@ -118,7 +118,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	exisitingDeviceUpdateFlag := true
 
-	config := storage.NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable", exisitingDeviceUpdateFlag)
+	config := storage.NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable")
 
 	p, err := storage.New(ctx, config)
 	if err != nil {
@@ -136,7 +136,8 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	}
 
 	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
-	dm := devicemanagement.New(p, &msgCtx, &cfg.DeviceManagementConfig)
+	cfg.DeviceManagementConfig.SeedExistingDevices = exisitingDeviceUpdateFlag
+	dm := devicemanagement.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
 	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
 	err = dm.SeedLwm2mTypes(ctx, dm.Config().Types)

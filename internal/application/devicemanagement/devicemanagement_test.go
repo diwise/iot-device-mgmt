@@ -19,23 +19,28 @@ func TestDeviceStatusHandler(t *testing.T) {
 	log := slog.Default()
 	ctx := context.Background()
 
-	storage := &DeviceStorageMock{
+	reader := &DeviceReaderMock{
 		QueryFunc: func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
+	}
+	writer := &DeviceWriterMock{
 		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
-			return nil
-		},
-		AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
-			return nil
-		},
-		SetDeviceStateFunc: func(ctx context.Context, deviceID string, state types.DeviceState) error {
 			return nil
 		},
 		SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
 			return nil
 		},
 	}
+	statusWriter := &DeviceStatusWriterMock{
+		AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error {
+			return nil
+		},
+		SetDeviceStateFunc: func(ctx context.Context, deviceID string, state types.DeviceState) error {
+			return nil
+		},
+	}
+	profiles := &DeviceProfileStoreMock{}
 
 	msgCtx := messaging.MsgContextMock{
 		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
@@ -52,7 +57,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 		BatteryLevel: &bat,
 	}
 
-	svc := New(storage, &msgCtx, nil)
+	svc := New(reader, writer, statusWriter, profiles, &msgCtx, nil)
 
 	err := svc.NewDevice(ctx, types.Device{
 		Active:      true,
@@ -86,7 +91,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 	})
 	is.NoErr(err)
 
-	handler := NewDeviceStatusHandler(svc)
+	handler := newDeviceStatusHandler(svc)
 	handler(ctx, statusMessage(sm), log)
 }
 

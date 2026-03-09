@@ -84,6 +84,8 @@ func main() {
 func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 
 	log := logging.GetFromContext(ctx)
+	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
+	cfg.DeviceManagementConfig.SeedExistingDevices = seedExistingDevices
 
 	probes := map[string]k8shandlers.ServiceProber{
 		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
@@ -113,7 +115,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
-			dm = devicemanagement.New(s, messenger, &ac.DeviceManagementConfig)
+			dm = devicemanagement.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
 			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(as, &ac.WatchdogConfig)
 
@@ -139,7 +141,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 
 			messenger.Start()
 
-			err = dm.RegisterTopicMessageHandler(ctx)
+			err = devicemanagement.RegisterTopicMessageHandler(ctx, dm, messenger)
 			if err != nil {
 				return
 			}
@@ -168,10 +170,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 }
 
 func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
-
-	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
-
-	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode], seedExistingDevices))
+	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
 }
 
 func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConfig, error) {

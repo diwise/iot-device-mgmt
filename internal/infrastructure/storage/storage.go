@@ -33,9 +33,8 @@ var (
 var migrateSQL string
 
 type Storage struct {
-	conn                  *pgxpool.Pool
-	updateExistingDevices bool
-	mu                    sync.Mutex
+	conn *pgxpool.Pool
+	mu   sync.Mutex
 }
 
 func New(ctx context.Context, config Config) (*Storage, error) {
@@ -45,8 +44,7 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 	}
 
 	s := &Storage{
-		conn:                  pool,
-		updateExistingDevices: config.seedExistingDevices,
+		conn: pool,
 	}
 
 	return s, initialize(ctx, s)
@@ -1114,10 +1112,6 @@ func (s *Storage) GetTenants(ctx context.Context) (types.Collection[string], err
 		Limit:      uint64(len(tenants)),
 		TotalCount: uint64(len(tenants)),
 	}, nil
-}
-
-func (s *Storage) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
-	return s.updateExistingDevices
 }
 
 func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {

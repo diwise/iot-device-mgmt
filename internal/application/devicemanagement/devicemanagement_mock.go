@@ -5,10 +5,9 @@ package devicemanagement
 
 import (
 	"context"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"io"
 	"sync"
-
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -21,7 +20,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //
 //		// make and configure a mocked DeviceManagement
 //		mockedDeviceManagement := &DeviceManagementMock{
-//			ConfigFunc: func() *DeviceManagementConfig {
+//			ConfigFunc: func() *Config {
 //				panic("mock out the Config method")
 //			},
 //			GetByDeviceIDFunc: func(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
@@ -59,9 +58,6 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			},
 //			QueryFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
-//			},
-//			RegisterTopicMessageHandlerFunc: func(ctx context.Context) error {
-//				panic("mock out the RegisterTopicMessageHandler method")
 //			},
 //			SeedDevicesFunc: func(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
 //				panic("mock out the SeedDevices method")
@@ -123,9 +119,6 @@ type DeviceManagementMock struct {
 
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
-
-	// RegisterTopicMessageHandlerFunc mocks the RegisterTopicMessageHandler method.
-	RegisterTopicMessageHandlerFunc func(ctx context.Context) error
 
 	// SeedDevicesFunc mocks the SeedDevices method.
 	SeedDevicesFunc func(ctx context.Context, devices io.ReadCloser, validTenants []string) error
@@ -249,11 +242,6 @@ type DeviceManagementMock struct {
 			// Tenants is the tenants argument value.
 			Tenants []string
 		}
-		// RegisterTopicMessageHandler holds details about calls to the RegisterTopicMessageHandler method.
-		RegisterTopicMessageHandler []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-		}
 		// SeedDevices holds details about calls to the SeedDevices method.
 		SeedDevices []struct {
 			// Ctx is the ctx argument value.
@@ -296,25 +284,24 @@ type DeviceManagementMock struct {
 			DeviceState types.DeviceState
 		}
 	}
-	lockConfig                      sync.RWMutex
-	lockGetByDeviceID               sync.RWMutex
-	lockGetBySensorID               sync.RWMutex
-	lockGetDeviceAlarms             sync.RWMutex
-	lockGetDeviceMeasurements       sync.RWMutex
-	lockGetDeviceProfiles           sync.RWMutex
-	lockGetDeviceStatus             sync.RWMutex
-	lockGetLwm2mTypes               sync.RWMutex
-	lockGetTenants                  sync.RWMutex
-	lockHandleStatusMessage         sync.RWMutex
-	lockMergeDevice                 sync.RWMutex
-	lockNewDevice                   sync.RWMutex
-	lockQuery                       sync.RWMutex
-	lockRegisterTopicMessageHandler sync.RWMutex
-	lockSeedDevices                 sync.RWMutex
-	lockSeedLwm2mTypes              sync.RWMutex
-	lockSeedSensorProfiles          sync.RWMutex
-	lockUpdateDevice                sync.RWMutex
-	lockUpdateState                 sync.RWMutex
+	lockConfig                sync.RWMutex
+	lockGetByDeviceID         sync.RWMutex
+	lockGetBySensorID         sync.RWMutex
+	lockGetDeviceAlarms       sync.RWMutex
+	lockGetDeviceMeasurements sync.RWMutex
+	lockGetDeviceProfiles     sync.RWMutex
+	lockGetDeviceStatus       sync.RWMutex
+	lockGetLwm2mTypes         sync.RWMutex
+	lockGetTenants            sync.RWMutex
+	lockHandleStatusMessage   sync.RWMutex
+	lockMergeDevice           sync.RWMutex
+	lockNewDevice             sync.RWMutex
+	lockQuery                 sync.RWMutex
+	lockSeedDevices           sync.RWMutex
+	lockSeedLwm2mTypes        sync.RWMutex
+	lockSeedSensorProfiles    sync.RWMutex
+	lockUpdateDevice          sync.RWMutex
+	lockUpdateState           sync.RWMutex
 }
 
 // Config calls ConfigFunc.
@@ -809,38 +796,6 @@ func (mock *DeviceManagementMock) QueryCalls() []struct {
 	mock.lockQuery.RLock()
 	calls = mock.calls.Query
 	mock.lockQuery.RUnlock()
-	return calls
-}
-
-// RegisterTopicMessageHandler calls RegisterTopicMessageHandlerFunc.
-func (mock *DeviceManagementMock) RegisterTopicMessageHandler(ctx context.Context) error {
-	if mock.RegisterTopicMessageHandlerFunc == nil {
-		panic("DeviceManagementMock.RegisterTopicMessageHandlerFunc: method is nil but DeviceManagement.RegisterTopicMessageHandler was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-	}{
-		Ctx: ctx,
-	}
-	mock.lockRegisterTopicMessageHandler.Lock()
-	mock.calls.RegisterTopicMessageHandler = append(mock.calls.RegisterTopicMessageHandler, callInfo)
-	mock.lockRegisterTopicMessageHandler.Unlock()
-	return mock.RegisterTopicMessageHandlerFunc(ctx)
-}
-
-// RegisterTopicMessageHandlerCalls gets all the calls that were made to RegisterTopicMessageHandler.
-// Check the length with:
-//
-//	len(mockedDeviceManagement.RegisterTopicMessageHandlerCalls())
-func (mock *DeviceManagementMock) RegisterTopicMessageHandlerCalls() []struct {
-	Ctx context.Context
-} {
-	var calls []struct {
-		Ctx context.Context
-	}
-	mock.lockRegisterTopicMessageHandler.RLock()
-	calls = mock.calls.RegisterTopicMessageHandler
-	mock.lockRegisterTopicMessageHandler.RUnlock()
 	return calls
 }
 

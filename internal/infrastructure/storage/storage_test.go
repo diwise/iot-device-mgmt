@@ -10,7 +10,7 @@ import (
 )
 
 func testSetup(t *testing.T) (context.Context, *Storage) {
-	cfg := NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable", true)
+	cfg := NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable")
 	s, err := New(context.Background(), cfg)
 	if err != nil {
 		t.Skip("could not connect to database")

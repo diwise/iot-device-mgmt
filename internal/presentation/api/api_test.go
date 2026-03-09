@@ -26,9 +26,9 @@ func TestApi(t *testing.T) {
 	defer policies.Close()
 
 	msgMock := &messaging.MsgContextMock{}
-	ds := &devicemanagement.DeviceStorageMock{}
+	mocks := newDeviceManagementMocks()
 
-	dm := devicemanagement.New(ds, msgMock, &devicemanagement.Config{})
+	dm := devicemanagement.New(mocks.reader, mocks.writer, mocks.statusWriter, mocks.profiles, msgMock, &devicemanagement.Config{})
 	as := alarms.AlarmServiceMock{}
 
 	mux := http.NewServeMux()
@@ -38,41 +38,57 @@ func TestApi(t *testing.T) {
 	defer server.Close()
 
 	t.Run("GET /devices", func(t *testing.T) {
-		testQueryDevices(t, server.URL, ds)
+		testQueryDevices(t, server.URL, mocks)
 	})
 
 	t.Run("GET /devices?devEUI=test-sensor-1", func(t *testing.T) {
-		testQueryDevicesBySensorID(t, server.URL, ds)
+		testQueryDevicesBySensorID(t, server.URL, mocks)
 	})
 
 	t.Run("GET /devices/test-device-1", func(t *testing.T) {
-		testGetDevice(t, server.URL, ds)
+		testGetDevice(t, server.URL, mocks)
 	})
 
 	t.Run("GET /devices/test-device-1/status", func(t *testing.T) {
-		testDeviceStatus(t, server.URL, ds)
+		testDeviceStatus(t, server.URL, mocks)
 	})
 
 	t.Run("GET /devices/test-device-1/alarms", func(t *testing.T) {
-		testDeviceAlarms(t, server.URL, ds)
+		testDeviceAlarms(t, server.URL, mocks)
 	})
 
 	t.Run("GET /devices/test-device-1/measurements", func(t *testing.T) {
-		testDeviceMeasurements(t, server.URL, ds)
+		testDeviceMeasurements(t, server.URL, mocks)
 	})
 
 	t.Run("POST /devices", func(t *testing.T) {
-		testCreateDevice(t, server.URL, ds)
+		testCreateDevice(t, server.URL, mocks)
 	})
 
 	t.Run("POST /devices+multiPart", func(t *testing.T) {
-		testCreateDevices(t, server.URL, ds)
+		testCreateDevices(t, server.URL, mocks)
 	})
 
 }
 
-func testQueryDevices(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+type deviceManagementMocks struct {
+	reader       *devicemanagement.DeviceReaderMock
+	writer       *devicemanagement.DeviceWriterMock
+	statusWriter *devicemanagement.DeviceStatusWriterMock
+	profiles     *devicemanagement.DeviceProfileStoreMock
+}
+
+func newDeviceManagementMocks() deviceManagementMocks {
+	return deviceManagementMocks{
+		reader:       &devicemanagement.DeviceReaderMock{},
+		writer:       &devicemanagement.DeviceWriterMock{},
+		statusWriter: &devicemanagement.DeviceStatusWriterMock{},
+		profiles:     &devicemanagement.DeviceProfileStoreMock{},
+	}
+}
+
+func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Data: []types.Device{testDevice},
 		}
@@ -89,8 +105,8 @@ func testQueryDevices(t *testing.T, baseUrl string, ds *devicemanagement.DeviceS
 	}
 }
 
-func testQueryDevicesBySensorID(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
+func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
 		return testDevice, nil
 	}
 
@@ -104,8 +120,8 @@ func testQueryDevicesBySensorID(t *testing.T, baseUrl string, ds *devicemanageme
 	}
 }
 
-func testGetDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+func testGetDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Count: 1,
 			Data:  []types.Device{testDevice},
@@ -123,8 +139,8 @@ func testGetDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStor
 	}
 }
 
-func testDeviceStatus(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
 		collection := types.Collection[types.SensorStatus]{
 			Data: []types.SensorStatus{
 				{
@@ -145,8 +161,14 @@ func testDeviceStatus(t *testing.T, baseUrl string, ds *devicemanagement.DeviceS
 	}
 }
 
-func testDeviceAlarms(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.GetDeviceAlarmsFunc = func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
+func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{
+			Count: 1,
+			Data:  []types.Device{testDevice},
+		}, nil
+	}
+	mocks.reader.GetDeviceAlarmsFunc = func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 		collection := types.Collection[types.AlarmDetails]{
 			Data: []types.AlarmDetails{
 				{
@@ -169,8 +191,8 @@ func testDeviceAlarms(t *testing.T, baseUrl string, ds *devicemanagement.DeviceS
 	}
 }
 
-func testDeviceMeasurements(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
+func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
 		collection := types.Collection[types.Measurement]{
 			Data: []types.Measurement{
 				{
@@ -192,12 +214,12 @@ func testDeviceMeasurements(t *testing.T, baseUrl string, ds *devicemanagement.D
 	}
 }
 
-func testCreateDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
 	}
 
-	ds.QueryFunc = func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{},
 		}, nil
@@ -215,17 +237,13 @@ func testCreateDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceS
 	}
 }
 
-func testCreateDevices(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
-	ds.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
 	}
 
-	ds.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
 		return types.Device{}, storage.ErrNoRows
-	}
-
-	ds.IsSeedExistingDevicesEnabledFunc = func(ctx context.Context) bool {
-		return true
 	}
 
 	body, contentType := createMultipartFileUpload(t, "fileupload", "devices.csv", csvMock)
