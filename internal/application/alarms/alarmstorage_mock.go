@@ -20,17 +20,17 @@ var _ AlarmStorage = &AlarmStorageMock{}
 //
 //		// make and configure a mocked AlarmStorage
 //		mockedAlarmStorage := &AlarmStorageMock{
-//			AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
-//				panic("mock out the AddAlarm method")
+//			AddFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+//				panic("mock out the Add method")
 //			},
-//			GetAlarmsFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-//				panic("mock out the GetAlarms method")
+//			AlarmsFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+//				panic("mock out the Alarms method")
 //			},
-//			GetStaleDevicesFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
-//				panic("mock out the GetStaleDevices method")
+//			RemoveFunc: func(ctx context.Context, deviceID string, alarmType string) error {
+//				panic("mock out the Remove method")
 //			},
-//			RemoveAlarmFunc: func(ctx context.Context, deviceID string, alarmType string) error {
-//				panic("mock out the RemoveAlarm method")
+//			StaleFunc: func(ctx context.Context) (types.Collection[types.Device], error) {
+//				panic("mock out the Stale method")
 //			},
 //		}
 //
@@ -39,22 +39,22 @@ var _ AlarmStorage = &AlarmStorageMock{}
 //
 //	}
 type AlarmStorageMock struct {
-	// AddAlarmFunc mocks the AddAlarm method.
-	AddAlarmFunc func(ctx context.Context, deviceID string, a types.AlarmDetails) error
+	// AddFunc mocks the Add method.
+	AddFunc func(ctx context.Context, deviceID string, a types.AlarmDetails) error
 
-	// GetAlarmsFunc mocks the GetAlarms method.
-	GetAlarmsFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
+	// AlarmsFunc mocks the Alarms method.
+	AlarmsFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
 
-	// GetStaleDevicesFunc mocks the GetStaleDevices method.
-	GetStaleDevicesFunc func(ctx context.Context) (types.Collection[types.Device], error)
+	// RemoveFunc mocks the Remove method.
+	RemoveFunc func(ctx context.Context, deviceID string, alarmType string) error
 
-	// RemoveAlarmFunc mocks the RemoveAlarm method.
-	RemoveAlarmFunc func(ctx context.Context, deviceID string, alarmType string) error
+	// StaleFunc mocks the Stale method.
+	StaleFunc func(ctx context.Context) (types.Collection[types.Device], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
-		// AddAlarm holds details about calls to the AddAlarm method.
-		AddAlarm []struct {
+		// Add holds details about calls to the Add method.
+		Add []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -62,20 +62,15 @@ type AlarmStorageMock struct {
 			// A is the a argument value.
 			A types.AlarmDetails
 		}
-		// GetAlarms holds details about calls to the GetAlarms method.
-		GetAlarms []struct {
+		// Alarms holds details about calls to the Alarms method.
+		Alarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// ConditionsMoqParam is the conditionsMoqParam argument value.
 			ConditionsMoqParam []conditions.ConditionFunc
 		}
-		// GetStaleDevices holds details about calls to the GetStaleDevices method.
-		GetStaleDevices []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-		}
-		// RemoveAlarm holds details about calls to the RemoveAlarm method.
-		RemoveAlarm []struct {
+		// Remove holds details about calls to the Remove method.
+		Remove []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
@@ -83,17 +78,22 @@ type AlarmStorageMock struct {
 			// AlarmType is the alarmType argument value.
 			AlarmType string
 		}
+		// Stale holds details about calls to the Stale method.
+		Stale []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
 	}
-	lockAddAlarm        sync.RWMutex
-	lockGetAlarms       sync.RWMutex
-	lockGetStaleDevices sync.RWMutex
-	lockRemoveAlarm     sync.RWMutex
+	lockAdd    sync.RWMutex
+	lockAlarms sync.RWMutex
+	lockRemove sync.RWMutex
+	lockStale  sync.RWMutex
 }
 
-// AddAlarm calls AddAlarmFunc.
-func (mock *AlarmStorageMock) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
-	if mock.AddAlarmFunc == nil {
-		panic("AlarmStorageMock.AddAlarmFunc: method is nil but AlarmStorage.AddAlarm was just called")
+// Add calls AddFunc.
+func (mock *AlarmStorageMock) Add(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+	if mock.AddFunc == nil {
+		panic("AlarmStorageMock.AddFunc: method is nil but AlarmStorage.Add was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
@@ -104,17 +104,17 @@ func (mock *AlarmStorageMock) AddAlarm(ctx context.Context, deviceID string, a t
 		DeviceID: deviceID,
 		A:        a,
 	}
-	mock.lockAddAlarm.Lock()
-	mock.calls.AddAlarm = append(mock.calls.AddAlarm, callInfo)
-	mock.lockAddAlarm.Unlock()
-	return mock.AddAlarmFunc(ctx, deviceID, a)
+	mock.lockAdd.Lock()
+	mock.calls.Add = append(mock.calls.Add, callInfo)
+	mock.lockAdd.Unlock()
+	return mock.AddFunc(ctx, deviceID, a)
 }
 
-// AddAlarmCalls gets all the calls that were made to AddAlarm.
+// AddCalls gets all the calls that were made to Add.
 // Check the length with:
 //
-//	len(mockedAlarmStorage.AddAlarmCalls())
-func (mock *AlarmStorageMock) AddAlarmCalls() []struct {
+//	len(mockedAlarmStorage.AddCalls())
+func (mock *AlarmStorageMock) AddCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
 	A        types.AlarmDetails
@@ -124,16 +124,16 @@ func (mock *AlarmStorageMock) AddAlarmCalls() []struct {
 		DeviceID string
 		A        types.AlarmDetails
 	}
-	mock.lockAddAlarm.RLock()
-	calls = mock.calls.AddAlarm
-	mock.lockAddAlarm.RUnlock()
+	mock.lockAdd.RLock()
+	calls = mock.calls.Add
+	mock.lockAdd.RUnlock()
 	return calls
 }
 
-// GetAlarms calls GetAlarmsFunc.
-func (mock *AlarmStorageMock) GetAlarms(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-	if mock.GetAlarmsFunc == nil {
-		panic("AlarmStorageMock.GetAlarmsFunc: method is nil but AlarmStorage.GetAlarms was just called")
+// Alarms calls AlarmsFunc.
+func (mock *AlarmStorageMock) Alarms(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+	if mock.AlarmsFunc == nil {
+		panic("AlarmStorageMock.AlarmsFunc: method is nil but AlarmStorage.Alarms was just called")
 	}
 	callInfo := struct {
 		Ctx                context.Context
@@ -142,17 +142,17 @@ func (mock *AlarmStorageMock) GetAlarms(ctx context.Context, conditionsMoqParam 
 		Ctx:                ctx,
 		ConditionsMoqParam: conditionsMoqParam,
 	}
-	mock.lockGetAlarms.Lock()
-	mock.calls.GetAlarms = append(mock.calls.GetAlarms, callInfo)
-	mock.lockGetAlarms.Unlock()
-	return mock.GetAlarmsFunc(ctx, conditionsMoqParam...)
+	mock.lockAlarms.Lock()
+	mock.calls.Alarms = append(mock.calls.Alarms, callInfo)
+	mock.lockAlarms.Unlock()
+	return mock.AlarmsFunc(ctx, conditionsMoqParam...)
 }
 
-// GetAlarmsCalls gets all the calls that were made to GetAlarms.
+// AlarmsCalls gets all the calls that were made to Alarms.
 // Check the length with:
 //
-//	len(mockedAlarmStorage.GetAlarmsCalls())
-func (mock *AlarmStorageMock) GetAlarmsCalls() []struct {
+//	len(mockedAlarmStorage.AlarmsCalls())
+func (mock *AlarmStorageMock) AlarmsCalls() []struct {
 	Ctx                context.Context
 	ConditionsMoqParam []conditions.ConditionFunc
 } {
@@ -160,48 +160,16 @@ func (mock *AlarmStorageMock) GetAlarmsCalls() []struct {
 		Ctx                context.Context
 		ConditionsMoqParam []conditions.ConditionFunc
 	}
-	mock.lockGetAlarms.RLock()
-	calls = mock.calls.GetAlarms
-	mock.lockGetAlarms.RUnlock()
+	mock.lockAlarms.RLock()
+	calls = mock.calls.Alarms
+	mock.lockAlarms.RUnlock()
 	return calls
 }
 
-// GetStaleDevices calls GetStaleDevicesFunc.
-func (mock *AlarmStorageMock) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
-	if mock.GetStaleDevicesFunc == nil {
-		panic("AlarmStorageMock.GetStaleDevicesFunc: method is nil but AlarmStorage.GetStaleDevices was just called")
-	}
-	callInfo := struct {
-		Ctx context.Context
-	}{
-		Ctx: ctx,
-	}
-	mock.lockGetStaleDevices.Lock()
-	mock.calls.GetStaleDevices = append(mock.calls.GetStaleDevices, callInfo)
-	mock.lockGetStaleDevices.Unlock()
-	return mock.GetStaleDevicesFunc(ctx)
-}
-
-// GetStaleDevicesCalls gets all the calls that were made to GetStaleDevices.
-// Check the length with:
-//
-//	len(mockedAlarmStorage.GetStaleDevicesCalls())
-func (mock *AlarmStorageMock) GetStaleDevicesCalls() []struct {
-	Ctx context.Context
-} {
-	var calls []struct {
-		Ctx context.Context
-	}
-	mock.lockGetStaleDevices.RLock()
-	calls = mock.calls.GetStaleDevices
-	mock.lockGetStaleDevices.RUnlock()
-	return calls
-}
-
-// RemoveAlarm calls RemoveAlarmFunc.
-func (mock *AlarmStorageMock) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
-	if mock.RemoveAlarmFunc == nil {
-		panic("AlarmStorageMock.RemoveAlarmFunc: method is nil but AlarmStorage.RemoveAlarm was just called")
+// Remove calls RemoveFunc.
+func (mock *AlarmStorageMock) Remove(ctx context.Context, deviceID string, alarmType string) error {
+	if mock.RemoveFunc == nil {
+		panic("AlarmStorageMock.RemoveFunc: method is nil but AlarmStorage.Remove was just called")
 	}
 	callInfo := struct {
 		Ctx       context.Context
@@ -212,17 +180,17 @@ func (mock *AlarmStorageMock) RemoveAlarm(ctx context.Context, deviceID string, 
 		DeviceID:  deviceID,
 		AlarmType: alarmType,
 	}
-	mock.lockRemoveAlarm.Lock()
-	mock.calls.RemoveAlarm = append(mock.calls.RemoveAlarm, callInfo)
-	mock.lockRemoveAlarm.Unlock()
-	return mock.RemoveAlarmFunc(ctx, deviceID, alarmType)
+	mock.lockRemove.Lock()
+	mock.calls.Remove = append(mock.calls.Remove, callInfo)
+	mock.lockRemove.Unlock()
+	return mock.RemoveFunc(ctx, deviceID, alarmType)
 }
 
-// RemoveAlarmCalls gets all the calls that were made to RemoveAlarm.
+// RemoveCalls gets all the calls that were made to Remove.
 // Check the length with:
 //
-//	len(mockedAlarmStorage.RemoveAlarmCalls())
-func (mock *AlarmStorageMock) RemoveAlarmCalls() []struct {
+//	len(mockedAlarmStorage.RemoveCalls())
+func (mock *AlarmStorageMock) RemoveCalls() []struct {
 	Ctx       context.Context
 	DeviceID  string
 	AlarmType string
@@ -232,8 +200,40 @@ func (mock *AlarmStorageMock) RemoveAlarmCalls() []struct {
 		DeviceID  string
 		AlarmType string
 	}
-	mock.lockRemoveAlarm.RLock()
-	calls = mock.calls.RemoveAlarm
-	mock.lockRemoveAlarm.RUnlock()
+	mock.lockRemove.RLock()
+	calls = mock.calls.Remove
+	mock.lockRemove.RUnlock()
+	return calls
+}
+
+// Stale calls StaleFunc.
+func (mock *AlarmStorageMock) Stale(ctx context.Context) (types.Collection[types.Device], error) {
+	if mock.StaleFunc == nil {
+		panic("AlarmStorageMock.StaleFunc: method is nil but AlarmStorage.Stale was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockStale.Lock()
+	mock.calls.Stale = append(mock.calls.Stale, callInfo)
+	mock.lockStale.Unlock()
+	return mock.StaleFunc(ctx)
+}
+
+// StaleCalls gets all the calls that were made to Stale.
+// Check the length with:
+//
+//	len(mockedAlarmStorage.StaleCalls())
+func (mock *AlarmStorageMock) StaleCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockStale.RLock()
+	calls = mock.calls.Stale
+	mock.lockStale.RUnlock()
 	return calls
 }

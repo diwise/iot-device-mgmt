@@ -28,6 +28,30 @@ var ErrDeviceAlreadyExist = fmt.Errorf("device already exists")
 var ErrDeviceProfileNotFound = fmt.Errorf("device profile not found")
 var ErrMissingTenant = fmt.Errorf("missing tenant")
 
+//go:generate moq -rm -out devicestorage_mock.go . DeviceStorage
+type DeviceStorage interface {
+	Query(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error)
+	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
+
+	CreateOrUpdateDevice(ctx context.Context, d types.Device) error
+	UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
+
+	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
+	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
+
+	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error)
+	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
+
+	GetTenants(ctx context.Context) (types.Collection[string], error)
+	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.Measurement], error)
+
+	IsSeedExistingDevicesEnabled(ctx context.Context) bool
+	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
+	CreateSensorProfile(ctx context.Context, p types.SensorProfile) error
+	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
+}
+
 /*
 type DeviceService interface {
 	Device(ctx context.Context, id string) (types.Device, error)
@@ -62,7 +86,7 @@ type DeviceManagement interface {
 
 	// -----------------
 	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
-	Config() *DeviceManagementConfig
+	Config() *Config
 
 	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 
@@ -72,45 +96,22 @@ type DeviceManagement interface {
 	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
 }
 
-type DeviceManagementConfig struct {
+type Config struct {
 	DeviceProfiles []types.SensorProfile `yaml:"deviceprofiles"`
 	Types          []types.Lwm2mType     `yaml:"types"`
 }
 
 type service struct {
 	storage   DeviceStorage
-	config    *DeviceManagementConfig
+	config    *Config
 	messenger messaging.MsgContext
 }
 
-func (s service) Config() *DeviceManagementConfig {
+func (s service) Config() *Config {
 	return s.config
 }
 
-//go:generate moq -rm -out devicestorage_mock.go . DeviceStorage
-type DeviceStorage interface {
-	Query(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error)
-	CreateOrUpdateDevice(ctx context.Context, d types.Device) error
-	UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
-	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
-	SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error
-	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error)
-
-	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
-
-	GetTenants(ctx context.Context) (types.Collection[string], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
-	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.Measurement], error)
-	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
-
-	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
-
-	IsSeedExistingDevicesEnabled(ctx context.Context) bool
-	CreateSensorProfile(ctx context.Context, p types.SensorProfile) error
-	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
-}
-
-func New(storage DeviceStorage, messenger messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {
+func New(storage DeviceStorage, messenger messaging.MsgContext, config *Config) DeviceManagement {
 	s := service{
 		storage:   storage,
 		messenger: messenger,

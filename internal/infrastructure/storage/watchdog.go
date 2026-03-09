@@ -7,7 +7,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
-func (s *Storage) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
+func (s *Storage) Stale(ctx context.Context) (types.Collection[types.Device], error) {
 	sql := `
 		WITH last_status AS (
 			SELECT sensor_id, MAX(observed_at) AS last_observed

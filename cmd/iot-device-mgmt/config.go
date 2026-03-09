@@ -34,9 +34,9 @@ const (
 )
 
 type appConfig struct {
-	AlarmServiceConfig     alarms.AlarmServiceConfig               `yaml:"alarmservice"`
-	DeviceManagementConfig devicemanagement.DeviceManagementConfig `yaml:"devicemanagement"`
-	WatchdogConfig         watchdog.WatchdogConfig                 `yaml:"watchdog"`
+	AlarmServiceConfig     alarms.Config           `yaml:"alarmservice"`
+	DeviceManagementConfig devicemanagement.Config `yaml:"devicemanagement"`
+	WatchdogConfig         watchdog.WatchdogConfig `yaml:"watchdog"`
 	/*
 	   messenger              messaging.MsgContext
 	   db                     storage.Store

@@ -144,7 +144,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 				return
 			}
 
-			err = as.RegisterTopicMessageHandler(ctx)
+			err = alarms.RegisterTopicMessageHandler(ctx, as, messenger)
 			if err != nil {
 				return
 			}

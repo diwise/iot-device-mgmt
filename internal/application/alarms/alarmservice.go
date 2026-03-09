@@ -27,13 +27,13 @@ const AlarmDeviceNotObserved string = "device_not_observed"
 
 //go:generate moq -rm -out alarmstorage_mock.go . AlarmStorage
 type AlarmStorage interface {
-	AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error
-	RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error
-	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
-	GetAlarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
+	Add(ctx context.Context, deviceID string, a types.AlarmDetails) error
+	Remove(ctx context.Context, deviceID string, alarmType string) error
+	Stale(ctx context.Context) (types.Collection[types.Device], error)
+	Alarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
 }
 
-type alarmSvc struct {
+type svc struct {
 	storage   AlarmStorage
 	messenger messaging.MsgContext
 	config    map[string]types.AlarmType
@@ -43,16 +43,15 @@ type alarmSvc struct {
 type AlarmService interface {
 	Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
-	GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error)
-	RegisterTopicMessageHandler(ctx context.Context) error
-	GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
+	Stale(ctx context.Context) (types.Collection[types.Device], error)
+	Alarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
 }
 
-type AlarmServiceConfig struct {
+type Config struct {
 	AlarmTypes []types.AlarmType `yaml:"alarmtypes"`
 }
 
-func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
+func (svc *svc) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 	log := logging.GetFromContext(ctx)
 
 	alarmType := strings.TrimSpace(strings.ToLower(strings.ReplaceAll(alarm.AlarmType, " ", "_")))
@@ -75,22 +74,18 @@ func (svc *alarmSvc) Add(ctx context.Context, deviceID string, alarm types.Alarm
 		alarm.ObservedAt = time.Now().UTC()
 	}
 
-	return svc.storage.AddAlarm(ctx, deviceID, alarm)
+	return svc.storage.Add(ctx, deviceID, alarm)
 }
 
-func (svc *alarmSvc) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
-	return svc.storage.GetStaleDevices(ctx)
+func (svc *svc) Stale(ctx context.Context) (types.Collection[types.Device], error) {
+	return svc.storage.Stale(ctx)
 }
 
-func (svc *alarmSvc) Remove(ctx context.Context, deviceID string, alarmType string) error {
-	return svc.storage.RemoveAlarm(ctx, deviceID, alarmType)
+func (svc *svc) Remove(ctx context.Context, deviceID string, alarmType string) error {
+	return svc.storage.Remove(ctx, deviceID, alarmType)
 }
 
-func (svc *alarmSvc) RegisterTopicMessageHandler(ctx context.Context) error {
-	return svc.messenger.RegisterTopicMessageHandler("device-status", NewDeviceStatusHandler(svc))
-}
-
-func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
+func (svc *svc) Alarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
 	conds := []conditions.ConditionFunc{}
 
 	for k, v := range params {
@@ -112,11 +107,11 @@ func (svc *alarmSvc) GetAlarms(ctx context.Context, params map[string][]string, 
 
 	conds = append(conds, conditions.WithActive(true), conditions.WithTenants(tenants))
 
-	return svc.storage.GetAlarms(ctx, conds...)
+	return svc.storage.Alarms(ctx, conds...)
 }
 
-func New(s AlarmStorage, m messaging.MsgContext, cfg *AlarmServiceConfig) AlarmService {
-	svc := &alarmSvc{
+func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmService {
+	svc := &svc{
 		storage:   s,
 		messenger: m,
 		config:    make(map[string]types.AlarmType),
@@ -129,7 +124,11 @@ func New(s AlarmStorage, m messaging.MsgContext, cfg *AlarmServiceConfig) AlarmS
 	return svc
 }
 
-func NewDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
+func RegisterTopicMessageHandler(ctx context.Context, svc AlarmService, messenger messaging.MsgContext) error {
+	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc))
+}
+
+func newDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
 		var err error
 

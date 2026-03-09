@@ -18,13 +18,13 @@ func TestDeviceStatusHandler(t *testing.T) {
 	ctx := context.Background()
 
 	s := &AlarmStorageMock{
-		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+		AddFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
 	}
 	m := &messaging.MsgContextMock{}
 
-	svc := New(s, m, &AlarmServiceConfig{
+	svc := New(s, m, &Config{
 		AlarmTypes: []types.AlarmType{
 			{
 				Name:    AlarmDeviceNotObserved,
@@ -46,11 +46,11 @@ func TestDeviceStatusHandler(t *testing.T) {
 		},
 	}
 
-	handler := NewDeviceStatusHandler(svc)
+	handler := newDeviceStatusHandler(svc)
 	handler(ctx, msg, log)
 
-	is.Equal(1, len(s.AddAlarmCalls()))
-	is.Equal(AlarmDeviceNotObserved, s.AddAlarmCalls()[0].A.AlarmType)
+	is.Equal(1, len(s.AddCalls()))
+	is.Equal(AlarmDeviceNotObserved, s.AddCalls()[0].A.AlarmType)
 }
 
 func TestDeviceStatusHandlerWithMessages(t *testing.T) {
@@ -59,13 +59,13 @@ func TestDeviceStatusHandlerWithMessages(t *testing.T) {
 	ctx := context.Background()
 
 	s := &AlarmStorageMock{
-		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+		AddFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 			return nil
 		},
 	}
 	m := &messaging.MsgContextMock{}
 
-	svc := New(s, m, &AlarmServiceConfig{
+	svc := New(s, m, &Config{
 		AlarmTypes: []types.AlarmType{
 			{
 				Name:    "message1",
@@ -92,9 +92,9 @@ func TestDeviceStatusHandlerWithMessages(t *testing.T) {
 		},
 	}
 
-	handler := NewDeviceStatusHandler(svc)
+	handler := newDeviceStatusHandler(svc)
 	handler(ctx, msg, log)
 
-	is.Equal(2, len(s.AddAlarmCalls()))
-	is.Equal("message2", s.AddAlarmCalls()[1].A.AlarmType)
+	is.Equal(2, len(s.AddCalls()))
+	is.Equal("message2", s.AddCalls()[1].A.AlarmType)
 }

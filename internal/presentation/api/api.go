@@ -643,7 +643,7 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		result, err := svc.GetAlarms(ctx, r.URL.Query(), allowedTenants)
+		result, err := svc.Alarms(ctx, r.URL.Query(), allowedTenants)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return

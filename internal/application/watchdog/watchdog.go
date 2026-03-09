@@ -106,7 +106,7 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
 
 	l.setRunning(true)
 
-	result, err := l.alarmSvc.GetStaleDevices(ctx)
+	result, err := l.alarmSvc.Stale(ctx)
 	if err != nil {
 		l.setRunning(false)
 		return

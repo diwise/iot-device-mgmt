@@ -10,7 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func (s *Storage) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
+func (s *Storage) Add(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 	if deviceID == "" {
 		return ErrNoID
 	}
@@ -113,7 +113,7 @@ func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.C
 	}, nil
 }
 
-func (s *Storage) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
+func (s *Storage) Remove(ctx context.Context, deviceID string, alarmType string) error {
 	args := pgx.NamedArgs{
 		"device_id":  deviceID,
 		"alarm_type": alarmType,
@@ -139,7 +139,7 @@ func (s *Storage) RemoveAlarm(ctx context.Context, deviceID string, alarmType st
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) GetAlarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+func (s *Storage) Alarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
 	condition := conditions.NewCondition(conds...)
 
 	args := NamedArgs(condition)

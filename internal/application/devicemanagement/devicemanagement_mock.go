@@ -5,9 +5,10 @@ package devicemanagement
 
 import (
 	"context"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"io"
 	"sync"
+
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceManagementMock does implement DeviceManagement.
@@ -85,7 +86,7 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //	}
 type DeviceManagementMock struct {
 	// ConfigFunc mocks the Config method.
-	ConfigFunc func() *DeviceManagementConfig
+	ConfigFunc func() *Config
 
 	// GetByDeviceIDFunc mocks the GetByDeviceID method.
 	GetByDeviceIDFunc func(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
@@ -317,7 +318,7 @@ type DeviceManagementMock struct {
 }
 
 // Config calls ConfigFunc.
-func (mock *DeviceManagementMock) Config() *DeviceManagementConfig {
+func (mock *DeviceManagementMock) Config() *Config {
 	if mock.ConfigFunc == nil {
 		panic("DeviceManagementMock.ConfigFunc: method is nil but DeviceManagement.Config was just called")
 	}

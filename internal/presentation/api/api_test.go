@@ -28,7 +28,7 @@ func TestApi(t *testing.T) {
 	msgMock := &messaging.MsgContextMock{}
 	ds := &devicemanagement.DeviceStorageMock{}
 
-	dm := devicemanagement.New(ds, msgMock, &devicemanagement.DeviceManagementConfig{})
+	dm := devicemanagement.New(ds, msgMock, &devicemanagement.Config{})
 	as := alarms.AlarmServiceMock{}
 
 	mux := http.NewServeMux()
