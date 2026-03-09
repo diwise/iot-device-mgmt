@@ -6,6 +6,7 @@ package devicemanagement
 import (
 	"context"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"io"
 	"sync"
 )
 
@@ -61,6 +62,15 @@ var _ DeviceManagement = &DeviceManagementMock{}
 //			RegisterTopicMessageHandlerFunc: func(ctx context.Context) error {
 //				panic("mock out the RegisterTopicMessageHandler method")
 //			},
+//			SeedDevicesFunc: func(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+//				panic("mock out the SeedDevices method")
+//			},
+//			SeedLwm2mTypesFunc: func(ctx context.Context, lwm2m []types.Lwm2mType) error {
+//				panic("mock out the SeedLwm2mTypes method")
+//			},
+//			SeedSensorProfilesFunc: func(ctx context.Context, profiles []types.SensorProfile) error {
+//				panic("mock out the SeedSensorProfiles method")
+//			},
 //			UpdateDeviceFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the UpdateDevice method")
 //			},
@@ -115,6 +125,15 @@ type DeviceManagementMock struct {
 
 	// RegisterTopicMessageHandlerFunc mocks the RegisterTopicMessageHandler method.
 	RegisterTopicMessageHandlerFunc func(ctx context.Context) error
+
+	// SeedDevicesFunc mocks the SeedDevices method.
+	SeedDevicesFunc func(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+
+	// SeedLwm2mTypesFunc mocks the SeedLwm2mTypes method.
+	SeedLwm2mTypesFunc func(ctx context.Context, lwm2m []types.Lwm2mType) error
+
+	// SeedSensorProfilesFunc mocks the SeedSensorProfiles method.
+	SeedSensorProfilesFunc func(ctx context.Context, profiles []types.SensorProfile) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, device types.Device) error
@@ -234,6 +253,29 @@ type DeviceManagementMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
+		// SeedDevices holds details about calls to the SeedDevices method.
+		SeedDevices []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Devices is the devices argument value.
+			Devices io.ReadCloser
+			// ValidTenants is the validTenants argument value.
+			ValidTenants []string
+		}
+		// SeedLwm2mTypes holds details about calls to the SeedLwm2mTypes method.
+		SeedLwm2mTypes []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Lwm2m is the lwm2m argument value.
+			Lwm2m []types.Lwm2mType
+		}
+		// SeedSensorProfiles holds details about calls to the SeedSensorProfiles method.
+		SeedSensorProfiles []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Profiles is the profiles argument value.
+			Profiles []types.SensorProfile
+		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -267,6 +309,9 @@ type DeviceManagementMock struct {
 	lockNewDevice                   sync.RWMutex
 	lockQuery                       sync.RWMutex
 	lockRegisterTopicMessageHandler sync.RWMutex
+	lockSeedDevices                 sync.RWMutex
+	lockSeedLwm2mTypes              sync.RWMutex
+	lockSeedSensorProfiles          sync.RWMutex
 	lockUpdateDevice                sync.RWMutex
 	lockUpdateState                 sync.RWMutex
 }
@@ -795,6 +840,118 @@ func (mock *DeviceManagementMock) RegisterTopicMessageHandlerCalls() []struct {
 	mock.lockRegisterTopicMessageHandler.RLock()
 	calls = mock.calls.RegisterTopicMessageHandler
 	mock.lockRegisterTopicMessageHandler.RUnlock()
+	return calls
+}
+
+// SeedDevices calls SeedDevicesFunc.
+func (mock *DeviceManagementMock) SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+	if mock.SeedDevicesFunc == nil {
+		panic("DeviceManagementMock.SeedDevicesFunc: method is nil but DeviceManagement.SeedDevices was just called")
+	}
+	callInfo := struct {
+		Ctx          context.Context
+		Devices      io.ReadCloser
+		ValidTenants []string
+	}{
+		Ctx:          ctx,
+		Devices:      devices,
+		ValidTenants: validTenants,
+	}
+	mock.lockSeedDevices.Lock()
+	mock.calls.SeedDevices = append(mock.calls.SeedDevices, callInfo)
+	mock.lockSeedDevices.Unlock()
+	return mock.SeedDevicesFunc(ctx, devices, validTenants)
+}
+
+// SeedDevicesCalls gets all the calls that were made to SeedDevices.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.SeedDevicesCalls())
+func (mock *DeviceManagementMock) SeedDevicesCalls() []struct {
+	Ctx          context.Context
+	Devices      io.ReadCloser
+	ValidTenants []string
+} {
+	var calls []struct {
+		Ctx          context.Context
+		Devices      io.ReadCloser
+		ValidTenants []string
+	}
+	mock.lockSeedDevices.RLock()
+	calls = mock.calls.SeedDevices
+	mock.lockSeedDevices.RUnlock()
+	return calls
+}
+
+// SeedLwm2mTypes calls SeedLwm2mTypesFunc.
+func (mock *DeviceManagementMock) SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error {
+	if mock.SeedLwm2mTypesFunc == nil {
+		panic("DeviceManagementMock.SeedLwm2mTypesFunc: method is nil but DeviceManagement.SeedLwm2mTypes was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		Lwm2m []types.Lwm2mType
+	}{
+		Ctx:   ctx,
+		Lwm2m: lwm2m,
+	}
+	mock.lockSeedLwm2mTypes.Lock()
+	mock.calls.SeedLwm2mTypes = append(mock.calls.SeedLwm2mTypes, callInfo)
+	mock.lockSeedLwm2mTypes.Unlock()
+	return mock.SeedLwm2mTypesFunc(ctx, lwm2m)
+}
+
+// SeedLwm2mTypesCalls gets all the calls that were made to SeedLwm2mTypes.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.SeedLwm2mTypesCalls())
+func (mock *DeviceManagementMock) SeedLwm2mTypesCalls() []struct {
+	Ctx   context.Context
+	Lwm2m []types.Lwm2mType
+} {
+	var calls []struct {
+		Ctx   context.Context
+		Lwm2m []types.Lwm2mType
+	}
+	mock.lockSeedLwm2mTypes.RLock()
+	calls = mock.calls.SeedLwm2mTypes
+	mock.lockSeedLwm2mTypes.RUnlock()
+	return calls
+}
+
+// SeedSensorProfiles calls SeedSensorProfilesFunc.
+func (mock *DeviceManagementMock) SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error {
+	if mock.SeedSensorProfilesFunc == nil {
+		panic("DeviceManagementMock.SeedSensorProfilesFunc: method is nil but DeviceManagement.SeedSensorProfiles was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		Profiles []types.SensorProfile
+	}{
+		Ctx:      ctx,
+		Profiles: profiles,
+	}
+	mock.lockSeedSensorProfiles.Lock()
+	mock.calls.SeedSensorProfiles = append(mock.calls.SeedSensorProfiles, callInfo)
+	mock.lockSeedSensorProfiles.Unlock()
+	return mock.SeedSensorProfilesFunc(ctx, profiles)
+}
+
+// SeedSensorProfilesCalls gets all the calls that were made to SeedSensorProfiles.
+// Check the length with:
+//
+//	len(mockedDeviceManagement.SeedSensorProfilesCalls())
+func (mock *DeviceManagementMock) SeedSensorProfilesCalls() []struct {
+	Ctx      context.Context
+	Profiles []types.SensorProfile
+} {
+	var calls []struct {
+		Ctx      context.Context
+		Profiles []types.SensorProfile
+	}
+	mock.lockSeedSensorProfiles.RLock()
+	calls = mock.calls.SeedSensorProfiles
+	mock.lockSeedSensorProfiles.RUnlock()
 	return calls
 }
 

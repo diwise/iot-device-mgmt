@@ -88,7 +88,7 @@ func TestCreateUnknownDevice(t *testing.T) {
 			expects.RequestHeaderContains("Content-Type", "application/json"),
 			expects.RequestBodyContaining(`"active":false`,
 				`"sensorID":"testsensorid"`,
-				`"deviceProfile":{"name":"unknown"`),
+				`"sensorProfile":{"name":"unknown"`),
 		),
 		test.Returns(
 			response.Code(201),

@@ -16,7 +16,6 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -30,7 +29,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService, s *storage.Storage) error {
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceManagement, alarm alarms.AlarmService) error {
 	const apiPrefix string = "/api/v0"
 
 	log := logging.GetFromContext(ctx)
@@ -50,7 +49,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	r.Get("/devices/{id}/alarms", getDeviceAlarmsHandler(log, dm))
 	r.Get("/devices/{id}/measurements", getDeviceMeasurementsHandler(log, dm))
 
-	r.Post("/devices", createDeviceHandler(log, dm, s))
+	r.Post("/devices", createDeviceHandler(log, dm))
 	r.Put("/devices/{id}", updateDeviceHandler(log, dm))
 	r.Patch("/devices/{id}", patchDeviceHandler(log, dm))
 
@@ -344,7 +343,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceM
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement, s *storage.Storage) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -362,7 +361,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceManagement
 				return
 			}
 
-			err = storage.SeedDevices(ctx, s, file, allowedTenants)
+			err = svc.SeedDevices(ctx, file, allowedTenants)
 			if err != nil {
 				logger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)

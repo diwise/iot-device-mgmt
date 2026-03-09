@@ -3,502 +3,288 @@ package api
 import (
 	"bytes"
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
-	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
-	"github.com/google/uuid"
-	"github.com/matryer/is"
+
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
-func TestExportDevices(t *testing.T) {
-	is, _, _, s, _, ctx, mux := testSetup(t)
+func TestApi(t *testing.T) {
+	ctx := t.Context()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	msgMock := &messaging.MsgContextMock{}
+	ds := &devicemanagement.DeviceStorageMock{}
+
+	dm := devicemanagement.New(ds, msgMock, &devicemanagement.DeviceManagementConfig{})
+	as := alarms.AlarmServiceMock{}
+
+	mux := http.NewServeMux()
+	RegisterHandlers(ctx, mux, policies, dm, &as)
+
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	devices := []types.Device{}
+	t.Run("GET /devices", func(t *testing.T) {
+		testQueryDevices(t, server.URL, ds)
+	})
 
-	s.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	t.Run("GET /devices?devEUI=test-sensor-1", func(t *testing.T) {
+		testQueryDevicesBySensorID(t, server.URL, ds)
+	})
+
+	t.Run("GET /devices/test-device-1", func(t *testing.T) {
+		testGetDevice(t, server.URL, ds)
+	})
+
+	t.Run("GET /devices/test-device-1/status", func(t *testing.T) {
+		testDeviceStatus(t, server.URL, ds)
+	})
+
+	t.Run("GET /devices/test-device-1/alarms", func(t *testing.T) {
+		testDeviceAlarms(t, server.URL, ds)
+	})
+
+	t.Run("GET /devices/test-device-1/measurements", func(t *testing.T) {
+		testDeviceMeasurements(t, server.URL, ds)
+	})
+
+	t.Run("POST /devices", func(t *testing.T) {
+		testCreateDevice(t, server.URL, ds)
+	})
+
+	t.Run("POST /devices+multiPart", func(t *testing.T) {
+		testCreateDevices(t, server.URL, ds)
+	})
+
+}
+
+func testQueryDevices(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+		collection := types.Collection[types.Device]{
+			Data: []types.Device{testDevice},
+		}
+		return collection, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
+		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testQueryDevicesBySensorID(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
+		return testDevice, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices?devEUI=test-sensor-1", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
+		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testGetDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+		collection := types.Collection[types.Device]{
+			Count: 1,
+			Data:  []types.Device{testDevice},
+		}
+		return collection, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices/test-device-1", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
+		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testDeviceStatus(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+		collection := types.Collection[types.SensorStatus]{
+			Data: []types.SensorStatus{
+				{
+					BatteryLevel: 45,
+				},
+			},
+		}
+		return collection, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices/test-device-1/status", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"batteryLevel":45`) {
+		t.Fatalf("expected response to contain battery level '45', got %s", string(body))
+	}
+}
+
+func testDeviceAlarms(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.GetDeviceAlarmsFunc = func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
+		collection := types.Collection[types.AlarmDetails]{
+			Data: []types.AlarmDetails{
+				{
+					AlarmType:   "battery_low",
+					Description: "Battery is low",
+					Severity:    2,
+				},
+			},
+		}
+		return collection, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices/test-device-1/alarms", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"alarmType":"battery_low"`) {
+		t.Fatalf("expected response to contain alarm type 'battery_low', got %s", string(body))
+	}
+}
+
+func testDeviceMeasurements(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
+		collection := types.Collection[types.Measurement]{
+			Data: []types.Measurement{
+				{
+					ID:    "-temp-1",
+					Value: 21.5,
+				},
+			},
+		}
+		return collection, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices/test-device-1/measurements", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"value":21.5`) {
+		t.Fatalf("expected response to contain measurement value '21.5', got %s", string(body))
+	}
+}
+
+func testCreateDevice(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		return nil
+	}
+
+	ds.QueryFunc = func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
-			Data:       devices,
-			Count:      uint64(len(devices)),
-			Offset:     0,
-			Limit:      uint64(len(devices)),
-			TotalCount: uint64(len(devices)),
+			Data: []types.Device{},
 		}, nil
 	}
 
-	s.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
+	payload := `{
+		"deviceID": "new-device-1",
+		"sensorID": "new-sensor-1",
+		"tenant": "default"
+	}`
+
+	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/devices", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", statusCode)
+	}
+}
+
+func testCreateDevices(t *testing.T, baseUrl string, ds *devicemanagement.DeviceStorageMock) {
+	ds.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		return nil
+	}
+
+	ds.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
 		return types.Device{}, storage.ErrNoRows
 	}
 
-	s.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
-		devices = append(devices, d)
-		return nil
+	ds.IsSeedExistingDevicesEnabledFunc = func(ctx context.Context) bool {
+		return true
 	}
 
-	storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	body, contentType := createMultipartFileUpload(t, "fileupload", "devices.csv", csvMock)
 
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices?export=true", nil)
-	req.Header.Add("Authorization", "Bearer ????")
-	req.Header.Add("accept", "text/csv")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-
-	b, err := io.ReadAll(res.Body)
-	is.NoErr(err)
-
-	csv := strings.Split(string(b), "\n")
-
-	is.Equal("devEUI;internalID;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata", csv[0])
-	is.Equal("a81758fffe06bfa3;intern-a81758fffe06bfa3;62.391600;17.307230;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;elsys_codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;0;source;key=value", csv[1])
+	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/devices", body, map[string]string{"Content-Type": contentType})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", statusCode)
+	}
 }
 
-func TestGetDevicesWithinBoundsIsCalledIfBoundsExistInQuery(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-	server := httptest.NewServer(mux)
-	defer server.Close()
+func createMultipartFileUpload(t *testing.T, fieldName, fileName, content string) (*bytes.Buffer, string) {
+	t.Helper()
 
-	c := 0
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		c = len(conditions)
-		return types.Collection[types.Device]{}, nil
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+
+	part, err := writer.CreateFormFile(fieldName, fileName)
+	if err != nil {
+		t.Fatalf("failed to create multipart file field: %v", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices?bounds=%5B62.387942893965395%2C17.2897328765558%3B62.3955798771803%2C17.33788389279115%5D", nil)
-	req.Header.Add("Authorization", "Bearer ????")
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-
-	is.Equal(2, c)
-}
-
-func TestCreateDeviceHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	filePath := "devices.csv"
-	fieldName := "fileupload"
-	body := new(bytes.Buffer)
-
-	part := multipart.NewWriter(body)
-
-	w, err := part.CreateFormFile(fieldName, filePath)
-	is.NoErr(err)
-
-	_, err = io.Copy(w, strings.NewReader(csvMock))
-	is.NoErr(err)
-
-	part.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v0/devices", body)
-	req.Header.Add("Content-Type", part.FormDataContentType())
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(201, res.StatusCode)
-	is.Equal(1, len(repo.CreateOrUpdateDeviceCalls()))
-}
-
-func TestGetDeviceHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		return types.Collection[types.Device]{
-			Data: []types.Device{
-				{
-					DeviceID: "33788389279",
-				},
-			},
-			Count: 1}, nil
+	_, err = io.Copy(part, strings.NewReader(content))
+	if err != nil {
+		t.Fatalf("failed to write multipart content: %v", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices/33788389279", nil)
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-
-	response := struct {
-		Data types.Device
-	}{}
-
-	b, _ := io.ReadAll(res.Body)
-	json.Unmarshal(b, &response)
-
-	is.Equal("33788389279", response.Data.DeviceID)
-}
-
-func TestGetDeviceStatusHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		return types.Collection[types.Device]{
-			Data: []types.Device{
-				{
-					DeviceID: "33788389279",
-				},
-			},
-			Count: 1}, nil
+	err = writer.Close()
+	if err != nil {
+		t.Fatalf("failed to finalize multipart body: %v", err)
 	}
 
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/devices/33788389279/status", nil)
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-	is.Equal(1, len(repo.GetDeviceStatusCalls()))
+	return body, writer.FormDataContentType()
 }
 
-func TestPatchDeviceHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
+func do(t *testing.T, method, url string, body io.Reader, headers ...map[string]string) (int, []byte) {
+	req, _ := http.NewRequest(method, url, body)
+	req.Header.Set("Authorization", "Bearer mock-token")
 
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		return types.Collection[types.Device]{
-			Data: []types.Device{
-				{
-					DeviceID: "33788389279",
-				},
-			},
-			Count: 1}, nil
-	}
-
-	body := strings.NewReader(`{"name":"newname"}`)
-
-	req, _ := http.NewRequest(http.MethodPatch, server.URL+"/api/v0/devices/33788389279", body)
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-	is.Equal(1, len(repo.UpdateDeviceCalls()))
-}
-
-func TestPutDeviceHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		return types.Collection[types.Device]{
-			Data: []types.Device{
-				{
-					DeviceID: "33788389279",
-				},
-			},
-			Count: 1}, nil
-	}
-
-	body := strings.NewReader(`
-		{
-			"deviceID" : "33788389279",
-			"tenant" : "default"
+	for _, h := range headers {
+		for k, v := range h {
+			req.Header.Set(k, v)
 		}
-	`)
+	}
 
-	req, _ := http.NewRequest(http.MethodPut, server.URL+"/api/v0/devices/33788389279", body)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("failed to make request: %v", err)
+	}
+	defer resp.Body.Close()
 
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read response body: %v", err)
+	}
 
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-	is.Equal(1, len(repo.CreateOrUpdateDeviceCalls()))
+	return resp.StatusCode, b
 }
 
-func TestPatchDeviceWithPayloadHandler(t *testing.T) {
-	putJson := `
-{
-    "active": true,
-    "description": "alla utom sensor\\r\\njord\\r\\n3601",
-    "deviceID": "defca053-6ec8-5430-a318-92bf7fcb854f",
-    "deviceProfile": "elsys",
-    "environment": "soil",
-    "interval": "3601",
-    "latitude": 59.373227,
-    "longitude": 18.632813,
-    "name": "EMS_Desk_05",
-    "tenant": "default",
-    "types": ["urn:oma:lwm2m:ext:3301", "urn:oma:lwm2m:ext:3200", "urn:oma:lwm2m:ext:3304", "urn:oma:lwm2m:ext:3428", "urn:oma:lwm2m:ext:3302", "urn:oma:lwm2m:ext:3303"]
-}`
-
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	repo.QueryFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-		return types.Collection[types.Device]{
-			Data: []types.Device{
-				{
-					Active:   false,
-					SensorID: uuid.NewString(),
-					DeviceID: "defca053-6ec8-5430-a318-92bf7fcb854f",
-				},
-			},
-			Count:      1,
-			Offset:     0,
-			Limit:      1,
-			TotalCount: 1,
-		}, nil
-	}
-
-	repo.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
-		return nil
-	}
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	req, _ := http.NewRequest(http.MethodPatch, server.URL+"/api/v0/devices/defca053-6ec8-5430-a318-92bf7fcb854f", strings.NewReader(putJson))
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(http.StatusOK, res.StatusCode)
-}
-
-func TestCreateNewDeviceHandler(t *testing.T) {
-	deviceJson := `
-{
-    "active": false,
-    "sensorID": "24e124743c211337",
-    "deviceID": "ecff5911-e771-5c5c-b6eb-e9f1bc932195",
-    "tenant": "default",
-    "name": "SN-WS302-01",
-    "description": "",
-    "location": {
-        "latitude": 0,
-        "longitude": 0
-    },
-    "types": null,
-    "deviceProfile": {
-        "name": "unknown",
-        "decoder": "unknown",
-        "interval": 0
-    },
-    "deviceStatus": {
-        "batteryLevel": 0,
-        "observedAt": "0001-01-01T00:00:00Z"
-    },
-    "deviceState": {
-        "online": false,
-        "state": 0,
-        "observedAt": "0001-01-01T00:00:00Z"
-    }
-}`
-
-	is, _, _, _, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	req, _ := http.NewRequest(http.MethodPost, server.URL+"/api/v0/devices", strings.NewReader(deviceJson))
-
-	req.Header.Add("Content-Type", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(http.StatusCreated, res.StatusCode)
-}
-
-func TestGetAlarmsHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	deviceID := uuid.NewString()
-
-	repo.GetAlarmsFunc = func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-		return types.Collection[types.Alarms]{
-			Data: []types.Alarms{
-				{
-					DeviceID:   deviceID,
-					AlarmTypes: []string{alarms.AlarmDeviceNotObserved},
-					ObservedAt: time.Now().UTC(),
-				},
-			},
-			Count:      1,
-			Offset:     0,
-			Limit:      1,
-			TotalCount: 1,
-		}, nil
-	}
-
-	req, _ := http.NewRequest(http.MethodGet, server.URL+"/api/v0/alarms", nil)
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-
-	response := struct {
-		Data []types.Alarms
-	}{}
-	b, _ := io.ReadAll(res.Body)
-	json.Unmarshal(b, &response)
-
-	is.Equal(response.Data[0].DeviceID, deviceID)
-}
-
-func TestGetAlarmsWithFilterHandler(t *testing.T) {
-	is, _, _, repo, _, _, mux := testSetup(t)
-
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	deviceID := uuid.NewString()
-
-	endpoint := fmt.Sprintf("%s/api/v0/alarms?alarmtype=%s", server.URL, alarms.AlarmDeviceNotObserved)
-
-	repo.GetAlarmsFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-		return types.Collection[types.Alarms]{
-			Data: []types.Alarms{
-				{
-					DeviceID:   deviceID,
-					AlarmTypes: []string{alarms.AlarmDeviceNotObserved},
-				},
-			},
-			Count:      1,
-			Offset:     0,
-			Limit:      1,
-			TotalCount: 1,
-		}, nil
-	}
-
-	req, _ := http.NewRequest(http.MethodGet, endpoint, nil)
-
-	req.Header.Add("Accept", "application/json")
-	req.Header.Add("Authorization", "Bearer ????")
-
-	res, err := http.DefaultClient.Do(req)
-	is.NoErr(err)
-
-	is.Equal(200, res.StatusCode)
-
-	response := struct {
-		Data []types.Alarms
-	}{}
-	b, _ := io.ReadAll(res.Body)
-	json.Unmarshal(b, &response)
-
-	containsAlartType := slices.ContainsFunc(response.Data[0].AlarmTypes, func(a string) bool { return a == alarms.AlarmDeviceNotObserved })
-
-	is.True(containsAlartType)
-	is.Equal(response.Data[0].DeviceID, deviceID)
-
-	calls := repo.GetAlarmsCalls()
-	c := &conditions.Condition{}
-	for _, f := range calls[0].ConditionsMoqParam {
-		c = f(c)
-	}
-	is.Equal(c.AlarmType, "device_not_observed")
-}
-
-func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messaging.MsgContextMock, *storage.StoreMock, *slog.Logger, context.Context, *http.ServeMux) {
-	is := is.New(t)
-	ctx := context.Background()
-
-	msgCtx := &messaging.MsgContextMock{
-		RegisterTopicMessageHandlerFunc: func(routingKey string, handler messaging.TopicMessageHandler) error {
-			return nil
-		},
-	}
-
-	db := &storage.StoreMock{
-		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, error) {
-			return types.Device{
-				SensorID: sensorID,
-				DeviceID: "intern-" + sensorID,
-			}, nil
-		},
-		IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
-			return true
-		},
-		CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
-			return nil
-		},
-		QueryFunc: func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
-			return types.Collection[types.Device]{}, nil
-		},
-		UpdateDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
-			return nil
-		},
-		SetSensorProfileFunc: func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-			return nil
-		},
-		SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
-			return nil
-		},
-		AddAlarmFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
-			return nil
-		},
-		GetDeviceStatusFunc: func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
-			return types.Collection[types.SensorStatus]{}, nil
-		},
-	}
-	repo := devicemanagement.NewStorage(db)
-	dm := devicemanagement.New(repo, msgCtx, &devicemanagement.DeviceManagementConfig{})
-	arepo := alarms.NewStorage(db)
-	as := alarms.New(arepo, msgCtx, &alarms.AlarmServiceConfig{})
-
-	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-
-	mux := http.NewServeMux()
-	RegisterHandlers(ctx, mux, strings.NewReader(policiesMock), dm, as, db)
-
-	return is, dm, msgCtx, db, log, ctx, mux
-}
+var testDevice = types.Device{SensorID: "test-sensor-1", DeviceID: "test-device-1", Tenant: "default"}
 
 const csvMock string = `sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
 a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;key=value

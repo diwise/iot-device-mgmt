@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"slices"
 	"strconv"
@@ -66,6 +67,9 @@ type DeviceManagement interface {
 	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 
 	RegisterTopicMessageHandler(ctx context.Context) error
+	SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+	SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error
+	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
 }
 
 type DeviceManagementConfig struct {
@@ -100,6 +104,10 @@ type DeviceStorage interface {
 	AddDeviceStatus(ctx context.Context, status types.StatusMessage) error
 
 	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
+
+	IsSeedExistingDevicesEnabled(ctx context.Context) bool
+	CreateSensorProfile(ctx context.Context, p types.SensorProfile) error
+	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
 }
 
 func New(storage DeviceStorage, messenger messaging.MsgContext, config *DeviceManagementConfig) DeviceManagement {

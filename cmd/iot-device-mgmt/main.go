@@ -107,7 +107,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policies.Close()
-				return api.RegisterHandlers(ctx, handler, policies, dm, as, s)
+				return api.RegisterHandlers(ctx, handler, policies, dm, as)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
@@ -122,17 +122,17 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
 
-			err = storage.SeedLwm2mTypes(ctx, s, appCfg.DeviceManagementConfig.Types)
+			err = dm.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedSensorProfiles(ctx, s, appCfg.DeviceManagementConfig.DeviceProfiles)
+			err = dm.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedDevices(ctx, s, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = dm.SeedDevices(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}

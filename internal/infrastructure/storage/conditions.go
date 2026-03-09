@@ -9,7 +9,7 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-func  Where(c *types.Condition) string {
+func Where(c *types.Condition) string {
 	where := []string{}
 
 	if c.DeviceID != "" {
@@ -196,7 +196,7 @@ func OffsetLimit(c *types.Condition, i ...int) (string, int, int) {
 	return offsetLimit, offset, limit
 }
 
-func OrderBy(c *types.Condition, fallback string) string {
+func OrderByWithFallback(c *types.Condition, fallback string) string {
 	orderBy := ""
 
 	if c.SortBy != "" {

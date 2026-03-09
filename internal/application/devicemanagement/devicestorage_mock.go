@@ -26,6 +26,12 @@ var _ DeviceStorage = &DeviceStorageMock{}
 //			CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 //				panic("mock out the CreateOrUpdateDevice method")
 //			},
+//			CreateSensorProfileFunc: func(ctx context.Context, p types.SensorProfile) error {
+//				panic("mock out the CreateSensorProfile method")
+//			},
+//			CreateSensorProfileTypeFunc: func(ctx context.Context, t types.Lwm2mType) error {
+//				panic("mock out the CreateSensorProfileType method")
+//			},
 //			GetDeviceAlarmsFunc: func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
 //				panic("mock out the GetDeviceAlarms method")
 //			},
@@ -40,6 +46,9 @@ var _ DeviceStorage = &DeviceStorageMock{}
 //			},
 //			GetTenantsFunc: func(ctx context.Context) (types.Collection[string], error) {
 //				panic("mock out the GetTenants method")
+//			},
+//			IsSeedExistingDevicesEnabledFunc: func(ctx context.Context) bool {
+//				panic("mock out the IsSeedExistingDevicesEnabled method")
 //			},
 //			QueryFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
@@ -69,6 +78,12 @@ type DeviceStorageMock struct {
 	// CreateOrUpdateDeviceFunc mocks the CreateOrUpdateDevice method.
 	CreateOrUpdateDeviceFunc func(ctx context.Context, d types.Device) error
 
+	// CreateSensorProfileFunc mocks the CreateSensorProfile method.
+	CreateSensorProfileFunc func(ctx context.Context, p types.SensorProfile) error
+
+	// CreateSensorProfileTypeFunc mocks the CreateSensorProfileType method.
+	CreateSensorProfileTypeFunc func(ctx context.Context, t types.Lwm2mType) error
+
 	// GetDeviceAlarmsFunc mocks the GetDeviceAlarms method.
 	GetDeviceAlarmsFunc func(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 
@@ -83,6 +98,9 @@ type DeviceStorageMock struct {
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
+
+	// IsSeedExistingDevicesEnabledFunc mocks the IsSeedExistingDevicesEnabled method.
+	IsSeedExistingDevicesEnabledFunc func(ctx context.Context) bool
 
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error)
@@ -114,6 +132,20 @@ type DeviceStorageMock struct {
 			Ctx context.Context
 			// D is the d argument value.
 			D types.Device
+		}
+		// CreateSensorProfile holds details about calls to the CreateSensorProfile method.
+		CreateSensorProfile []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// P is the p argument value.
+			P types.SensorProfile
+		}
+		// CreateSensorProfileType holds details about calls to the CreateSensorProfileType method.
+		CreateSensorProfileType []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// T is the t argument value.
+			T types.Lwm2mType
 		}
 		// GetDeviceAlarms holds details about calls to the GetDeviceAlarms method.
 		GetDeviceAlarms []struct {
@@ -149,6 +181,11 @@ type DeviceStorageMock struct {
 		}
 		// GetTenants holds details about calls to the GetTenants method.
 		GetTenants []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+		}
+		// IsSeedExistingDevicesEnabled holds details about calls to the IsSeedExistingDevicesEnabled method.
+		IsSeedExistingDevicesEnabled []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
@@ -210,18 +247,21 @@ type DeviceStorageMock struct {
 			Interval *int
 		}
 	}
-	lockAddDeviceStatus       sync.RWMutex
-	lockCreateOrUpdateDevice  sync.RWMutex
-	lockGetDeviceAlarms       sync.RWMutex
-	lockGetDeviceBySensorID   sync.RWMutex
-	lockGetDeviceMeasurements sync.RWMutex
-	lockGetDeviceStatus       sync.RWMutex
-	lockGetTenants            sync.RWMutex
-	lockQuery                 sync.RWMutex
-	lockSetDeviceProfileTypes sync.RWMutex
-	lockSetDeviceState        sync.RWMutex
-	lockSetSensorProfile      sync.RWMutex
-	lockUpdateDevice          sync.RWMutex
+	lockAddDeviceStatus              sync.RWMutex
+	lockCreateOrUpdateDevice         sync.RWMutex
+	lockCreateSensorProfile          sync.RWMutex
+	lockCreateSensorProfileType      sync.RWMutex
+	lockGetDeviceAlarms              sync.RWMutex
+	lockGetDeviceBySensorID          sync.RWMutex
+	lockGetDeviceMeasurements        sync.RWMutex
+	lockGetDeviceStatus              sync.RWMutex
+	lockGetTenants                   sync.RWMutex
+	lockIsSeedExistingDevicesEnabled sync.RWMutex
+	lockQuery                        sync.RWMutex
+	lockSetDeviceProfileTypes        sync.RWMutex
+	lockSetDeviceState               sync.RWMutex
+	lockSetSensorProfile             sync.RWMutex
+	lockUpdateDevice                 sync.RWMutex
 }
 
 // AddDeviceStatus calls AddDeviceStatusFunc.
@@ -293,6 +333,78 @@ func (mock *DeviceStorageMock) CreateOrUpdateDeviceCalls() []struct {
 	mock.lockCreateOrUpdateDevice.RLock()
 	calls = mock.calls.CreateOrUpdateDevice
 	mock.lockCreateOrUpdateDevice.RUnlock()
+	return calls
+}
+
+// CreateSensorProfile calls CreateSensorProfileFunc.
+func (mock *DeviceStorageMock) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
+	if mock.CreateSensorProfileFunc == nil {
+		panic("DeviceStorageMock.CreateSensorProfileFunc: method is nil but DeviceStorage.CreateSensorProfile was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		P   types.SensorProfile
+	}{
+		Ctx: ctx,
+		P:   p,
+	}
+	mock.lockCreateSensorProfile.Lock()
+	mock.calls.CreateSensorProfile = append(mock.calls.CreateSensorProfile, callInfo)
+	mock.lockCreateSensorProfile.Unlock()
+	return mock.CreateSensorProfileFunc(ctx, p)
+}
+
+// CreateSensorProfileCalls gets all the calls that were made to CreateSensorProfile.
+// Check the length with:
+//
+//	len(mockedDeviceStorage.CreateSensorProfileCalls())
+func (mock *DeviceStorageMock) CreateSensorProfileCalls() []struct {
+	Ctx context.Context
+	P   types.SensorProfile
+} {
+	var calls []struct {
+		Ctx context.Context
+		P   types.SensorProfile
+	}
+	mock.lockCreateSensorProfile.RLock()
+	calls = mock.calls.CreateSensorProfile
+	mock.lockCreateSensorProfile.RUnlock()
+	return calls
+}
+
+// CreateSensorProfileType calls CreateSensorProfileTypeFunc.
+func (mock *DeviceStorageMock) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
+	if mock.CreateSensorProfileTypeFunc == nil {
+		panic("DeviceStorageMock.CreateSensorProfileTypeFunc: method is nil but DeviceStorage.CreateSensorProfileType was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+		T   types.Lwm2mType
+	}{
+		Ctx: ctx,
+		T:   t,
+	}
+	mock.lockCreateSensorProfileType.Lock()
+	mock.calls.CreateSensorProfileType = append(mock.calls.CreateSensorProfileType, callInfo)
+	mock.lockCreateSensorProfileType.Unlock()
+	return mock.CreateSensorProfileTypeFunc(ctx, t)
+}
+
+// CreateSensorProfileTypeCalls gets all the calls that were made to CreateSensorProfileType.
+// Check the length with:
+//
+//	len(mockedDeviceStorage.CreateSensorProfileTypeCalls())
+func (mock *DeviceStorageMock) CreateSensorProfileTypeCalls() []struct {
+	Ctx context.Context
+	T   types.Lwm2mType
+} {
+	var calls []struct {
+		Ctx context.Context
+		T   types.Lwm2mType
+	}
+	mock.lockCreateSensorProfileType.RLock()
+	calls = mock.calls.CreateSensorProfileType
+	mock.lockCreateSensorProfileType.RUnlock()
 	return calls
 }
 
@@ -477,6 +589,38 @@ func (mock *DeviceStorageMock) GetTenantsCalls() []struct {
 	mock.lockGetTenants.RLock()
 	calls = mock.calls.GetTenants
 	mock.lockGetTenants.RUnlock()
+	return calls
+}
+
+// IsSeedExistingDevicesEnabled calls IsSeedExistingDevicesEnabledFunc.
+func (mock *DeviceStorageMock) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
+	if mock.IsSeedExistingDevicesEnabledFunc == nil {
+		panic("DeviceStorageMock.IsSeedExistingDevicesEnabledFunc: method is nil but DeviceStorage.IsSeedExistingDevicesEnabled was just called")
+	}
+	callInfo := struct {
+		Ctx context.Context
+	}{
+		Ctx: ctx,
+	}
+	mock.lockIsSeedExistingDevicesEnabled.Lock()
+	mock.calls.IsSeedExistingDevicesEnabled = append(mock.calls.IsSeedExistingDevicesEnabled, callInfo)
+	mock.lockIsSeedExistingDevicesEnabled.Unlock()
+	return mock.IsSeedExistingDevicesEnabledFunc(ctx)
+}
+
+// IsSeedExistingDevicesEnabledCalls gets all the calls that were made to IsSeedExistingDevicesEnabled.
+// Check the length with:
+//
+//	len(mockedDeviceStorage.IsSeedExistingDevicesEnabledCalls())
+func (mock *DeviceStorageMock) IsSeedExistingDevicesEnabledCalls() []struct {
+	Ctx context.Context
+} {
+	var calls []struct {
+		Ctx context.Context
+	}
+	mock.lockIsSeedExistingDevicesEnabled.RLock()
+	calls = mock.calls.IsSeedExistingDevicesEnabled
+	mock.lockIsSeedExistingDevicesEnabled.RUnlock()
 	return calls
 }
 

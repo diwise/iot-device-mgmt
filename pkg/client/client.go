@@ -188,7 +188,7 @@ func (dmc *devManagementClient) refreshToken(ctx context.Context) (token *oauth2
 	// Retry logic with exponential backoff
 	var lastErr error
 	maxRetries := 3
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		if attempt > 0 {
 			backoff := time.Duration(attempt*attempt) * 100 * time.Millisecond
 			log.Debug("retrying token refresh", "attempt", attempt+1, "backoff", backoff)

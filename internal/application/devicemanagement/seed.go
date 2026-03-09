@@ -1,4 +1,4 @@
-package storage
+package devicemanagement
 
 import (
 	"context"
@@ -11,12 +11,14 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
+	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 )
 
-func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTenants []string) error {
+func (s service) SeedDevices(ctx context.Context, devices io.ReadCloser, validTenants []string) error {
+
 	log := logging.GetFromContext(ctx)
 	defer devices.Close()
 
@@ -33,7 +35,7 @@ func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTe
 		return err
 	}
 
-	shouldUpdate := s.IsSeedExistingDevicesEnabled(ctx)
+	shouldUpdate := s.storage.IsSeedExistingDevicesEnabled(ctx)
 	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", shouldUpdate))
 
 	for _, record := range records {
@@ -46,16 +48,16 @@ func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTe
 
 		exists := false
 		if strings.TrimSpace(device.SensorID) != "" {
-			_, err := s.GetDeviceBySensorID(ctx, device.SensorID)
+			_, err := s.storage.GetDeviceBySensorID(ctx, device.SensorID)
 			if err != nil {
-				if !errors.Is(err, ErrNoRows) {
+				if !errors.Is(err, storage.ErrNoRows) {
 					return err
 				}
 			} else {
 				exists = true
 			}
 		} else {
-			existing, err := s.Query(ctx, conditions.WithDeviceID(device.DeviceID))
+			existing, err := s.storage.Query(ctx, conditions.WithDeviceID(device.DeviceID))
 			if err != nil {
 				return err
 			}
@@ -63,7 +65,7 @@ func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTe
 		}
 
 		if !exists {
-			err := s.CreateOrUpdateDevice(ctx, device)
+			err := s.storage.CreateOrUpdateDevice(ctx, device)
 			if err != nil {
 				log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 				return err
@@ -79,7 +81,7 @@ func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTe
 			continue
 		}
 
-		err = s.CreateOrUpdateDevice(ctx, device)
+		err = s.storage.CreateOrUpdateDevice(ctx, device)
 		if err != nil {
 			log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 			return err
@@ -87,27 +89,32 @@ func SeedDevices(ctx context.Context, s *Storage, devices io.ReadCloser, validTe
 
 		log.Debug("updated existing device", slog.String("device_id", device.DeviceID), slog.Bool("seed_existing_devices", shouldUpdate))
 	}
+
 	return nil
+
 }
 
-func SeedLwm2mTypes(ctx context.Context, s *Storage, lwm2m []types.Lwm2mType) error {
+func (s service) SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error {
+
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, t := range lwm2m {
-		err := s.CreateSensorProfileType(ctx, t)
+		err := s.storage.CreateSensorProfileType(ctx, t)
 		if err != nil {
 			log.Debug("failed to seed lwm2m type", "name", t.Name, "urn", t.Urn)
 			errs = append(errs, err)
 		}
 	}
 	return errors.Join(errs...)
+
 }
 
-func SeedSensorProfiles(ctx context.Context, s *Storage, profiles []types.SensorProfile) error {
+func (s service) SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error {
+
 	log := logging.GetFromContext(ctx)
 	var errs []error
 	for _, p := range profiles {
-		err := s.CreateSensorProfile(ctx, p)
+		err := s.storage.CreateSensorProfile(ctx, p)
 		if err != nil {
 			log.Debug("failed to seed device profile", "decoder", p.Decoder, "name", p.Name)
 			errs = append(errs, err)
@@ -115,6 +122,7 @@ func SeedSensorProfiles(ctx context.Context, s *Storage, profiles []types.Sensor
 		log.Debug("added device profile", "name", p.Name, "decoder", p.Decoder)
 	}
 	return errors.Join(errs...)
+
 }
 
 type deviceRecord struct {

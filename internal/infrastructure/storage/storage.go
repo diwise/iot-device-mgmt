@@ -14,38 +14,45 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Config struct {
-	host                string
-	user                string
-	password            string
-	port                string
-	dbname              string
-	sslmode             string
-	seedExistingDevices bool
+var (
+	ErrNoRows        = errors.New("no rows in result set")
+	ErrTooManyRows   = errors.New("too many rows in result set")
+	ErrQueryRow      = errors.New("could not execute query")
+	ErrStoreFailed   = errors.New("could not store data")
+	ErrNoID          = errors.New("data contains no id")
+	ErrMissingTenant = errors.New("missing tenant information")
+	ErrAlreadyExist  = errors.New("device already exists")
+	ErrDeleted       = errors.New("deleted")
+)
+
+//go:embed migrate.sql
+var migrateSQL string
+
+type Storage struct {
+	conn                  *pgxpool.Pool
+	updateExistingDevices bool
+	mu                    sync.Mutex
 }
 
-func (c Config) ConnStr() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", c.user, c.password, c.host, c.port, c.dbname, c.sslmode)
-}
-
-func NewConfig(host, user, password, port, dbname, sslmode string, seedExistingDevices bool) Config {
-	return Config{
-		host:                host,
-		user:                user,
-		password:            password,
-		port:                port,
-		dbname:              dbname,
-		sslmode:             sslmode,
-		seedExistingDevices: seedExistingDevices,
+func New(ctx context.Context, config Config) (*Storage, error) {
+	pool, err := newPool(ctx, config)
+	if err != nil {
+		return nil, err
 	}
+
+	s := &Storage{
+		conn:                  pool,
+		updateExistingDevices: config.seedExistingDevices,
+	}
+
+	return s, initialize(ctx, s)
 }
 
-func NewPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
+func newPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	poolConfig, err := pgxpool.ParseConfig(config.ConnStr())
 	if err != nil {
 		return nil, err
@@ -72,50 +79,8 @@ func NewPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 	return p, nil
 }
 
-var (
-	ErrNoRows        = errors.New("no rows in result set")
-	ErrTooManyRows   = errors.New("too many rows in result set")
-	ErrQueryRow      = errors.New("could not execute query")
-	ErrStoreFailed   = errors.New("could not store data")
-	ErrNoID          = errors.New("data contains no id")
-	ErrMissingTenant = errors.New("missing tenant information")
-	ErrAlreadyExist  = errors.New("device already exists")
-	ErrDeleted       = errors.New("deleted")
-)
-
-//go:embed migrate.sql
-var migrateSQL string
-
-type dbPool interface {
-	Acquire(ctx context.Context) (*pgxpool.Conn, error)
-	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)	
-	Query(ctx context.Context, sql string, args ...interface{}) (pgx.Rows, error)
-	QueryRow(ctx context.Context, sql string, args ...interface{}) pgx.Row
-	Close()
-}
-
-type Storage struct {
-	pool                  dbPool
-	updateExistingDevices bool
-	mu                    sync.Mutex
-}
-
-func New(ctx context.Context, config Config) (*Storage, error) {
-	pool, err := NewPool(ctx, config)
-	if err != nil {
-		return nil, err
-	}
-
-	s := &Storage{
-		pool:                  pool,
-		updateExistingDevices: config.seedExistingDevices,
-	}
-
-	return s, initialize(ctx, s)
-}
-
 func initialize(ctx context.Context, s *Storage) error {
-	_, err := s.pool.Exec(ctx, migrateSQL)
+	_, err := s.conn.Exec(ctx, migrateSQL)
 	if err != nil {
 		return err
 	}
@@ -124,40 +89,11 @@ func initialize(ctx context.Context, s *Storage) error {
 }
 
 func (s *Storage) Close() {
-	s.pool.Close()
-}
-
-func (s *Storage) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
-	args := pgx.NamedArgs{
-		"sensor_profile_type_id": strings.ToLower(strings.TrimSpace(t.Urn)),
-		"name":                   strings.TrimSpace(t.Name),
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO sensor_profile_types (sensor_profile_type_id, name)
-		VALUES (@sensor_profile_type_id, @name)
-		ON CONFLICT DO NOTHING`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
+	s.conn.Close()
 }
 
 func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return err
 	}
@@ -198,10 +134,129 @@ func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile
 	return tx.Commit(ctx)
 }
 
+func (s *Storage) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error {
+	args := pgx.NamedArgs{
+		"sensor_profile_type_id": strings.ToLower(strings.TrimSpace(t.Urn)),
+		"name":                   strings.TrimSpace(t.Name),
+	}
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO sensor_profile_types (sensor_profile_type_id, name)
+		VALUES (@sensor_profile_type_id, @name)
+		ON CONFLICT DO NOTHING`, args)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
+	if dp.Decoder == "" {
+		return fmt.Errorf("device profile contains no decoder")
+	}
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	args := pgx.NamedArgs{
+		"sensor_profile": strings.ToLower(dp.Decoder),
+		"device_id":      deviceID,
+		"interval":       dp.Interval,
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE devices SET
+			interval=@interval,
+			modified_on=NOW()
+		WHERE device_id=@device_id AND deleted=FALSE`, args)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `
+		UPDATE sensors s
+		SET sensor_profile=@sensor_profile,
+			modified_on=NOW()
+		FROM devices d
+		WHERE d.device_id=@device_id
+			AND d.deleted=FALSE
+			AND d.sensor_id = s.sensor_id`, args)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Storage) SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error {
+	log := logging.GetFromContext(ctx)
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	args := pgx.NamedArgs{
+		"device_id": deviceID,
+	}
+
+	_, err = tx.Exec(ctx, `DELETE FROM device_sensor_profile_types WHERE device_id=@device_id;`, args)
+	if err != nil {
+		return err
+	}
+
+	for _, t := range types {
+		if strings.TrimSpace(t.Urn) == "" {
+			continue
+		}
+
+		args["sensor_profile_type_id"] = strings.TrimSpace(t.Urn)
+		_, err = tx.Exec(ctx, `
+			INSERT INTO device_sensor_profile_types (device_id, sensor_profile_type_id)
+			VALUES (@device_id, @sensor_profile_type_id)
+			ON CONFLICT DO NOTHING;`, args)
+		if err != nil {
+			log.Error("could not add type to device", "args", args, "err", err.Error())
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) error {
 	log := logging.GetFromContext(ctx)
 
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return err
 	}
@@ -322,273 +377,6 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 	return tx.Commit(ctx)
 }
 
-func createOrUpdateSensorTx(ctx context.Context, tx pgx.Tx, sensorID, sensorProfile string) error {
-	if sensorID == "" {
-		return nil
-	}
-
-	args := pgx.NamedArgs{
-		"sensor_id":      sensorID,
-		"sensor_profile": nil,
-	}
-
-	if sensorProfile != "" {
-		args["sensor_profile"] = sensorProfile
-	}
-
-	_, err := tx.Exec(ctx, `
-		INSERT INTO sensors (sensor_id, sensor_profile)
-		VALUES (@sensor_id, @sensor_profile)
-		ON CONFLICT (sensor_id) DO UPDATE
-		SET sensor_profile = COALESCE(EXCLUDED.sensor_profile, sensors.sensor_profile),
-			modified_on = NOW()`, args)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) error {
-	if deviceID == "" {
-		return ErrNoID
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	args := pgx.NamedArgs{
-		"device_id": deviceID,
-		"tag_name":  strings.TrimSpace(t.Name),
-	}
-
-	_, err = tx.Exec(ctx, `INSERT INTO device_device_tags (device_id, name) VALUES (@device_id, @tag_name) ON CONFLICT DO NOTHING;`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) CreateTag(ctx context.Context, t types.Tag) error {
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	err = createTagTx(ctx, tx, t)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func createTagTx(ctx context.Context, tx pgx.Tx, t types.Tag) error {
-	args := pgx.NamedArgs{
-		"name": strings.TrimSpace(t.Name),
-	}
-	_, err := tx.Exec(ctx, `INSERT INTO device_tags (name) VALUES (@name) ON CONFLICT DO NOTHING;`, args)
-	return err
-}
-
-func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
-	args := pgx.NamedArgs{
-		"observed_at":   status.Timestamp.UTC(),
-		"lookup_id":     status.DeviceID,
-		"battery_level": status.BatteryLevel,
-		"rssi":          status.RSSI,
-		"snr":           status.LoRaSNR,
-		"fq":            status.Frequency,
-		"sf":            status.SpreadingFactor,
-		"dr":            status.DR,
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	var sensorID string
-	err = tx.QueryRow(ctx, `
-		SELECT sensor_id
-		FROM devices
-		WHERE deleted=FALSE
-			AND sensor_id IS NOT NULL
-			AND (device_id=@lookup_id OR sensor_id=@lookup_id)
-		ORDER BY device_id ASC
-		LIMIT 1`, args).Scan(&sensorID)
-	if err != nil {
-		return err
-	}
-	args["sensor_id"] = sensorID
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO sensor_status (observed_at, sensor_id, battery_level, rssi, snr, fq, sf, dr)
-		VALUES (@observed_at, @sensor_id, @battery_level, @rssi, @snr, @fq, @sf, @dr)
-		ON CONFLICT DO NOTHING;`, args)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(ctx, `DELETE FROM sensor_status WHERE sensor_id=@sensor_id AND observed_at < NOW() - INTERVAL '3 weeks'`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
-	args := pgx.NamedArgs{
-		"device_id":   deviceID,
-		"observed_at": state.ObservedAt.UTC(),
-		"online":      state.Online,
-		"state":       state.State,
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO device_state (device_id, observed_at, online, state)
-		VALUES (@device_id, @observed_at, @online, @state)
-		ON CONFLICT (device_id) DO UPDATE
-			SET
-				observed_at = EXCLUDED.observed_at,
-				online = EXCLUDED.online,
-				state = EXCLUDED.state,
-				modified_on = NOW();
-		`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-	if dp.Decoder == "" {
-		return fmt.Errorf("device profile contains no decoder")
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	args := pgx.NamedArgs{
-		"sensor_profile": strings.ToLower(dp.Decoder),
-		"device_id":      deviceID,
-		"interval":       dp.Interval,
-	}
-
-	_, err = tx.Exec(ctx, `
-		UPDATE devices SET
-			interval=@interval,
-			modified_on=NOW()
-		WHERE device_id=@device_id AND deleted=FALSE`, args)
-	if err != nil {
-		return err
-	}
-
-	_, err = tx.Exec(ctx, `
-		UPDATE sensors s
-		SET sensor_profile=@sensor_profile,
-			modified_on=NOW()
-		FROM devices d
-		WHERE d.device_id=@device_id
-			AND d.deleted=FALSE
-			AND d.sensor_id = s.sensor_id`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error {
-	log := logging.GetFromContext(ctx)
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	args := pgx.NamedArgs{
-		"device_id": deviceID,
-	}
-
-	_, err = tx.Exec(ctx, `DELETE FROM device_sensor_profile_types WHERE device_id=@device_id;`, args)
-	if err != nil {
-		return err
-	}
-
-	for _, t := range types {
-		if strings.TrimSpace(t.Urn) == "" {
-			continue
-		}
-
-		args["sensor_profile_type_id"] = strings.TrimSpace(t.Urn)
-		_, err = tx.Exec(ctx, `
-			INSERT INTO device_sensor_profile_types (device_id, sensor_profile_type_id)
-			VALUES (@device_id, @sensor_profile_type_id)
-			ON CONFLICT DO NOTHING;`, args)
-		if err != nil {
-			log.Error("could not add type to device", "args", args, "err", err.Error())
-			return err
-		}
-	}
-
-	return tx.Commit(ctx)
-}
-
 func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
 	if deviceID == "" {
 		return ErrNoID
@@ -645,7 +433,7 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 		return nil
 	}
 
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return err
 	}
@@ -660,6 +448,273 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 	sql := "UPDATE devices SET " + strings.Join(values, ",") + " WHERE device_id=@device_id AND deleted=FALSE"
 
 	_, err = tx.Exec(ctx, sql, args)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func createOrUpdateSensorTx(ctx context.Context, tx pgx.Tx, sensorID, sensorProfile string) error {
+	if sensorID == "" {
+		return nil
+	}
+
+	args := pgx.NamedArgs{
+		"sensor_id":      sensorID,
+		"sensor_profile": nil,
+	}
+
+	if sensorProfile != "" {
+		args["sensor_profile"] = sensorProfile
+	}
+
+	_, err := tx.Exec(ctx, `
+		INSERT INTO sensors (sensor_id, sensor_profile)
+		VALUES (@sensor_id, @sensor_profile)
+		ON CONFLICT (sensor_id) DO UPDATE
+		SET sensor_profile = COALESCE(EXCLUDED.sensor_profile, sensors.sensor_profile),
+			modified_on = NOW()`, args)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) error {
+	if deviceID == "" {
+		return ErrNoID
+	}
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	args := pgx.NamedArgs{
+		"device_id": deviceID,
+		"tag_name":  strings.TrimSpace(t.Name),
+	}
+
+	_, err = tx.Exec(ctx, `INSERT INTO device_device_tags (device_id, name) VALUES (@device_id, @tag_name) ON CONFLICT DO NOTHING;`, args)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Storage) CreateTag(ctx context.Context, t types.Tag) error {
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	err = createTagTx(ctx, tx, t)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func createTagTx(ctx context.Context, tx pgx.Tx, t types.Tag) error {
+	args := pgx.NamedArgs{
+		"name": strings.TrimSpace(t.Name),
+	}
+	_, err := tx.Exec(ctx, `INSERT INTO device_tags (name) VALUES (@name) ON CONFLICT DO NOTHING;`, args)
+	return err
+}
+
+func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessage) error {
+	args := pgx.NamedArgs{
+		"observed_at":   status.Timestamp.UTC(),
+		"lookup_id":     status.DeviceID,
+		"battery_level": status.BatteryLevel,
+		"rssi":          status.RSSI,
+		"snr":           status.LoRaSNR,
+		"fq":            status.Frequency,
+		"sf":            status.SpreadingFactor,
+		"dr":            status.DR,
+	}
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	var sensorID string
+	err = tx.QueryRow(ctx, `
+		SELECT sensor_id
+		FROM devices
+		WHERE deleted=FALSE
+			AND sensor_id IS NOT NULL
+			AND (device_id=@lookup_id OR sensor_id=@lookup_id)
+		ORDER BY device_id ASC
+		LIMIT 1`, args).Scan(&sensorID)
+	if err != nil {
+		return err
+	}
+	args["sensor_id"] = sensorID
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO sensor_status (observed_at, sensor_id, battery_level, rssi, snr, fq, sf, dr)
+		VALUES (@observed_at, @sensor_id, @battery_level, @rssi, @snr, @fq, @sf, @dr)
+		ON CONFLICT DO NOTHING;`, args)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(ctx, `DELETE FROM sensor_status WHERE sensor_id=@sensor_id AND observed_at < NOW() - INTERVAL '3 weeks'`, args)
+	if err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+	log := logging.GetFromContext(ctx)
+
+	condition := conditions.NewCondition(conds...)
+
+	offsetLimitSql, offset, limit := OffsetLimit(condition, 0, 100)
+
+	sql := fmt.Sprintf(`
+		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count
+		FROM (
+			SELECT ss.observed_at, ss.battery_level, ss.rssi, ss.snr, ss.fq, ss.sf, ss.dr, count(*) OVER () AS total_count
+			FROM devices d
+			JOIN sensor_status ss ON d.sensor_id = ss.sensor_id
+			WHERE d.device_id=@device_id
+			  AND d.tenant=ANY(@tenants)
+			ORDER BY ss.observed_at DESC
+			%s
+		) AS statuses
+		ORDER BY observed_at ASC;
+		`, offsetLimitSql)
+
+	args := NamedArgs(condition)
+	args["device_id"] = deviceID
+
+	now := time.Now()
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return types.Collection[types.SensorStatus]{}, err
+	}
+	defer c.Release()
+
+	rows, err := c.Query(ctx, sql, args)
+	if err != nil {
+		log.Debug("failed to query device statuses", "sql", sql, "args", args, "err", err.Error())
+		return types.Collection[types.SensorStatus]{}, err
+	}
+	defer rows.Close()
+
+	log.Debug("GetDeviceStatus", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
+
+	statuses := []types.SensorStatus{}
+
+	var count int64
+	var observed_at time.Time
+	var battery_level, rssi, snr, sf *float64
+	var fq *int64
+	var dr *int
+
+	for rows.Next() {
+		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr, &count)
+		if err != nil {
+			return types.Collection[types.SensorStatus]{}, err
+		}
+
+		_rssi := rssi
+		_snr := snr
+		_fq := fq
+		_sf := sf
+		_dr := dr
+		_observedAt := observed_at
+
+		status := types.SensorStatus{
+			RSSI:            _rssi,
+			LoRaSNR:         _snr,
+			Frequency:       _fq,
+			SpreadingFactor: _sf,
+			DR:              _dr,
+			ObservedAt:      _observedAt.UTC(),
+		}
+		if battery_level != nil {
+			status.BatteryLevel = int(*battery_level)
+		}
+
+		statuses = append(statuses, status)
+	}
+
+	if err := rows.Err(); err != nil {
+		return types.Collection[types.SensorStatus]{}, err
+	}
+
+	return types.Collection[types.SensorStatus]{
+		Data:       statuses,
+		Count:      uint64(len(statuses)),
+		TotalCount: uint64(count),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
+	}, nil
+}
+
+func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state types.DeviceState) error {
+	args := pgx.NamedArgs{
+		"device_id":   deviceID,
+		"observed_at": state.ObservedAt.UTC(),
+		"online":      state.Online,
+		"state":       state.State,
+	}
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO device_state (device_id, observed_at, online, state)
+		VALUES (@device_id, @observed_at, @online, @state)
+		ON CONFLICT (device_id) DO UPDATE
+			SET
+				observed_at = EXCLUDED.observed_at,
+				online = EXCLUDED.online,
+				state = EXCLUDED.state,
+				modified_on = NOW();
+		`, args)
 	if err != nil {
 		return err
 	}
@@ -683,7 +738,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 	var location pgtype.Point
 	var typesList [][]string
 
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return types.Device{}, err
 	}
@@ -838,13 +893,13 @@ func (s *Storage) Query(ctx context.Context, conds ...conditions.ConditionFunc) 
 		LEFT JOIN metadata_list ml ON ml.device_id = d.device_id
 		%s
 		%s
-		%s;`, Where(condition), OrderBy(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
+		%s;`, Where(condition), OrderByWithFallback(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
 
 	args := NamedArgs(condition)
 
 	now := time.Now()
 
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return types.Collection[types.Device]{}, err
 	}
@@ -1020,98 +1075,8 @@ func (s *Storage) Query(ctx context.Context, conds ...conditions.ConditionFunc) 
 	}, nil
 }
 
-func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
-	log := logging.GetFromContext(ctx)
-
-	condition := conditions.NewCondition(conds...)
-
-	offsetLimitSql, offset, limit := OffsetLimit(condition, 0, 100)
-
-	sql := fmt.Sprintf(`
-		SELECT observed_at, battery_level, rssi, snr, fq, sf, dr, total_count
-		FROM (
-			SELECT ss.observed_at, ss.battery_level, ss.rssi, ss.snr, ss.fq, ss.sf, ss.dr, count(*) OVER () AS total_count
-			FROM devices d
-			JOIN sensor_status ss ON d.sensor_id = ss.sensor_id
-			WHERE d.device_id=@device_id
-			  AND d.tenant=ANY(@tenants)
-			ORDER BY ss.observed_at DESC
-			%s
-		) AS statuses
-		ORDER BY observed_at ASC;
-		`, offsetLimitSql)
-
-	args := NamedArgs(condition)
-	args["device_id"] = deviceID
-
-	now := time.Now()
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return types.Collection[types.SensorStatus]{}, err
-	}
-	defer c.Release()
-
-	rows, err := c.Query(ctx, sql, args)
-	if err != nil {
-		log.Debug("failed to query device statuses", "sql", sql, "args", args, "err", err.Error())
-		return types.Collection[types.SensorStatus]{}, err
-	}
-	defer rows.Close()
-
-	log.Debug("GetDeviceStatus", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
-
-	statuses := []types.SensorStatus{}
-
-	var count int64
-	var observed_at time.Time
-	var battery_level, rssi, snr, sf *float64
-	var fq *int64
-	var dr *int
-
-	for rows.Next() {
-		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr, &count)
-		if err != nil {
-			return types.Collection[types.SensorStatus]{}, err
-		}
-
-		_rssi := rssi
-		_snr := snr
-		_fq := fq
-		_sf := sf
-		_dr := dr
-		_observedAt := observed_at
-
-		status := types.SensorStatus{
-			RSSI:            _rssi,
-			LoRaSNR:         _snr,
-			Frequency:       _fq,
-			SpreadingFactor: _sf,
-			DR:              _dr,
-			ObservedAt:      _observedAt.UTC(),
-		}
-		if battery_level != nil {
-			status.BatteryLevel = int(*battery_level)
-		}
-
-		statuses = append(statuses, status)
-	}
-
-	if err := rows.Err(); err != nil {
-		return types.Collection[types.SensorStatus]{}, err
-	}
-
-	return types.Collection[types.SensorStatus]{
-		Data:       statuses,
-		Count:      uint64(len(statuses)),
-		TotalCount: uint64(count),
-		Offset:     uint64(offset),
-		Limit:      uint64(limit),
-	}, nil
-}
-
 func (s *Storage) GetTenants(ctx context.Context) (types.Collection[string], error) {
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return types.Collection[string]{}, err
 	}
@@ -1155,288 +1120,6 @@ func (s *Storage) IsSeedExistingDevicesEnabled(ctx context.Context) bool {
 	return s.updateExistingDevices
 }
 
-func (s *Storage) AddAlarm(ctx context.Context, deviceID string, a types.AlarmDetails) error {
-	if deviceID == "" {
-		return ErrNoID
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	args := pgx.NamedArgs{
-		"device_id":   deviceID,
-		"type":        a.AlarmType,
-		"description": a.Description,
-		"observed_at": a.ObservedAt,
-		"severity":    a.Severity,
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, `
-		INSERT INTO device_alarms (device_id, type, description, observed_at, severity)
-		VALUES (@device_id, @type, @description, @observed_at, @severity)
-		ON CONFLICT (device_id, type) DO UPDATE
-			SET
-				description=EXCLUDED.description,
-				observed_at=EXCLUDED.observed_at,
-				severity=EXCLUDED.severity,
-				count = device_alarms.count + 1
-				`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error) {
-	if deviceID == "" {
-		return types.Collection[types.AlarmDetails]{}, ErrNoID
-	}
-
-	args := pgx.NamedArgs{
-		"device_id": deviceID,
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return types.Collection[types.AlarmDetails]{}, err
-	}
-	defer c.Release()
-
-	rows, err := c.Query(ctx, `
-		SELECT device_id, type, description, observed_at, severity
-		FROM device_alarms
-		WHERE device_id=@device_id
-		ORDER BY observed_at ASC`, args)
-	if err != nil {
-		return types.Collection[types.AlarmDetails]{}, err
-	}
-	defer rows.Close()
-
-	alarms := []types.AlarmDetails{}
-
-	for rows.Next() {
-		var device_id, alarmtype, description string
-		var observed_at time.Time
-		var severity int
-
-		err := rows.Scan(&device_id, &alarmtype, &description, &observed_at, &severity)
-		if err != nil {
-			return types.Collection[types.AlarmDetails]{}, err
-		}
-
-		alarms = append(alarms, types.AlarmDetails{
-			AlarmType:   alarmtype,
-			Description: description,
-			ObservedAt:  observed_at.UTC(),
-			Severity:    severity,
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return types.Collection[types.AlarmDetails]{}, err
-	}
-
-	return types.Collection[types.AlarmDetails]{
-		Data:       alarms,
-		Count:      uint64(len(alarms)),
-		Offset:     0,
-		Limit:      uint64(len(alarms)),
-		TotalCount: uint64(len(alarms)),
-	}, nil
-}
-
-func (s *Storage) GetStaleDevices(ctx context.Context) (types.Collection[types.Device], error) {
-	sql := `
-		WITH last_status AS (
-			SELECT sensor_id, MAX(observed_at) AS last_observed
-			FROM sensor_status
-			GROUP BY sensor_id
-		)
-
-		SELECT
-			d.device_id,
-			d.sensor_id,
-			d.active,
-			d.tenant,
-			s.sensor_profile,
-			d.interval      AS device_interval,
-			sp.interval     AS profile_interval,
-			ls.last_observed,
-			CASE WHEN d.interval = 0 THEN sp.interval ELSE d.interval END AS effective_interval_seconds
-		FROM devices d
-			LEFT JOIN sensors s ON s.sensor_id = d.sensor_id
-			LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
-			LEFT JOIN last_status ls ON ls.sensor_id = d.sensor_id
-		WHERE ls.last_observed IS NOT NULL AND ls.last_observed < NOW() - (COALESCE(NULLIF(d.interval, 0), sp.interval) * INTERVAL '1 second');
-	`
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return types.Collection[types.Device]{}, err
-	}
-	defer c.Release()
-
-	rows, err := c.Query(ctx, sql)
-	if err != nil {
-		return types.Collection[types.Device]{}, err
-	}
-	defer rows.Close()
-
-	devices := []types.Device{}
-
-	var deviceID, tenant, profile string
-	var device_interval, profile_interval, effective_interval int
-	var sensorID *string
-	var active bool
-	var lastObserved *time.Time
-
-	for rows.Next() {
-		err := rows.Scan(&deviceID, &sensorID, &active, &tenant, &profile, &device_interval, &profile_interval, &lastObserved, &effective_interval)
-		if err != nil {
-			return types.Collection[types.Device]{}, err
-		}
-
-		_a := active
-		_sid := ""
-		if sensorID != nil {
-			_sid = *sensorID
-		}
-		_did := deviceID
-		_tid := tenant
-		_ei := effective_interval
-		_l := lastObserved
-
-		d := types.Device{
-			Active:   _a,
-			SensorID: _sid,
-			DeviceID: _did,
-			Tenant:   _tid,
-			Interval: _ei,
-			DeviceState: types.DeviceState{
-				ObservedAt: time.Time{},
-			},
-		}
-
-		if _l != nil {
-			d.DeviceState.ObservedAt = *_l
-		}
-
-		devices = append(devices, d)
-	}
-
-	if err := rows.Err(); err != nil {
-		return types.Collection[types.Device]{}, err
-	}
-
-	return types.Collection[types.Device]{
-		Data:       devices,
-		Count:      uint64(len(devices)),
-		TotalCount: uint64(len(devices)),
-		Offset:     0,
-		Limit:      uint64(len(devices)),
-	}, nil
-}
-
-func (s *Storage) RemoveAlarm(ctx context.Context, deviceID string, alarmType string) error {
-	args := pgx.NamedArgs{
-		"device_id":  deviceID,
-		"alarm_type": alarmType,
-	}
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return err
-	}
-	defer c.Release()
-
-	tx, err := c.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	_, err = tx.Exec(ctx, `DELETE FROM device_alarms WHERE device_id=@device_id AND type=@alarm_type`, args)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-func (s *Storage) GetAlarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-	condition := conditions.NewCondition(conds...)
-
-	args := NamedArgs(condition)
-	offsetLimit, offset, limit := OffsetLimit(condition, 0, 5)
-
-	sql := fmt.Sprintf(`
-		SELECT a.device_id, array_agg(type) as type, MAX(severity) as severity, MAX(observed_at) as observed_at, count(*) OVER () AS count
-		FROM device_alarms a
-		JOIN devices d ON a.device_id = d.device_id
-		%s
-		GROUP BY a.device_id
-		ORDER BY observed_at DESC
-		%s
-	`, Where(condition), offsetLimit)
-
-	c, err := s.pool.Acquire(ctx)
-	if err != nil {
-		return types.Collection[types.Alarms]{}, err
-	}
-	defer c.Release()
-
-	rows, err := c.Query(ctx, sql, args)
-	if err != nil {
-		return types.Collection[types.Alarms]{}, err
-	}
-	defer rows.Close()
-
-	var totalCount uint64
-	alarms := []types.Alarms{}
-
-	for rows.Next() {
-		var observedAt time.Time
-		var deviceID string
-		var typs []string
-		var severity int
-
-		err := rows.Scan(&deviceID, &typs, &severity, &observedAt, &totalCount)
-		if err != nil {
-			return types.Collection[types.Alarms]{}, err
-		}
-		alarms = append(alarms, types.Alarms{
-			DeviceID:   deviceID,
-			AlarmTypes: typs,
-			ObservedAt: observedAt.UTC(),
-		})
-	}
-
-	if err := rows.Err(); err != nil {
-		return types.Collection[types.Alarms]{}, err
-	}
-
-	return types.Collection[types.Alarms]{
-		Data:       alarms,
-		Count:      uint64(len(alarms)),
-		Offset:     uint64(offset),
-		Limit:      uint64(limit),
-		TotalCount: totalCount,
-	}, nil
-}
-
 func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
 
 	// HACK: to remove where clause for non existing deleted flag
@@ -1459,7 +1142,7 @@ func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, co
 		ORDER BY d."time" DESC
 		%s`, Where(condition), offsetLimit)
 
-	c, err := s.pool.Acquire(ctx)
+	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		return types.Collection[types.Measurement]{}, err
 	}

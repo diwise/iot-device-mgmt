@@ -118,27 +118,11 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	exisitingDeviceUpdateFlag := true
 
-	config := storage.NewConfig(
-		"localhost",
-		"postgres",
-		"password",
-		"5432",
-		"postgres",
-		"disable",
-		exisitingDeviceUpdateFlag,
-	)
+	config := storage.NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable", exisitingDeviceUpdateFlag)
 
-	p, err := storage.NewPool(ctx, config)
+	p, err := storage.New(ctx, config)
 	if err != nil {
 		t.Log("could not connect to postgres, will skip test")
-		t.SkipNow()
-	}
-
-	s := storage.NewWithPool(p)
-
-	err = s.Initialize(ctx)
-	if err != nil {
-		t.Log("could not initialize storage, will skip test")
 		t.SkipNow()
 	}
 
@@ -152,21 +136,21 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	}
 
 	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
-	dm := devicemanagement.New(s, &msgCtx, &cfg.DeviceManagementConfig)
-	as := alarms.New(alarms.NewStorage(s), &msgCtx, &cfg.AlarmServiceConfig)
+	dm := devicemanagement.New(p, &msgCtx, &cfg.DeviceManagementConfig)
+	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
-	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
+	err = dm.SeedLwm2mTypes(ctx, dm.Config().Types)
 	is.NoErr(err)
 
-	err = storage.SeedSensorProfiles(ctx, s, dm.Config().DeviceProfiles)
+	err = dm.SeedSensorProfiles(ctx, dm.Config().DeviceProfiles)
 	is.NoErr(err)
 
-	err = storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	err = dm.SeedDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, dm, as, s)
+	api.RegisterHandlers(ctx, mux, policies, dm, as)
 
 	return mux, is
 }
