@@ -59,7 +59,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 
 	svc := New(reader, writer, statusWriter, profiles, &msgCtx, nil)
 
-	err := svc.NewDevice(ctx, types.Device{
+	err := svc.Create(ctx, types.Device{
 		Active:      true,
 		SensorID:    uuid.NewString(),
 		DeviceID:    sm.DeviceID,

@@ -19,7 +19,7 @@ func RegisterTopicMessageHandler(ctx context.Context, svc DeviceStatusHandler, m
 	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc))
 }
 
-func (s service) HandleStatusMessage(ctx context.Context, status types.StatusMessage) error {
+func (s service) Handle(ctx context.Context, status types.StatusMessage) error {
 	state := types.DeviceState{
 		Online:     true,
 		State:      types.DeviceStateOK,
@@ -59,7 +59,7 @@ func newDeviceStatusHandler(svc DeviceStatusHandler) messaging.TopicMessageHandl
 
 		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", m.DeviceID), slog.String("tenant", m.Tenant))
 
-		err = svc.HandleStatusMessage(ctx, m)
+		err = svc.Handle(ctx, m)
 		if err != nil {
 			log.Error("could not add device status", "err", err.Error())
 			return

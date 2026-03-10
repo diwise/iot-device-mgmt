@@ -15,7 +15,7 @@ var errDeviceNotFound = fmt.Errorf("device not found")
 var errDeviceProfileNotFound = fmt.Errorf("device profile not found")
 var errMissingTenant = fmt.Errorf("missing tenant")
 
-func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
+func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
 	d, err := s.reader.GetDeviceBySensorID(ctx, sensorID)
 	if err != nil {
 		if errors.Is(err, storage.ErrNoRows) {
@@ -31,7 +31,7 @@ func (s service) GetBySensorID(ctx context.Context, sensorID string, tenants []s
 	return types.Device{}, ErrDeviceNotFound
 }
 
-func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
+func (s service) Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
 	result, err := s.reader.Query(ctx, conditions.WithDeviceID(deviceID), conditions.WithTenants(tenants))
 	if err != nil {
 		if errors.Is(err, storage.ErrNoRows) {
@@ -47,7 +47,7 @@ func (s service) GetByDeviceID(ctx context.Context, deviceID string, tenants []s
 	return result.Data[0], nil
 }
 
-func (s service) GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error) {
+func (s service) Status(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error) {
 	if deviceID == "" {
 		return types.Collection[types.SensorStatus]{}, ErrDeviceNotFound
 	}
@@ -62,8 +62,8 @@ func (s service) GetDeviceStatus(ctx context.Context, deviceID string, params ma
 	return s.reader.GetDeviceStatus(ctx, deviceID, conds...)
 }
 
-func (s service) GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
-	_, err := s.GetByDeviceID(ctx, deviceID, tenants)
+func (s service) Alarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
+	_, err := s.Device(ctx, deviceID, tenants)
 	if err != nil {
 		return types.Collection[types.AlarmDetails]{}, err
 	}
@@ -78,11 +78,11 @@ func (s service) Query(ctx context.Context, params map[string][]string, tenants 
 	return s.reader.Query(ctx, conds...)
 }
 
-func (s service) GetTenants(ctx context.Context) (types.Collection[string], error) {
+func (s service) Tenants(ctx context.Context) (types.Collection[string], error) {
 	return s.reader.GetTenants(ctx)
 }
 
-func (s service) GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+func (s service) Lwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
 	var collection types.Collection[types.Lwm2mType]
 
 	if len(urn) > 0 && urn[0] != "" {
@@ -122,7 +122,7 @@ func (s service) GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collec
 	return collection, nil
 }
 
-func (s service) GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
+func (s service) Profiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
 	var collection types.Collection[types.SensorProfile]
 
 	if len(name) > 0 && name[0] != "" {
@@ -162,7 +162,7 @@ func (s service) GetDeviceProfiles(ctx context.Context, name ...string) (types.C
 	return collection, nil
 }
 
-func (s service) GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
+func (s service) Measurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
 	conds := conditions.Parse(ctx, params)
 
 	conds = append(conds, conditions.WithDeviceID(deviceID))

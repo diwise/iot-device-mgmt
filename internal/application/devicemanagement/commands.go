@@ -13,7 +13,7 @@ import (
 
 var errDeviceAlreadyExist = fmt.Errorf("device already exists")
 
-func (s service) NewDevice(ctx context.Context, device types.Device) error {
+func (s service) Create(ctx context.Context, device types.Device) error {
 	result, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
 	if err != nil {
 		return err
@@ -43,7 +43,7 @@ func (s service) NewDevice(ctx context.Context, device types.Device) error {
 	return nil
 }
 
-func (s service) UpdateDevice(ctx context.Context, device types.Device) error {
+func (s service) Update(ctx context.Context, device types.Device) error {
 	result, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
 	if err != nil {
 		return err
@@ -61,7 +61,7 @@ func (s service) UpdateDevice(ctx context.Context, device types.Device) error {
 	return nil
 }
 
-func (s service) MergeDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
+func (s service) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
 	result, err := s.reader.Query(ctx, conditions.WithDeviceID(deviceID), conditions.WithTenants(tenants))

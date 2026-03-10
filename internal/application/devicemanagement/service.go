@@ -40,27 +40,26 @@ type DeviceProfileStore interface {
 	CreateSensorProfileType(ctx context.Context, t types.Lwm2mType) error
 }
 
+/* ----- SERVICE INTERFACES ----- */
+
 type DeviceQueryService interface {
-	GetBySensorID(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
-	GetByDeviceID(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	GetDeviceStatus(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
-	GetDeviceAlarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
-	GetDeviceMeasurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
+	DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
+	Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
+	Status(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
+	Alarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
+	Measurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
 	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
-	GetTenants(ctx context.Context) (types.Collection[string], error)
-	GetLwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
-	GetDeviceProfiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
+	Tenants(ctx context.Context) (types.Collection[string], error)
+	Lwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
+	Profiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
 }
 
 type DeviceCommandService interface {
-	NewDevice(ctx context.Context, device types.Device) error
-	UpdateDevice(ctx context.Context, device types.Device) error
-	MergeDevice(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
-	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
-}
-
-type DeviceBulkCreateService interface {
+	Create(ctx context.Context, device types.Device) error
 	CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error
+	Update(ctx context.Context, device types.Device) error
+	Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
+	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 }
 
 type DeviceBootstrapService interface {
@@ -70,13 +69,12 @@ type DeviceBootstrapService interface {
 }
 
 type DeviceStatusHandler interface {
-	HandleStatusMessage(ctx context.Context, status types.StatusMessage) error
+	Handle(ctx context.Context, status types.StatusMessage) error
 }
 
 type DeviceAPIService interface {
 	DeviceQueryService
 	DeviceCommandService
-	DeviceBulkCreateService
 }
 
 //go:generate moq -rm -out devicereader_mock.go . DeviceReader

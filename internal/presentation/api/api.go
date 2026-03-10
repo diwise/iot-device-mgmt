@@ -81,7 +81,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 			logger.Debug(fmt.Sprintf("request devEUI %s for tenants %s", sensorID, strings.Join(allowedTenants, ", ")))
 
-			device, err := svc.GetBySensorID(ctx, sensorID, allowedTenants)
+			device, err := svc.DeviceBySensor(ctx, sensorID, allowedTenants)
 			if err != nil {
 				if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 					logger.Debug(fmt.Sprintf("device %s not found", sensorID))
@@ -187,7 +187,7 @@ func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) h
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		device, err := svc.GetByDeviceID(ctx, deviceID, allowedTenants)
+		device, err := svc.Device(ctx, deviceID, allowedTenants)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -227,7 +227,7 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		statuses, err := svc.GetDeviceStatus(ctx, deviceID, r.URL.Query(), allowedTenants)
+		statuses, err := svc.Status(ctx, deviceID, r.URL.Query(), allowedTenants)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -271,7 +271,7 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		alarms, err := svc.GetDeviceAlarms(ctx, deviceID, allowedTenants)
+		alarms, err := svc.Alarms(ctx, deviceID, allowedTenants)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -315,7 +315,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceA
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		result, err := svc.GetDeviceMeasurements(ctx, deviceID, r.URL.Query(), allowedTenants)
+		result, err := svc.Measurements(ctx, deviceID, r.URL.Query(), allowedTenants)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -393,7 +393,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 				return
 			}
 
-			err = svc.NewDevice(ctx, d)
+			err = svc.Create(ctx, d)
 			if err != nil {
 				if errors.Is(err, devicemanagement.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)
@@ -456,7 +456,7 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 			return
 		}
 
-		err = svc.UpdateDevice(ctx, d)
+		err = svc.Update(ctx, d)
 		if err != nil {
 			logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
@@ -501,7 +501,7 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService)
 			return
 		}
 
-		err = svc.MergeDevice(ctx, deviceID, fields, allowedTenants)
+		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
 			logger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
 			w.WriteHeader(http.StatusBadRequest)
@@ -537,13 +537,13 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPI
 				names = parts
 			}
 
-			profiles, err = svc.GetDeviceProfiles(ctx, names...)
+			profiles, err = svc.Profiles(ctx, names...)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
 		} else {
-			profiles, err = svc.GetDeviceProfiles(ctx)
+			profiles, err = svc.Profiles(ctx)
 			if err != nil {
 				w.WriteHeader(http.StatusNotFound)
 				return
@@ -596,7 +596,7 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 			urn = urnParam
 		}
 
-		types, err := svc.GetLwm2mTypes(ctx, urn)
+		types, err := svc.Lwm2mTypes(ctx, urn)
 		if err != nil {
 			w.WriteHeader(http.StatusNotFound)
 			return
