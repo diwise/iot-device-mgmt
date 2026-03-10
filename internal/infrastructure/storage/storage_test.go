@@ -8,6 +8,8 @@ import (
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	sensormanagement "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/google/uuid"
 )
@@ -99,6 +101,18 @@ func TestStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("create standalone sensor", func(t *testing.T) {
+		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+			SensorID: "zz-test-sensor-" + uuid.NewString(),
+			SensorProfile: &types.SensorProfile{
+				Decoder: "testdecoder-2",
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to create sensor: %v", err)
+		}
+	})
+
 	t.Run("set sensor profile", func(t *testing.T) {
 		err := s.SetSensorProfile(ctx, deviceID, types.SensorProfile{
 			Name:     "TestProfile-2",
@@ -151,6 +165,87 @@ func TestStorage(t *testing.T) {
 		}
 		if found {
 			t.Fatal("expected missing device to return found=false")
+		}
+	})
+
+	standaloneSensorID := "zz-test-sensor-standalone-" + uuid.NewString()
+
+	t.Run("create and get standalone sensor", func(t *testing.T) {
+		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+			SensorID: standaloneSensorID,
+			SensorProfile: &types.SensorProfile{
+				Decoder: "testdecoder-2",
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to create standalone sensor: %v", err)
+		}
+
+		sensor, found, err := s.GetSensor(ctx, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("failed to get sensor: %v", err)
+		}
+		if !found {
+			t.Fatal("expected sensor to be found")
+		}
+		if sensor.SensorID != standaloneSensorID {
+			t.Fatalf("expected sensor id %q, got %q", standaloneSensorID, sensor.SensorID)
+		}
+		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "TestDecoder-2" {
+			t.Fatalf("expected joined sensor profile decoder TestDecoder-2, got %+v", sensor.SensorProfile)
+		}
+
+		_, found, err = s.GetDeviceBySensorID(ctx, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("expected no error when checking device by sensor id, got %v", err)
+		}
+		if found {
+			t.Fatal("expected standalone sensor to not create a device")
+		}
+	})
+
+	t.Run("query sensors", func(t *testing.T) {
+		limit := 1000
+		result, err := s.QuerySensors(ctx, sensorquery.Sensors{Limit: &limit})
+		if err != nil {
+			t.Fatalf("failed to query sensors: %v", err)
+		}
+		if result.Count == 0 {
+			t.Fatal("expected at least one sensor in query result")
+		}
+
+		foundStandalone := false
+		for _, sensor := range result.Data {
+			if sensor.SensorID == standaloneSensorID {
+				foundStandalone = true
+				break
+			}
+		}
+		if !foundStandalone {
+			t.Fatalf("expected query result to contain sensor %q", standaloneSensorID)
+		}
+	})
+
+	t.Run("update standalone sensor", func(t *testing.T) {
+		err := s.UpdateSensor(ctx, sensormanagement.Sensor{
+			SensorID: standaloneSensorID,
+			SensorProfile: &types.SensorProfile{
+				Decoder: "testdecoder",
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to update sensor: %v", err)
+		}
+
+		sensor, found, err := s.GetSensor(ctx, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("failed to get updated sensor: %v", err)
+		}
+		if !found {
+			t.Fatal("expected updated sensor to be found")
+		}
+		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "TestDecoder" {
+			t.Fatalf("expected updated decoder TestDecoder, got %+v", sensor.SensorProfile)
 		}
 	})
 

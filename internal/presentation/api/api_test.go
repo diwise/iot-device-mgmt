@@ -15,6 +15,8 @@ import (
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -28,18 +30,44 @@ func TestApi(t *testing.T) {
 
 	msgMock := &messaging.MsgContextMock{}
 	mocks := newDeviceManagementMocks()
+	sensorMocks := newSensorManagementMocks()
 
 	dm := devicemanagement.New(mocks.reader, mocks.writer, mocks.statusWriter, mocks.profiles, msgMock, &devicemanagement.Config{})
+	sm := sensormanagement.New(sensorMocks.reader, sensorMocks.writer)
 	as := alarms.AlarmServiceMock{}
 
 	mux := http.NewServeMux()
-	RegisterHandlers(ctx, mux, policies, dm, &as)
+	RegisterHandlers(ctx, mux, policies, dm, sm, &as)
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
 	t.Run("GET /devices", func(t *testing.T) {
 		testQueryDevices(t, server.URL, mocks)
+	})
+
+	t.Run("GET /sensors", func(t *testing.T) {
+		testQuerySensors(t, server.URL, sensorMocks)
+	})
+
+	t.Run("GET /sensors?limit=invalid", func(t *testing.T) {
+		testQuerySensorsWithInvalidLimit(t, server.URL)
+	})
+
+	t.Run("GET /sensors internal failure", func(t *testing.T) {
+		testQuerySensorsInternalError(t, server.URL, sensorMocks)
+	})
+
+	t.Run("GET /sensors/test-sensor-standalone", func(t *testing.T) {
+		testGetSensor(t, server.URL, sensorMocks)
+	})
+
+	t.Run("GET /sensors/missing", func(t *testing.T) {
+		testGetSensorNotFound(t, server.URL, sensorMocks)
+	})
+
+	t.Run("GET /sensors/test-sensor-standalone internal failure", func(t *testing.T) {
+		testGetSensorInternalError(t, server.URL, sensorMocks)
 	})
 
 	t.Run("GET /devices?limit=invalid", func(t *testing.T) {
@@ -102,12 +130,32 @@ func TestApi(t *testing.T) {
 		testCreateDevice(t, server.URL, mocks)
 	})
 
+	t.Run("POST /sensors", func(t *testing.T) {
+		testCreateSensor(t, server.URL, sensorMocks)
+	})
+
+	t.Run("POST /sensors duplicate", func(t *testing.T) {
+		testCreateSensorDuplicate(t, server.URL, sensorMocks)
+	})
+
 	t.Run("POST /devices+multiPart", func(t *testing.T) {
 		testCreateDevices(t, server.URL, mocks)
 	})
 
 	t.Run("PUT /devices/test-device-1", func(t *testing.T) {
 		testUpdateDevice(t, server.URL, mocks)
+	})
+
+	t.Run("PUT /sensors/test-sensor-standalone", func(t *testing.T) {
+		testUpdateSensor(t, server.URL, sensorMocks)
+	})
+
+	t.Run("PUT /sensors/missing", func(t *testing.T) {
+		testUpdateSensorNotFound(t, server.URL, sensorMocks)
+	})
+
+	t.Run("PUT /sensors/test-sensor-standalone internal failure", func(t *testing.T) {
+		testUpdateSensorInternalError(t, server.URL, sensorMocks)
 	})
 
 	t.Run("PUT /devices/missing-device", func(t *testing.T) {
@@ -169,6 +217,75 @@ type deviceManagementMocks struct {
 	profiles     *devicemanagement.DeviceProfileStoreMock
 }
 
+type sensorReaderMock struct {
+	QueryFunc func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error)
+	GetFunc   func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error)
+}
+
+func (m *sensorReaderMock) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+	if m.QueryFunc == nil {
+		panic("sensorReaderMock.QueryFunc is nil")
+	}
+	return m.QueryFunc(ctx, query)
+}
+
+func (m *sensorReaderMock) GetSensor(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+	if m.GetFunc == nil {
+		panic("sensorReaderMock.GetFunc is nil")
+	}
+	return m.GetFunc(ctx, sensorID)
+}
+
+type sensorWriterMock struct {
+	CreateFunc func(ctx context.Context, sensor sensormanagement.Sensor) error
+	UpdateFunc func(ctx context.Context, sensor sensormanagement.Sensor) error
+}
+
+func (m *sensorWriterMock) CreateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+	if m.CreateFunc == nil {
+		panic("sensorWriterMock.CreateFunc is nil")
+	}
+	return m.CreateFunc(ctx, sensor)
+}
+
+func (m *sensorWriterMock) UpdateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+	if m.UpdateFunc == nil {
+		panic("sensorWriterMock.UpdateFunc is nil")
+	}
+	return m.UpdateFunc(ctx, sensor)
+}
+
+type sensorManagementMocks struct {
+	reader *sensorReaderMock
+	writer *sensorWriterMock
+}
+
+func newSensorManagementMocks() sensorManagementMocks {
+	return sensorManagementMocks{
+		reader: &sensorReaderMock{},
+		writer: &sensorWriterMock{},
+	}
+}
+
+func newNoopSensorAPIService() sensormanagement.SensorAPIService {
+	mocks := sensorManagementMocks{
+		reader: &sensorReaderMock{
+			QueryFunc: func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+				return types.Collection[sensormanagement.Sensor]{}, nil
+			},
+			GetFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+				return sensormanagement.Sensor{}, false, nil
+			},
+		},
+		writer: &sensorWriterMock{
+			CreateFunc: func(ctx context.Context, sensor sensormanagement.Sensor) error { return nil },
+			UpdateFunc: func(ctx context.Context, sensor sensormanagement.Sensor) error { return nil },
+		},
+	}
+
+	return sensormanagement.New(mocks.reader, mocks.writer)
+}
+
 func newDeviceManagementMocks() deviceManagementMocks {
 	return deviceManagementMocks{
 		reader:       &devicemanagement.DeviceReaderMock{},
@@ -193,6 +310,85 @@ func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 
 	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
 		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testQuerySensors(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+		return types.Collection[sensormanagement.Sensor]{
+			Data:       []sensormanagement.Sensor{testSensor},
+			Count:      1,
+			Offset:     0,
+			Limit:      10,
+			TotalCount: 1,
+		}, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/sensors", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-standalone"`) {
+		t.Fatalf("expected response to contain sensorID, got %s", string(body))
+	}
+	if !strings.Contains(string(body), `"decoder":"elsys"`) {
+		t.Fatalf("expected response to contain sensor profile decoder, got %s", string(body))
+	}
+}
+
+func testQuerySensorsWithInvalidLimit(t *testing.T, baseUrl string) {
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?limit=invalid", nil)
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", statusCode)
+	}
+}
+
+func testQuerySensorsInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+		return types.Collection[sensormanagement.Sensor]{}, errors.New("query failed")
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors", nil)
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
+	}
+}
+
+func testGetSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return testSensor, true, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/sensors/test-sensor-standalone", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-standalone"`) {
+		t.Fatalf("expected response to contain sensorID, got %s", string(body))
+	}
+}
+
+func testGetSensorNotFound(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{}, false, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors/missing", nil)
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testGetSensorInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{}, false, errors.New("lookup failed")
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors/test-sensor-standalone", nil)
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
 	}
 }
 
@@ -379,7 +575,7 @@ func testGetDeviceProfiles(t *testing.T, dm devicemanagement.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -410,7 +606,7 @@ func testGetDeviceProfilesNotFound(t *testing.T, dm devicemanagement.DeviceAPISe
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -437,7 +633,7 @@ func testGetDeviceProfilesInternalError(t *testing.T, dm devicemanagement.Device
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -469,7 +665,7 @@ func testGetLwm2mTypes(t *testing.T, dm devicemanagement.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -500,7 +696,7 @@ func testGetLwm2mTypesNotFound(t *testing.T, dm devicemanagement.DeviceAPIServic
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -527,7 +723,7 @@ func testGetLwm2mTypesInternalError(t *testing.T, dm devicemanagement.DeviceAPIS
 	}
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, service, newNoopSensorAPIService(), &alarms.AlarmServiceMock{}); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -563,6 +759,39 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
+func testCreateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{}, false, nil
+	}
+	mocks.writer.CreateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+		if sensor.SensorID != testSensor.SensorID {
+			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
+		}
+		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "elsys" {
+			t.Fatalf("expected sensor profile decoder elsys, got %+v", sensor.SensorProfile)
+		}
+		return nil
+	}
+
+	payload := `{"sensorID":"test-sensor-standalone","sensorProfile":{"decoder":"elsys"}}`
+	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/sensors", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusCreated {
+		t.Fatalf("expected status 201, got %d", statusCode)
+	}
+}
+
+func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return testSensor, true, nil
+	}
+
+	payload := `{"sensorID":"test-sensor-standalone","sensorProfile":{"decoder":"elsys"}}`
+	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/sensors", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", statusCode)
+	}
+}
+
 func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
@@ -595,6 +824,54 @@ func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
 	if statusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testUpdateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return testSensor, true, nil
+	}
+	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+		if sensor.SensorID != testSensor.SensorID {
+			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
+		}
+		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "enviot" {
+			t.Fatalf("expected sensor profile decoder enviot, got %+v", sensor.SensorProfile)
+		}
+		return nil
+	}
+
+	payload := `{"sensorID":"test-sensor-standalone","sensorProfile":{"decoder":"enviot"}}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/sensors/test-sensor-standalone", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testUpdateSensorNotFound(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{}, false, nil
+	}
+
+	payload := `{"sensorID":"missing","sensorProfile":{"decoder":"enviot"}}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/sensors/missing", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return testSensor, true, nil
+	}
+	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+		return errors.New("update failed")
+	}
+
+	payload := `{"sensorID":"test-sensor-standalone","sensorProfile":{"decoder":"enviot"}}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/sensors/test-sensor-standalone", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
 	}
 }
 
@@ -752,6 +1029,15 @@ func do(t *testing.T, method, url string, body io.Reader, headers ...map[string]
 }
 
 var testDevice = types.Device{SensorID: "test-sensor-1", DeviceID: "test-device-1", Tenant: "default"}
+
+var testSensor = sensormanagement.Sensor{
+	SensorID: "test-sensor-standalone",
+	SensorProfile: &types.SensorProfile{
+		Name:     "Elsys",
+		Decoder:  "elsys",
+		Interval: 60,
+	},
+}
 
 const csvMock string = `sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
 a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;key=value

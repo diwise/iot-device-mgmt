@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -9,8 +10,92 @@ import (
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
+
+func createLinks(u *url.URL, m *meta) *links {
+	if m == nil || m.TotalRecords == 0 {
+		return nil
+	}
+
+	query := u.Query()
+
+	newURL := func(offset uint64) *string {
+		query.Set("offset", strconv.Itoa(int(offset)))
+		u.RawQuery = query.Encode()
+		urlValue := u.String()
+		return &urlValue
+	}
+
+	first := uint64(0)
+	last := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
+	next := *m.Offset + *m.Limit
+	prev := int64(*m.Offset) - int64(*m.Limit)
+
+	links := &links{
+		Self:  newURL(*m.Offset),
+		First: newURL(first),
+		Last:  newURL(last),
+	}
+
+	if next < m.TotalRecords {
+		links.Next = newURL(next)
+	}
+
+	if prev >= 0 {
+		links.Prev = newURL(uint64(prev))
+	}
+
+	return links
+}
+
+func isMultipartFormData(r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+	return strings.Contains(contentType, "multipart/form-data")
+}
+
+func isApplicationJson(r *http.Request) bool {
+	contentType := r.Header.Get("Content-Type")
+	return strings.Contains(contentType, "application/json")
+}
+
+func wantsGeoJSON(r *http.Request) bool {
+	contentType := r.Header.Get("Accept")
+	return strings.Contains(contentType, "application/geo+json")
+}
+
+func wantsTextCSV(r *http.Request) bool {
+	contentType := r.Header.Get("Accept")
+	return strings.Contains(contentType, "text/csv")
+}
+
+func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
+	query := sensorquery.Sensors{}
+
+	for key, value := range values {
+		if len(value) == 0 {
+			continue
+		}
+
+		switch strings.ToLower(key) {
+		case "limit":
+			parsed, err := strconv.Atoi(value[0])
+			if err != nil {
+				return sensorquery.Sensors{}, fmt.Errorf("invalid limit value: %w", err)
+			}
+			query.Limit = &parsed
+		case "offset":
+			parsed, err := strconv.Atoi(value[0])
+			if err != nil {
+				return sensorquery.Sensors{}, fmt.Errorf("invalid offset value: %w", err)
+			}
+			query.Offset = &parsed
+		}
+	}
+
+	return query, nil
+}
 
 func alarmQueryFromValues(values url.Values, allowedTenants []string) (alarmquery.Alarms, error) {
 	query := alarmquery.Alarms{
@@ -72,10 +157,7 @@ func deviceMeasurementsQueryFromValues(values url.Values, allowedTenants []strin
 }
 
 func filtersFromValues(values url.Values, allowedTenants []string) (dmquery.Filters, error) {
-	filters := dmquery.Filters{
-		AllowedTenants: allowedTenants,
-	}
-
+	filters := dmquery.Filters{AllowedTenants: allowedTenants}
 	metadata := map[string]string{}
 
 	for key, value := range values {
@@ -187,20 +269,11 @@ func boundsFromValue(value string) (*types.Bounds, error) {
 		return nil, fmt.Errorf("invalid bounds value: %w", err)
 	}
 
-	return &types.Bounds{
-		MinLat: minLat,
-		MinLon: minLon,
-		MaxLat: maxLat,
-		MaxLon: maxLon,
-	}, nil
+	return &types.Bounds{MinLat: minLat, MinLon: minLon, MaxLat: maxLat, MaxLon: maxLon}, nil
 }
 
 func parseLastSeen(value string) (*time.Time, error) {
-	layouts := []string{
-		"2006-01-02T15:04",
-		"2006-01-02T15:04:05",
-		"2006-01-02T15:04Z",
-	}
+	layouts := []string{"2006-01-02T15:04", "2006-01-02T15:04:05", "2006-01-02T15:04Z"}
 
 	for _, layout := range layouts {
 		parsed, err := time.Parse(layout, value)

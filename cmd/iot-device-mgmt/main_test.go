@@ -12,6 +12,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
 
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 
@@ -138,6 +139,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
 	cfg.DeviceManagementConfig.SeedExistingDevices = exisitingDeviceUpdateFlag
 	dm := devicemanagement.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
+	sm := sensormanagement.New(p, p)
 	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
 	err = dm.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
@@ -151,7 +153,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, dm, as)
+	api.RegisterHandlers(ctx, mux, policies, dm, sm, as)
 
 	return mux, is
 }

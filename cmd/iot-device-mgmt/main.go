@@ -14,6 +14,7 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
 	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
@@ -101,6 +102,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	var deviceAPI devicemanagement.DeviceAPIService
 	var deviceBootstrap devicemanagement.DeviceBootstrapService
 	var deviceStatusHandler devicemanagement.DeviceStatusHandler
+	var sensorAPI sensormanagement.SensorAPIService
 	var as alarms.AlarmService
 	var wd watchdog.Watchdog
 
@@ -111,7 +113,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policies.Close()
-				return api.RegisterHandlers(ctx, handler, policies, deviceAPI, as)
+				return api.RegisterHandlers(ctx, handler, policies, deviceAPI, sensorAPI, as)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
@@ -121,6 +123,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 			deviceAPI = svc
 			deviceBootstrap = svc
 			deviceStatusHandler = svc
+			sensorAPI = sensormanagement.New(s, s)
 			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(as, &ac.WatchdogConfig)
 
