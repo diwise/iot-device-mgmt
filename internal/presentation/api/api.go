@@ -47,6 +47,8 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	r.Post("/devices", createDeviceHandler(log, dm))
 	r.Put("/devices/{id}", updateDeviceHandler(log, dm))
 	r.Patch("/devices/{id}", patchDeviceHandler(log, dm))
+	r.Put("/devices/{id}/sensor", attachDeviceSensorHandler(log, dm))
+	r.Delete("/devices/{id}/sensor", detachDeviceSensorHandler(log, dm))
 
 	r.Get("/alarms", getAlarmsHandler(log, alarm))
 

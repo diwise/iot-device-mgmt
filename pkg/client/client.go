@@ -32,6 +32,14 @@ type DeviceManagementClient interface {
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
 	Close(ctx context.Context)
 	CreateDevice(ctx context.Context, device types.Device) error
+	CreateSensor(ctx context.Context, sensor SensorConfig) error
+	UpdateSensor(ctx context.Context, sensor SensorConfig) error
+	GetSensor(ctx context.Context, sensorID string) (Sensor, error)
+	ListSensors(ctx context.Context, query SensorsQuery) ([]Sensor, error)
+	AttachSensorToDevice(ctx context.Context, deviceID, sensorID string) error
+	DetachSensorFromDevice(ctx context.Context, deviceID string) error
+	GetTenants(ctx context.Context) ([]string, error)
+	GetDeviceProfiles(ctx context.Context) ([]types.SensorProfile, error)
 	GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
 }
 
@@ -138,6 +146,7 @@ func New(ctx context.Context, devMgmtUrl, oauthTokenURL string, oauthInsecureURL
 }
 
 var ErrDeviceExist = errors.New("device already exists")
+var ErrConflict = errors.New("conflict")
 
 func drainAndCloseResponseBody(r *http.Response) {
 	defer r.Body.Close()

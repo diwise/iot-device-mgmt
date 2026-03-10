@@ -91,6 +91,18 @@ func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
 				return sensorquery.Sensors{}, fmt.Errorf("invalid offset value: %w", err)
 			}
 			query.Offset = &parsed
+		case "assigned":
+			parsed, err := strconv.ParseBool(value[0])
+			if err != nil {
+				return sensorquery.Sensors{}, fmt.Errorf("invalid assigned value: %w", err)
+			}
+			query.Assigned = &parsed
+		case "hasprofile":
+			parsed, err := strconv.ParseBool(value[0])
+			if err != nil {
+				return sensorquery.Sensors{}, fmt.Errorf("invalid hasProfile value: %w", err)
+			}
+			query.HasProfile = &parsed
 		}
 	}
 

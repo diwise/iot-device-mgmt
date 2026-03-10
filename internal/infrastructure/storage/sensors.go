@@ -18,11 +18,31 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
 	args := pgx.NamedArgs{}
+	where := []string{}
 	if condition.Offset != nil {
 		args["offset"] = offset
 	}
 	if condition.Limit != nil {
 		args["limit"] = limit
+	}
+	if query.Assigned != nil {
+		if *query.Assigned {
+			where = append(where, "d.device_id IS NOT NULL")
+		} else {
+			where = append(where, "d.device_id IS NULL")
+		}
+	}
+	if query.HasProfile != nil {
+		if *query.HasProfile {
+			where = append(where, "s.sensor_profile IS NOT NULL AND s.sensor_profile <> ''")
+		} else {
+			where = append(where, "(s.sensor_profile IS NULL OR s.sensor_profile = '')")
+		}
+	}
+
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
 	c, err := s.conn.Acquire(ctx)
@@ -34,14 +54,17 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	rows, err := c.Query(ctx, fmt.Sprintf(`
 		SELECT
 			s.sensor_id,
+			d.device_id,
 			sp.name,
 			sp.decoder,
 			sp.interval,
 			count(*) OVER () AS count
 		FROM sensors s
+		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
+		%s
 		ORDER BY s.sensor_id ASC
-		%s`, offsetLimit), args)
+		%s`, whereClause, offsetLimit), args)
 	if err != nil {
 		return types.Collection[sensormanagement.Sensor]{}, err
 	}
@@ -51,15 +74,16 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	var count uint64
 	for rows.Next() {
 		var sensorID string
+		var deviceID *string
 		var profileName, decoder *string
 		var interval *int
 
-		err = rows.Scan(&sensorID, &profileName, &decoder, &interval, &count)
+		err = rows.Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &count)
 		if err != nil {
 			return types.Collection[sensormanagement.Sensor]{}, err
 		}
 
-		items = append(items, sensorFromRow(sensorID, profileName, decoder, interval))
+		items = append(items, sensorFromRow(sensorID, deviceID, profileName, decoder, interval))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -87,17 +111,20 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensormanagem
 	defer c.Release()
 
 	var profileName, decoder *string
+	var deviceID *string
 	var interval *int
 
 	err = c.QueryRow(ctx, `
 		SELECT
 			s.sensor_id,
+			d.device_id,
 			sp.name,
 			sp.decoder,
 			sp.interval
 		FROM sensors s
+		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
-		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &profileName, &decoder, &interval)
+		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &profileName, &decoder, &interval)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return sensormanagement.Sensor{}, false, nil
@@ -105,7 +132,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensormanagem
 		return sensormanagement.Sensor{}, false, err
 	}
 
-	return sensorFromRow(sensorID, profileName, decoder, interval), true, nil
+	return sensorFromRow(sensorID, deviceID, profileName, decoder, interval), true, nil
 }
 
 func (s *Storage) CreateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
@@ -171,8 +198,8 @@ func sensorProfileDecoder(sensor sensormanagement.Sensor) any {
 	return strings.ToLower(strings.TrimSpace(sensor.SensorProfile.Decoder))
 }
 
-func sensorFromRow(sensorID string, profileName, decoder *string, interval *int) sensormanagement.Sensor {
-	sensor := sensormanagement.Sensor{SensorID: sensorID}
+func sensorFromRow(sensorID string, deviceID, profileName, decoder *string, interval *int) sensormanagement.Sensor {
+	sensor := sensormanagement.Sensor{SensorID: sensorID, DeviceID: deviceID}
 	if decoder == nil {
 		return sensor
 	}

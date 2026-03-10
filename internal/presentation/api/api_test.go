@@ -146,6 +146,18 @@ func TestApi(t *testing.T) {
 		testUpdateDevice(t, server.URL, mocks)
 	})
 
+	t.Run("PUT /devices/test-device-1/sensor", func(t *testing.T) {
+		testAttachSensorToDevice(t, server.URL, mocks)
+	})
+
+	t.Run("PUT /devices/test-device-1/sensor conflict", func(t *testing.T) {
+		testAttachSensorToDeviceConflict(t, server.URL, mocks)
+	})
+
+	t.Run("DELETE /devices/test-device-1/sensor", func(t *testing.T) {
+		testDetachSensorFromDevice(t, server.URL, mocks)
+	})
+
 	t.Run("PUT /sensors/test-sensor-standalone", func(t *testing.T) {
 		testUpdateSensor(t, server.URL, sensorMocks)
 	})
@@ -746,6 +758,12 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 			Data: []types.Device{},
 		}, nil
 	}
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	}
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return types.Device{}, false, nil
+	}
 
 	payload := `{
 		"deviceID": "new-device-1",
@@ -812,6 +830,12 @@ func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks
 func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	}
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return testDevice, true, nil
 	}
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		if d.DeviceID != testDevice.DeviceID {
@@ -927,17 +951,73 @@ func testPatchDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) 
 		}
 		return nil
 	}
-	mocks.writer.SetSensorProfileFunc = func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-		if dp.Decoder != "profile-a" {
-			t.Fatalf("expected profile-a, got %+v", dp)
+
+	payload := `{"active":"true","interval":60,"latitude":"62.1","longitude":17.2,"types":["urn:test:1"]}`
+	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	}
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return types.Device{}, false, nil
+	}
+	mocks.writer.AssignSensorFunc = func(ctx context.Context, deviceID, sensorID string) error {
+		if deviceID != testDevice.DeviceID {
+			t.Fatalf("expected device id %q, got %q", testDevice.DeviceID, deviceID)
+		}
+		if sensorID != "test-sensor-standalone" {
+			t.Fatalf("expected sensor id %q, got %q", "test-sensor-standalone", sensorID)
 		}
 		return nil
 	}
 
-	payload := `{"active":"true","interval":60,"latitude":"62.1","longitude":17.2,"types":["urn:test:1"],"deviceProfile":"profile-a"}`
-	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	payload := `{"sensorID":"test-sensor-standalone"}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/test-device-1/sensor", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
 	if statusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+		return sensormanagement.Sensor{SensorID: sensorID}, true, nil
+	}
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return types.Device{}, false, nil
+	}
+
+	payload := `{"sensorID":"test-sensor-standalone"}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/test-device-1/sensor", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusConflict {
+		t.Fatalf("expected status 409, got %d", statusCode)
+	}
+}
+
+func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.writer.UnassignSensorFunc = func(ctx context.Context, deviceID string) error {
+		if deviceID != testDevice.DeviceID {
+			t.Fatalf("expected device id %q, got %q", testDevice.DeviceID, deviceID)
+		}
+		return nil
+	}
+
+	statusCode, _ := do(t, http.MethodDelete, baseUrl+"/api/v0/devices/test-device-1/sensor", nil)
+	if statusCode != http.StatusNoContent {
+		t.Fatalf("expected status 204, got %d", statusCode)
 	}
 }
 

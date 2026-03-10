@@ -99,8 +99,10 @@ func TestContentTypeHelpers(t *testing.T) {
 
 func TestSensorQueryFromValues(t *testing.T) {
 	query, err := sensorQueryFromValues(url.Values{
-		"limit":  {"5"},
-		"offset": {"10"},
+		"limit":      {"5"},
+		"offset":     {"10"},
+		"assigned":   {"false"},
+		"hasProfile": {"true"},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -112,12 +114,25 @@ func TestSensorQueryFromValues(t *testing.T) {
 	if query.Offset == nil || *query.Offset != 10 {
 		t.Fatalf("expected offset 10, got %v", query.Offset)
 	}
+	if query.Assigned == nil || *query.Assigned {
+		t.Fatalf("expected assigned=false, got %v", query.Assigned)
+	}
+	if query.HasProfile == nil || !*query.HasProfile {
+		t.Fatalf("expected hasProfile=true, got %v", query.HasProfile)
+	}
 }
 
 func TestSensorQueryFromValuesRejectsInvalidLimit(t *testing.T) {
 	_, err := sensorQueryFromValues(url.Values{"limit": {"not-a-number"}})
 	if err == nil {
 		t.Fatal("expected error for invalid limit")
+	}
+}
+
+func TestSensorQueryFromValuesRejectsInvalidAssigned(t *testing.T) {
+	_, err := sensorQueryFromValues(url.Values{"assigned": {"maybe"}})
+	if err == nil {
+		t.Fatal("expected error for invalid assigned")
 	}
 }
 

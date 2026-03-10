@@ -12,6 +12,9 @@ import (
 )
 
 var errDeviceAlreadyExist = fmt.Errorf("device already exists")
+var errSensorNotFound = fmt.Errorf("sensor not found")
+var errSensorAlreadyAssigned = fmt.Errorf("sensor already assigned")
+var errSensorProfileRequired = fmt.Errorf("sensor profile required")
 
 func (s service) Create(ctx context.Context, device types.Device) error {
 	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
@@ -21,6 +24,13 @@ func (s service) Create(ctx context.Context, device types.Device) error {
 
 	if result.Count > 0 {
 		return ErrDeviceAlreadyExist
+	}
+
+	if strings.TrimSpace(device.SensorID) != "" {
+		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = s.writer.CreateOrUpdateDevice(ctx, device)
@@ -53,6 +63,13 @@ func (s service) Update(ctx context.Context, device types.Device) error {
 		return ErrDeviceNotFound
 	}
 
+	if strings.TrimSpace(device.SensorID) != "" {
+		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID)
+		if err != nil {
+			return err
+		}
+	}
+
 	err = s.writer.CreateOrUpdateDevice(ctx, device)
 	if err != nil {
 		return err
@@ -78,7 +95,7 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 	}
 
 	var active *bool
-	var name, description, environment, source, tenant, deviceProfile *string
+	var name, description, environment, source, tenant *string
 	var location *types.Location
 	var lwm2m []string
 	var interval *int
@@ -150,12 +167,6 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 				s := typ
 				lwm2m = append(lwm2m, s)
 			}
-		case "deviceProfile":
-			s, err := patchString(k, v)
-			if err != nil {
-				return err
-			}
-			deviceProfile = &s
 		case "interval":
 			i, err := patchInt(k, v)
 			if err != nil {
@@ -176,16 +187,6 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 		return err
 	}
 
-	if deviceProfile != nil {
-		err = s.writer.SetSensorProfile(ctx, deviceID, types.SensorProfile{
-			Decoder: *deviceProfile,
-		})
-		if err != nil {
-			log.Error("could not set device profile for device", "device_id", deviceID, "profile", deviceProfile, "err", err.Error())
-			return err
-		}
-	}
-
 	if len(lwm2m) > 0 {
 		l := []types.Lwm2mType{}
 		for _, t := range lwm2m {
@@ -202,6 +203,34 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 			log.Error("could not set lwm2m types for device", "device_id", deviceID, "err", err.Error())
 			return err
 		}
+	}
+
+	return nil
+}
+
+func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensorID string) error {
+	sensorID = strings.TrimSpace(sensorID)
+	if sensorID == "" {
+		return nil
+	}
+
+	sensor, found, err := s.reader.GetSensor(ctx, sensorID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrSensorNotFound
+	}
+	if sensor.SensorProfile == nil || strings.TrimSpace(sensor.SensorProfile.Decoder) == "" {
+		return ErrSensorProfileRequired
+	}
+
+	assignedDevice, found, err := s.reader.GetDeviceBySensorID(ctx, sensorID)
+	if err != nil {
+		return err
+	}
+	if found && assignedDevice.DeviceID != deviceID {
+		return ErrSensorAlreadyAssigned
 	}
 
 	return nil

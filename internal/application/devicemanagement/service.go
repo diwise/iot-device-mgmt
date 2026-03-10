@@ -5,6 +5,7 @@ import (
 	"io"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
@@ -14,10 +15,14 @@ var ErrDeviceAlreadyExist = errDeviceAlreadyExist
 var ErrDeviceProfileNotFound = errDeviceProfileNotFound
 var ErrMissingTenant = errMissingTenant
 var ErrInvalidPatch = errInvalidPatch
+var ErrSensorNotFound = errSensorNotFound
+var ErrSensorAlreadyAssigned = errSensorAlreadyAssigned
+var ErrSensorProfileRequired = errSensorProfileRequired
 
 type DeviceReader interface {
 	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error)
+	GetSensor(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
@@ -28,7 +33,8 @@ type DeviceWriter interface {
 	CreateOrUpdateDevice(ctx context.Context, d types.Device) error
 	UpdateDevice(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error
 	SetDeviceProfileTypes(ctx context.Context, deviceID string, types []types.Lwm2mType) error
-	SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error
+	AssignSensor(ctx context.Context, deviceID, sensorID string) error
+	UnassignSensor(ctx context.Context, deviceID string) error
 }
 
 type DeviceStatusWriter interface {
@@ -60,6 +66,8 @@ type DeviceCommandService interface {
 	CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error
 	Update(ctx context.Context, device types.Device) error
 	Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
+	AttachSensor(ctx context.Context, deviceID, sensorID string, tenants []string) error
+	DetachSensor(ctx context.Context, deviceID string, tenants []string) error
 	UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error
 }
 

@@ -43,11 +43,20 @@ var _ DeviceManagementClient = &DeviceManagementClientMock{}
 //
 //	}
 type DeviceManagementClientMock struct {
+	// AttachSensorToDeviceFunc mocks the AttachSensorToDevice method.
+	AttachSensorToDeviceFunc func(ctx context.Context, deviceID string, sensorID string) error
+
 	// CloseFunc mocks the Close method.
 	CloseFunc func(ctx context.Context)
 
 	// CreateDeviceFunc mocks the CreateDevice method.
 	CreateDeviceFunc func(ctx context.Context, device types.Device) error
+
+	// CreateSensorFunc mocks the CreateSensor method.
+	CreateSensorFunc func(ctx context.Context, sensor SensorConfig) error
+
+	// DetachSensorFromDeviceFunc mocks the DetachSensorFromDevice method.
+	DetachSensorFromDeviceFunc func(ctx context.Context, deviceID string) error
 
 	// FindDeviceFromDevEUIFunc mocks the FindDeviceFromDevEUI method.
 	FindDeviceFromDevEUIFunc func(ctx context.Context, devEUI string) (Device, error)
@@ -58,8 +67,28 @@ type DeviceManagementClientMock struct {
 	// GetDeviceProfileFunc mocks the GetDeviceProfile method.
 	GetDeviceProfileFunc func(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
 
+	// GetDeviceProfilesFunc mocks the GetDeviceProfiles method.
+	GetDeviceProfilesFunc func(ctx context.Context) ([]types.SensorProfile, error)
+
+	// GetSensorFunc mocks the GetSensor method.
+	GetSensorFunc func(ctx context.Context, sensorID string) (Sensor, error)
+
+	// GetTenantsFunc mocks the GetTenants method.
+	GetTenantsFunc func(ctx context.Context) ([]string, error)
+
+	// ListSensorsFunc mocks the ListSensors method.
+	ListSensorsFunc func(ctx context.Context, query SensorsQuery) ([]Sensor, error)
+
+	// UpdateSensorFunc mocks the UpdateSensor method.
+	UpdateSensorFunc func(ctx context.Context, sensor SensorConfig) error
+
 	// calls tracks calls to the methods.
 	calls struct {
+		AttachSensorToDevice []struct {
+			Ctx      context.Context
+			DeviceID string
+			SensorID string
+		}
 		// Close holds details about calls to the Close method.
 		Close []struct {
 			// Ctx is the ctx argument value.
@@ -71,6 +100,14 @@ type DeviceManagementClientMock struct {
 			Ctx context.Context
 			// Device is the device argument value.
 			Device types.Device
+		}
+		CreateSensor []struct {
+			Ctx    context.Context
+			Sensor SensorConfig
+		}
+		DetachSensorFromDevice []struct {
+			Ctx      context.Context
+			DeviceID string
 		}
 		// FindDeviceFromDevEUI holds details about calls to the FindDeviceFromDevEUI method.
 		FindDeviceFromDevEUI []struct {
@@ -93,12 +130,53 @@ type DeviceManagementClientMock struct {
 			// DeviceProfileID is the deviceProfileID argument value.
 			DeviceProfileID string
 		}
+		GetDeviceProfiles []struct {
+			Ctx context.Context
+		}
+		GetSensor []struct {
+			Ctx      context.Context
+			SensorID string
+		}
+		GetTenants []struct {
+			Ctx context.Context
+		}
+		ListSensors []struct {
+			Ctx   context.Context
+			Query SensorsQuery
+		}
+		UpdateSensor []struct {
+			Ctx    context.Context
+			Sensor SensorConfig
+		}
 	}
+	lockAttachSensorToDevice     sync.RWMutex
 	lockClose                    sync.RWMutex
 	lockCreateDevice             sync.RWMutex
+	lockCreateSensor             sync.RWMutex
+	lockDetachSensorFromDevice   sync.RWMutex
 	lockFindDeviceFromDevEUI     sync.RWMutex
 	lockFindDeviceFromInternalID sync.RWMutex
 	lockGetDeviceProfile         sync.RWMutex
+	lockGetDeviceProfiles        sync.RWMutex
+	lockGetSensor                sync.RWMutex
+	lockGetTenants               sync.RWMutex
+	lockListSensors              sync.RWMutex
+	lockUpdateSensor             sync.RWMutex
+}
+
+func (mock *DeviceManagementClientMock) AttachSensorToDevice(ctx context.Context, deviceID string, sensorID string) error {
+	if mock.AttachSensorToDeviceFunc == nil {
+		panic("DeviceManagementClientMock.AttachSensorToDeviceFunc: method is nil but DeviceManagementClient.AttachSensorToDevice was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		SensorID string
+	}{Ctx: ctx, DeviceID: deviceID, SensorID: sensorID}
+	mock.lockAttachSensorToDevice.Lock()
+	mock.calls.AttachSensorToDevice = append(mock.calls.AttachSensorToDevice, callInfo)
+	mock.lockAttachSensorToDevice.Unlock()
+	return mock.AttachSensorToDeviceFunc(ctx, deviceID, sensorID)
 }
 
 // Close calls CloseFunc.
@@ -149,6 +227,34 @@ func (mock *DeviceManagementClientMock) CreateDevice(ctx context.Context, device
 	mock.calls.CreateDevice = append(mock.calls.CreateDevice, callInfo)
 	mock.lockCreateDevice.Unlock()
 	return mock.CreateDeviceFunc(ctx, device)
+}
+
+func (mock *DeviceManagementClientMock) CreateSensor(ctx context.Context, sensor SensorConfig) error {
+	if mock.CreateSensorFunc == nil {
+		panic("DeviceManagementClientMock.CreateSensorFunc: method is nil but DeviceManagementClient.CreateSensor was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Sensor SensorConfig
+	}{Ctx: ctx, Sensor: sensor}
+	mock.lockCreateSensor.Lock()
+	mock.calls.CreateSensor = append(mock.calls.CreateSensor, callInfo)
+	mock.lockCreateSensor.Unlock()
+	return mock.CreateSensorFunc(ctx, sensor)
+}
+
+func (mock *DeviceManagementClientMock) DetachSensorFromDevice(ctx context.Context, deviceID string) error {
+	if mock.DetachSensorFromDeviceFunc == nil {
+		panic("DeviceManagementClientMock.DetachSensorFromDeviceFunc: method is nil but DeviceManagementClient.DetachSensorFromDevice was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+	}{Ctx: ctx, DeviceID: deviceID}
+	mock.lockDetachSensorFromDevice.Lock()
+	mock.calls.DetachSensorFromDevice = append(mock.calls.DetachSensorFromDevice, callInfo)
+	mock.lockDetachSensorFromDevice.Unlock()
+	return mock.DetachSensorFromDeviceFunc(ctx, deviceID)
 }
 
 // CreateDeviceCalls gets all the calls that were made to CreateDevice.
@@ -257,6 +363,70 @@ func (mock *DeviceManagementClientMock) GetDeviceProfile(ctx context.Context, de
 	mock.calls.GetDeviceProfile = append(mock.calls.GetDeviceProfile, callInfo)
 	mock.lockGetDeviceProfile.Unlock()
 	return mock.GetDeviceProfileFunc(ctx, deviceProfileID)
+}
+
+func (mock *DeviceManagementClientMock) GetDeviceProfiles(ctx context.Context) ([]types.SensorProfile, error) {
+	if mock.GetDeviceProfilesFunc == nil {
+		panic("DeviceManagementClientMock.GetDeviceProfilesFunc: method is nil but DeviceManagementClient.GetDeviceProfiles was just called")
+	}
+	callInfo := struct{ Ctx context.Context }{Ctx: ctx}
+	mock.lockGetDeviceProfiles.Lock()
+	mock.calls.GetDeviceProfiles = append(mock.calls.GetDeviceProfiles, callInfo)
+	mock.lockGetDeviceProfiles.Unlock()
+	return mock.GetDeviceProfilesFunc(ctx)
+}
+
+func (mock *DeviceManagementClientMock) GetSensor(ctx context.Context, sensorID string) (Sensor, error) {
+	if mock.GetSensorFunc == nil {
+		panic("DeviceManagementClientMock.GetSensorFunc: method is nil but DeviceManagementClient.GetSensor was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+	}{Ctx: ctx, SensorID: sensorID}
+	mock.lockGetSensor.Lock()
+	mock.calls.GetSensor = append(mock.calls.GetSensor, callInfo)
+	mock.lockGetSensor.Unlock()
+	return mock.GetSensorFunc(ctx, sensorID)
+}
+
+func (mock *DeviceManagementClientMock) GetTenants(ctx context.Context) ([]string, error) {
+	if mock.GetTenantsFunc == nil {
+		panic("DeviceManagementClientMock.GetTenantsFunc: method is nil but DeviceManagementClient.GetTenants was just called")
+	}
+	callInfo := struct{ Ctx context.Context }{Ctx: ctx}
+	mock.lockGetTenants.Lock()
+	mock.calls.GetTenants = append(mock.calls.GetTenants, callInfo)
+	mock.lockGetTenants.Unlock()
+	return mock.GetTenantsFunc(ctx)
+}
+
+func (mock *DeviceManagementClientMock) ListSensors(ctx context.Context, query SensorsQuery) ([]Sensor, error) {
+	if mock.ListSensorsFunc == nil {
+		panic("DeviceManagementClientMock.ListSensorsFunc: method is nil but DeviceManagementClient.ListSensors was just called")
+	}
+	callInfo := struct {
+		Ctx   context.Context
+		Query SensorsQuery
+	}{Ctx: ctx, Query: query}
+	mock.lockListSensors.Lock()
+	mock.calls.ListSensors = append(mock.calls.ListSensors, callInfo)
+	mock.lockListSensors.Unlock()
+	return mock.ListSensorsFunc(ctx, query)
+}
+
+func (mock *DeviceManagementClientMock) UpdateSensor(ctx context.Context, sensor SensorConfig) error {
+	if mock.UpdateSensorFunc == nil {
+		panic("DeviceManagementClientMock.UpdateSensorFunc: method is nil but DeviceManagementClient.UpdateSensor was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Sensor SensorConfig
+	}{Ctx: ctx, Sensor: sensor}
+	mock.lockUpdateSensor.Lock()
+	mock.calls.UpdateSensor = append(mock.calls.UpdateSensor, callInfo)
+	mock.lockUpdateSensor.Unlock()
+	return mock.UpdateSensorFunc(ctx, sensor)
 }
 
 // GetDeviceProfileCalls gets all the calls that were made to GetDeviceProfile.

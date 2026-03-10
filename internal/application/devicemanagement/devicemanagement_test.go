@@ -3,11 +3,13 @@ package devicemanagement
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"testing"
 	"time"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
@@ -22,6 +24,17 @@ func TestDeviceStatusHandler(t *testing.T) {
 	reader := &DeviceReaderMock{
 		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
+		},
+		GetSensorFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+			return sensormanagement.Sensor{
+				SensorID: sensorID,
+				SensorProfile: &types.SensorProfile{
+					Decoder: "test",
+				},
+			}, true, nil
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+			return types.Device{}, false, nil
 		},
 	}
 	writer := &DeviceWriterMock{
@@ -93,6 +106,69 @@ func TestDeviceStatusHandler(t *testing.T) {
 
 	handler := newDeviceStatusHandler(svc)
 	handler(ctx, statusMessage(sm), log)
+}
+
+func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
+	is := is.New(t)
+
+	reader := &DeviceReaderMock{
+		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+			return types.Collection[types.Device]{}, nil
+		},
+		GetSensorFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+			return sensormanagement.Sensor{SensorID: sensorID}, true, nil
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+			return types.Device{}, false, nil
+		},
+	}
+
+	svc := New(reader, &DeviceWriterMock{}, &DeviceStatusWriterMock{}, &DeviceProfileStoreMock{}, &messaging.MsgContextMock{}, nil)
+	err := svc.Create(context.Background(), types.Device{DeviceID: "device-1", SensorID: "sensor-1", Tenant: "default"})
+	is.True(errors.Is(err, ErrSensorProfileRequired))
+}
+
+func TestAttachSensorRejectsAssignedSensor(t *testing.T) {
+	is := is.New(t)
+
+	reader := &DeviceReaderMock{
+		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil
+		},
+		GetSensorFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+			return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		},
+		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+			return types.Device{DeviceID: "device-2", Tenant: "default"}, true, nil
+		},
+	}
+
+	svc := New(reader, &DeviceWriterMock{}, &DeviceStatusWriterMock{}, &DeviceProfileStoreMock{}, &messaging.MsgContextMock{}, nil)
+	err := svc.AttachSensor(context.Background(), "device-1", "sensor-1", []string{"default"})
+	is.True(errors.Is(err, ErrSensorAlreadyAssigned))
+}
+
+func TestDetachSensorCallsWriter(t *testing.T) {
+	is := is.New(t)
+	called := false
+
+	reader := &DeviceReaderMock{
+		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default", SensorID: "sensor-1"}}}, nil
+		},
+	}
+	writer := &DeviceWriterMock{
+		UnassignSensorFunc: func(ctx context.Context, deviceID string) error {
+			called = true
+			is.Equal(deviceID, "device-1")
+			return nil
+		},
+	}
+
+	svc := New(reader, writer, &DeviceStatusWriterMock{}, &DeviceProfileStoreMock{}, &messaging.MsgContextMock{}, nil)
+	err := svc.DetachSensor(context.Background(), "device-1", []string{"default"})
+	is.NoErr(err)
+	is.True(called)
 }
 
 func statusMessage(s types.StatusMessage) messaging.IncomingTopicMessage {

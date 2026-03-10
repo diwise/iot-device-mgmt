@@ -128,6 +128,159 @@ func TestCreateUnknownDevice(t *testing.T) {
 	client.Close(ctx)
 }
 
+func TestGetSensor(t *testing.T) {
+	is := is.New(t)
+
+	resBody := `{"data":{"sensorID":"sensor-1","deviceID":"device-1","sensorProfile":{"name":"Elsys","decoder":"elsys","interval":60}}}`
+	mockedService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/sensors/sensor-1"),
+			expects.RequestMethod("GET"),
+		),
+		test.Returns(
+			response.Code(200),
+			response.Body([]byte(resBody)),
+		),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is, expects.RequestPath("/token")),
+		test.Returns(response.ContentType("application/json"), response.Code(200), response.Body([]byte(TokenResponse))),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+
+	sensor, err := client.GetSensor(ctx, "sensor-1")
+	is.NoErr(err)
+	is.Equal(sensor.ID(), "sensor-1")
+	is.Equal(sensor.DeviceID(), "device-1")
+	is.True(sensor.IsAssigned())
+	is.Equal(sensor.SensorType(), "elsys")
+	is.Equal(sensor.Interval(), 60)
+
+	client.Close(ctx)
+}
+
+func TestListSensors(t *testing.T) {
+	is := is.New(t)
+
+	resBody := `{"data":[{"sensorID":"sensor-1","sensorProfile":{"decoder":"elsys","interval":60}},{"sensorID":"sensor-2"}]}`
+	assigned := false
+	hasProfile := true
+	limit := 10
+	mockedService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/sensors"),
+			expects.QueryParamContains("assigned", "false"),
+			expects.QueryParamContains("hasProfile", "true"),
+			expects.QueryParamContains("limit", "10"),
+			expects.RequestMethod("GET"),
+		),
+		test.Returns(response.Code(200), response.Body([]byte(resBody))),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is, expects.RequestPath("/token")),
+		test.Returns(response.ContentType("application/json"), response.Code(200), response.Body([]byte(TokenResponse))),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+
+	sensors, err := client.ListSensors(ctx, SensorsQuery{Assigned: &assigned, HasProfile: &hasProfile, Limit: &limit})
+	is.NoErr(err)
+	is.Equal(len(sensors), 2)
+	is.Equal(sensors[0].ID(), "sensor-1")
+	is.Equal(sensors[1].SensorType(), "")
+
+	client.Close(ctx)
+}
+
+func TestAttachAndDetachSensorToDevice(t *testing.T) {
+	is := is.New(t)
+
+	mockedService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/devices/device-1/sensor"),
+			expects.RequestMethod("PUT"),
+			expects.RequestBodyContaining(`"sensorID":"sensor-1"`),
+		),
+		test.Returns(response.Code(200)),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is, expects.RequestPath("/token")),
+		test.Returns(response.ContentType("application/json"), response.Code(200), response.Body([]byte(TokenResponse))),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+	is.NoErr(client.AttachSensorToDevice(ctx, "device-1", "sensor-1"))
+	client.Close(ctx)
+
+	mockedDetachService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/devices/device-1/sensor"),
+			expects.RequestMethod("DELETE"),
+		),
+		test.Returns(response.Code(204)),
+	)
+
+	client, err = New(ctx, mockedDetachService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+	is.NoErr(client.DetachSensorFromDevice(ctx, "device-1"))
+	client.Close(ctx)
+}
+
+func TestGetTenantsAndDeviceProfiles(t *testing.T) {
+	is := is.New(t)
+
+	tenantsService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/admin/tenants"),
+			expects.RequestMethod("GET"),
+		),
+		test.Returns(response.Code(200), response.Body([]byte(`{"data":["default","tenant-a"]}`))),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is, expects.RequestPath("/token")),
+		test.Returns(response.ContentType("application/json"), response.Code(200), response.Body([]byte(TokenResponse))),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+	client, err := New(ctx, tenantsService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+	tenants, err := client.GetTenants(ctx)
+	is.NoErr(err)
+	is.Equal(tenants, []string{"default", "tenant-a"})
+	client.Close(ctx)
+
+	profilesService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/admin/deviceprofiles"),
+			expects.RequestMethod("GET"),
+		),
+		test.Returns(response.Code(200), response.Body([]byte(`{"data":[{"name":"Elsys","decoder":"elsys","interval":60}]}`))),
+	)
+
+	client, err = New(ctx, profilesService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+	profiles, err := client.GetDeviceProfiles(ctx)
+	is.NoErr(err)
+	is.Equal(len(profiles), 1)
+	is.Equal(profiles[0].Decoder, "elsys")
+	client.Close(ctx)
+}
+
 func TestMe(t *testing.T) {
 	is := is.New(t)
 

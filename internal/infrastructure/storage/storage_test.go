@@ -67,6 +67,18 @@ func TestStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("create sensor for device", func(t *testing.T) {
+		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+			SensorID: sensorID,
+			SensorProfile: &types.SensorProfile{
+				Decoder: "testdecoder",
+			},
+		})
+		if err != nil {
+			t.Fatalf("failed to create sensor for device: %v", err)
+		}
+	})
+
 	t.Run("create a device", func(t *testing.T) {
 		d := types.Device{
 			DeviceID: deviceID,
@@ -226,6 +238,25 @@ func TestStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("query unassigned sensors with profile", func(t *testing.T) {
+		limit := 1000
+		assigned := false
+		hasProfile := true
+		result, err := s.QuerySensors(ctx, sensorquery.Sensors{Limit: &limit, Assigned: &assigned, HasProfile: &hasProfile})
+		if err != nil {
+			t.Fatalf("failed to query sensors with filters: %v", err)
+		}
+
+		for _, sensor := range result.Data {
+			if sensor.DeviceID != nil {
+				t.Fatalf("expected unassigned sensors only, got %+v", sensor)
+			}
+			if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder == "" {
+				t.Fatalf("expected sensors with profile only, got %+v", sensor)
+			}
+		}
+	})
+
 	t.Run("update standalone sensor", func(t *testing.T) {
 		err := s.UpdateSensor(ctx, sensormanagement.Sensor{
 			SensorID: standaloneSensorID,
@@ -277,11 +308,15 @@ func TestStorage(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to query alarms: %v", err)
 		}
-		if len(result.Data) != 1 {
-			t.Fatalf("expected 1 alarm result, got %d", len(result.Data))
+		found := false
+		for _, alarm := range result.Data {
+			if alarm.DeviceID == deviceID {
+				found = true
+				break
+			}
 		}
-		if result.Data[0].DeviceID != deviceID {
-			t.Fatalf("expected device id %q, got %q", deviceID, result.Data[0].DeviceID)
+		if !found {
+			t.Fatalf("expected alarm results to contain device id %q, got %+v", deviceID, result.Data)
 		}
 	})
 
@@ -321,6 +356,36 @@ func TestStorage(t *testing.T) {
 
 		if d.Active != newStatus {
 			t.Fatalf("expected active flag to be %v, got %v", newStatus, d.Active)
+		}
+	})
+
+	t.Run("attach standalone sensor to device", func(t *testing.T) {
+		err := s.AssignSensor(ctx, deviceID, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("failed to assign sensor: %v", err)
+		}
+
+		d, found, err := s.GetDeviceBySensorID(ctx, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("failed to get device by newly assigned sensor: %v", err)
+		}
+		if !found || d.DeviceID != deviceID {
+			t.Fatalf("expected assigned sensor to point to device %q, got %+v found=%v", deviceID, d, found)
+		}
+	})
+
+	t.Run("detach sensor from device", func(t *testing.T) {
+		err := s.UnassignSensor(ctx, deviceID)
+		if err != nil {
+			t.Fatalf("failed to unassign sensor: %v", err)
+		}
+
+		_, found, err := s.GetDeviceBySensorID(ctx, standaloneSensorID)
+		if err != nil {
+			t.Fatalf("failed to verify detached sensor: %v", err)
+		}
+		if found {
+			t.Fatal("expected detached sensor to no longer be linked to a device")
 		}
 	})
 

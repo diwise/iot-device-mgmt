@@ -263,8 +263,6 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 	defer tx.Rollback(ctx)
 
 	sensorID := strings.TrimSpace(d.SensorID)
-	sensorProfile := strings.ToLower(strings.TrimSpace(d.SensorProfile.Decoder))
-
 	args := pgx.NamedArgs{
 		"device_id":   strings.TrimSpace(d.DeviceID),
 		"active":      d.Active,
@@ -281,13 +279,6 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 		args["sensor_id"] = nil
 	} else {
 		args["sensor_id"] = sensorID
-	}
-
-	if sensorID != "" {
-		err = createOrUpdateSensorTx(ctx, tx, sensorID, sensorProfile)
-		if err != nil {
-			return err
-		}
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -447,33 +438,6 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 	}
 
 	return tx.Commit(ctx)
-}
-
-func createOrUpdateSensorTx(ctx context.Context, tx pgx.Tx, sensorID, sensorProfile string) error {
-	if sensorID == "" {
-		return nil
-	}
-
-	args := pgx.NamedArgs{
-		"sensor_id":      sensorID,
-		"sensor_profile": nil,
-	}
-
-	if sensorProfile != "" {
-		args["sensor_profile"] = sensorProfile
-	}
-
-	_, err := tx.Exec(ctx, `
-		INSERT INTO sensors (sensor_id, sensor_profile)
-		VALUES (@sensor_id, @sensor_profile)
-		ON CONFLICT (sensor_id) DO UPDATE
-		SET sensor_profile = COALESCE(EXCLUDED.sensor_profile, sensors.sensor_profile),
-			modified_on = NOW()`, args)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) error {

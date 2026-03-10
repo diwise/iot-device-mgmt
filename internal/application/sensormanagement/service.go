@@ -13,6 +13,7 @@ var ErrSensorAlreadyExists = errors.New("sensor already exists")
 
 type Sensor struct {
 	SensorID      string               `json:"sensorID"`
+	DeviceID      *string              `json:"deviceID,omitempty"`
 	SensorProfile *types.SensorProfile `json:"sensorProfile,omitempty"`
 }
 

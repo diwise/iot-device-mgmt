@@ -5,9 +5,11 @@ package devicemanagement
 
 import (
 	"context"
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
+
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceReaderMock does implement DeviceReader.
@@ -25,6 +27,9 @@ var _ DeviceReader = &DeviceReaderMock{}
 //			},
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 //				panic("mock out the GetDeviceBySensorID method")
+//			},
+//			GetSensorFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+//				panic("mock out the GetSensor method")
 //			},
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
@@ -51,6 +56,9 @@ type DeviceReaderMock struct {
 	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, bool, error)
 
+	// GetSensorFunc mocks the GetSensor method.
+	GetSensorFunc func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error)
+
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
 
@@ -74,6 +82,13 @@ type DeviceReaderMock struct {
 		}
 		// GetDeviceBySensorID holds details about calls to the GetDeviceBySensorID method.
 		GetDeviceBySensorID []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SensorID is the sensorID argument value.
+			SensorID string
+		}
+		// GetSensor holds details about calls to the GetSensor method.
+		GetSensor []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// SensorID is the sensorID argument value.
@@ -112,6 +127,7 @@ type DeviceReaderMock struct {
 	}
 	lockGetDeviceAlarms       sync.RWMutex
 	lockGetDeviceBySensorID   sync.RWMutex
+	lockGetSensor             sync.RWMutex
 	lockGetDeviceMeasurements sync.RWMutex
 	lockGetDeviceStatus       sync.RWMutex
 	lockGetTenants            sync.RWMutex
@@ -187,6 +203,42 @@ func (mock *DeviceReaderMock) GetDeviceBySensorIDCalls() []struct {
 	mock.lockGetDeviceBySensorID.RLock()
 	calls = mock.calls.GetDeviceBySensorID
 	mock.lockGetDeviceBySensorID.RUnlock()
+	return calls
+}
+
+// GetSensor calls GetSensorFunc.
+func (mock *DeviceReaderMock) GetSensor(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+	if mock.GetSensorFunc == nil {
+		panic("DeviceReaderMock.GetSensorFunc: method is nil but DeviceReader.GetSensor was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+	}{
+		Ctx:      ctx,
+		SensorID: sensorID,
+	}
+	mock.lockGetSensor.Lock()
+	mock.calls.GetSensor = append(mock.calls.GetSensor, callInfo)
+	mock.lockGetSensor.Unlock()
+	return mock.GetSensorFunc(ctx, sensorID)
+}
+
+// GetSensorCalls gets all the calls that were made to GetSensor.
+// Check the length with:
+//
+//	len(mockedDeviceReader.GetSensorCalls())
+func (mock *DeviceReaderMock) GetSensorCalls() []struct {
+	Ctx      context.Context
+	SensorID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		SensorID string
+	}
+	mock.lockGetSensor.RLock()
+	calls = mock.calls.GetSensor
+	mock.lockGetSensor.RUnlock()
 	return calls
 }
 

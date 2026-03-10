@@ -5,8 +5,9 @@ package devicemanagement
 
 import (
 	"context"
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
+
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceWriterMock does implement DeviceWriter.
@@ -19,14 +20,17 @@ var _ DeviceWriter = &DeviceWriterMock{}
 //
 //		// make and configure a mocked DeviceWriter
 //		mockedDeviceWriter := &DeviceWriterMock{
+//			AssignSensorFunc: func(ctx context.Context, deviceID string, sensorID string) error {
+//				panic("mock out the AssignSensor method")
+//			},
 //			CreateOrUpdateDeviceFunc: func(ctx context.Context, d types.Device) error {
 //				panic("mock out the CreateOrUpdateDevice method")
 //			},
 //			SetDeviceProfileTypesFunc: func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
 //				panic("mock out the SetDeviceProfileTypes method")
 //			},
-//			SetSensorProfileFunc: func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-//				panic("mock out the SetSensorProfile method")
+//			UnassignSensorFunc: func(ctx context.Context, deviceID string) error {
+//				panic("mock out the UnassignSensor method")
 //			},
 //			UpdateDeviceFunc: func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error {
 //				panic("mock out the UpdateDevice method")
@@ -38,20 +42,32 @@ var _ DeviceWriter = &DeviceWriterMock{}
 //
 //	}
 type DeviceWriterMock struct {
+	// AssignSensorFunc mocks the AssignSensor method.
+	AssignSensorFunc func(ctx context.Context, deviceID string, sensorID string) error
+
 	// CreateOrUpdateDeviceFunc mocks the CreateOrUpdateDevice method.
 	CreateOrUpdateDeviceFunc func(ctx context.Context, d types.Device) error
 
 	// SetDeviceProfileTypesFunc mocks the SetDeviceProfileTypes method.
 	SetDeviceProfileTypesFunc func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error
 
-	// SetSensorProfileFunc mocks the SetSensorProfile method.
-	SetSensorProfileFunc func(ctx context.Context, deviceID string, dp types.SensorProfile) error
+	// UnassignSensorFunc mocks the UnassignSensor method.
+	UnassignSensorFunc func(ctx context.Context, deviceID string) error
 
 	// UpdateDeviceFunc mocks the UpdateDevice method.
 	UpdateDeviceFunc func(ctx context.Context, deviceID string, active *bool, name *string, description *string, environment *string, source *string, tenant *string, location *types.Location, interval *int) error
 
 	// calls tracks calls to the methods.
 	calls struct {
+		// AssignSensor holds details about calls to the AssignSensor method.
+		AssignSensor []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// DeviceID is the deviceID argument value.
+			DeviceID string
+			// SensorID is the sensorID argument value.
+			SensorID string
+		}
 		// CreateOrUpdateDevice holds details about calls to the CreateOrUpdateDevice method.
 		CreateOrUpdateDevice []struct {
 			// Ctx is the ctx argument value.
@@ -68,14 +84,12 @@ type DeviceWriterMock struct {
 			// TypesMoqParam is the typesMoqParam argument value.
 			TypesMoqParam []types.Lwm2mType
 		}
-		// SetSensorProfile holds details about calls to the SetSensorProfile method.
-		SetSensorProfile []struct {
+		// UnassignSensor holds details about calls to the UnassignSensor method.
+		UnassignSensor []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// DeviceID is the deviceID argument value.
 			DeviceID string
-			// Dp is the dp argument value.
-			Dp types.SensorProfile
 		}
 		// UpdateDevice holds details about calls to the UpdateDevice method.
 		UpdateDevice []struct {
@@ -101,10 +115,51 @@ type DeviceWriterMock struct {
 			Interval *int
 		}
 	}
+	lockAssignSensor          sync.RWMutex
 	lockCreateOrUpdateDevice  sync.RWMutex
 	lockSetDeviceProfileTypes sync.RWMutex
-	lockSetSensorProfile      sync.RWMutex
+	lockUnassignSensor        sync.RWMutex
 	lockUpdateDevice          sync.RWMutex
+}
+
+// AssignSensor calls AssignSensorFunc.
+func (mock *DeviceWriterMock) AssignSensor(ctx context.Context, deviceID string, sensorID string) error {
+	if mock.AssignSensorFunc == nil {
+		panic("DeviceWriterMock.AssignSensorFunc: method is nil but DeviceWriter.AssignSensor was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		DeviceID string
+		SensorID string
+	}{
+		Ctx:      ctx,
+		DeviceID: deviceID,
+		SensorID: sensorID,
+	}
+	mock.lockAssignSensor.Lock()
+	mock.calls.AssignSensor = append(mock.calls.AssignSensor, callInfo)
+	mock.lockAssignSensor.Unlock()
+	return mock.AssignSensorFunc(ctx, deviceID, sensorID)
+}
+
+// AssignSensorCalls gets all the calls that were made to AssignSensor.
+// Check the length with:
+//
+//	len(mockedDeviceWriter.AssignSensorCalls())
+func (mock *DeviceWriterMock) AssignSensorCalls() []struct {
+	Ctx      context.Context
+	DeviceID string
+	SensorID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		DeviceID string
+		SensorID string
+	}
+	mock.lockAssignSensor.RLock()
+	calls = mock.calls.AssignSensor
+	mock.lockAssignSensor.RUnlock()
+	return calls
 }
 
 // CreateOrUpdateDevice calls CreateOrUpdateDeviceFunc.
@@ -183,43 +238,39 @@ func (mock *DeviceWriterMock) SetDeviceProfileTypesCalls() []struct {
 	return calls
 }
 
-// SetSensorProfile calls SetSensorProfileFunc.
-func (mock *DeviceWriterMock) SetSensorProfile(ctx context.Context, deviceID string, dp types.SensorProfile) error {
-	if mock.SetSensorProfileFunc == nil {
-		panic("DeviceWriterMock.SetSensorProfileFunc: method is nil but DeviceWriter.SetSensorProfile was just called")
+// UnassignSensor calls UnassignSensorFunc.
+func (mock *DeviceWriterMock) UnassignSensor(ctx context.Context, deviceID string) error {
+	if mock.UnassignSensorFunc == nil {
+		panic("DeviceWriterMock.UnassignSensorFunc: method is nil but DeviceWriter.UnassignSensor was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Dp       types.SensorProfile
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
-		Dp:       dp,
 	}
-	mock.lockSetSensorProfile.Lock()
-	mock.calls.SetSensorProfile = append(mock.calls.SetSensorProfile, callInfo)
-	mock.lockSetSensorProfile.Unlock()
-	return mock.SetSensorProfileFunc(ctx, deviceID, dp)
+	mock.lockUnassignSensor.Lock()
+	mock.calls.UnassignSensor = append(mock.calls.UnassignSensor, callInfo)
+	mock.lockUnassignSensor.Unlock()
+	return mock.UnassignSensorFunc(ctx, deviceID)
 }
 
-// SetSensorProfileCalls gets all the calls that were made to SetSensorProfile.
+// UnassignSensorCalls gets all the calls that were made to UnassignSensor.
 // Check the length with:
 //
-//	len(mockedDeviceWriter.SetSensorProfileCalls())
-func (mock *DeviceWriterMock) SetSensorProfileCalls() []struct {
+//	len(mockedDeviceWriter.UnassignSensorCalls())
+func (mock *DeviceWriterMock) UnassignSensorCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Dp       types.SensorProfile
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Dp       types.SensorProfile
 	}
-	mock.lockSetSensorProfile.RLock()
-	calls = mock.calls.SetSensorProfile
-	mock.lockSetSensorProfile.RUnlock()
+	mock.lockUnassignSensor.RLock()
+	calls = mock.calls.UnassignSensor
+	mock.lockUnassignSensor.RUnlock()
 	return calls
 }
 
