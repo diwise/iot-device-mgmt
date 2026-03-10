@@ -39,7 +39,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
 
-	r := router.New(mux, router.WithPrefix(apiPrefix), router.WithTaggedRoutes(true))
+	r := router.New(mux, router.WithPrefix(apiPrefix))
 
 	r.Use(authenticator)
 
