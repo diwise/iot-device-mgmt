@@ -5,7 +5,7 @@ package alarms
 
 import (
 	"context"
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
@@ -23,7 +23,7 @@ var _ AlarmStorage = &AlarmStorageMock{}
 //			AddFunc: func(ctx context.Context, deviceID string, a types.AlarmDetails) error {
 //				panic("mock out the Add method")
 //			},
-//			AlarmsFunc: func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+//			AlarmsFunc: func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 //				panic("mock out the Alarms method")
 //			},
 //			RemoveFunc: func(ctx context.Context, deviceID string, alarmType string) error {
@@ -43,7 +43,7 @@ type AlarmStorageMock struct {
 	AddFunc func(ctx context.Context, deviceID string, a types.AlarmDetails) error
 
 	// AlarmsFunc mocks the Alarms method.
-	AlarmsFunc func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
+	AlarmsFunc func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error)
 
 	// RemoveFunc mocks the Remove method.
 	RemoveFunc func(ctx context.Context, deviceID string, alarmType string) error
@@ -66,8 +66,8 @@ type AlarmStorageMock struct {
 		Alarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// ConditionsMoqParam is the conditionsMoqParam argument value.
-			ConditionsMoqParam []conditions.ConditionFunc
+			// Query is the query argument value.
+			Query alarmquery.Alarms
 		}
 		// Remove holds details about calls to the Remove method.
 		Remove []struct {
@@ -131,21 +131,21 @@ func (mock *AlarmStorageMock) AddCalls() []struct {
 }
 
 // Alarms calls AlarmsFunc.
-func (mock *AlarmStorageMock) Alarms(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
+func (mock *AlarmStorageMock) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 	if mock.AlarmsFunc == nil {
 		panic("AlarmStorageMock.AlarmsFunc: method is nil but AlarmStorage.Alarms was just called")
 	}
 	callInfo := struct {
-		Ctx                context.Context
-		ConditionsMoqParam []conditions.ConditionFunc
+		Ctx   context.Context
+		Query alarmquery.Alarms
 	}{
-		Ctx:                ctx,
-		ConditionsMoqParam: conditionsMoqParam,
+		Ctx:   ctx,
+		Query: query,
 	}
 	mock.lockAlarms.Lock()
 	mock.calls.Alarms = append(mock.calls.Alarms, callInfo)
 	mock.lockAlarms.Unlock()
-	return mock.AlarmsFunc(ctx, conditionsMoqParam...)
+	return mock.AlarmsFunc(ctx, query)
 }
 
 // AlarmsCalls gets all the calls that were made to Alarms.
@@ -153,12 +153,12 @@ func (mock *AlarmStorageMock) Alarms(ctx context.Context, conditionsMoqParam ...
 //
 //	len(mockedAlarmStorage.AlarmsCalls())
 func (mock *AlarmStorageMock) AlarmsCalls() []struct {
-	Ctx                context.Context
-	ConditionsMoqParam []conditions.ConditionFunc
+	Ctx   context.Context
+	Query alarmquery.Alarms
 } {
 	var calls []struct {
-		Ctx                context.Context
-		ConditionsMoqParam []conditions.ConditionFunc
+		Ctx   context.Context
+		Query alarmquery.Alarms
 	}
 	mock.lockAlarms.RLock()
 	calls = mock.calls.Alarms

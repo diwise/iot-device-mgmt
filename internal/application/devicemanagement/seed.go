@@ -11,8 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -63,16 +62,13 @@ func (s service) importDevices(ctx context.Context, devices io.ReadCloser, valid
 
 		exists := false
 		if strings.TrimSpace(device.SensorID) != "" {
-			_, err := s.reader.GetDeviceBySensorID(ctx, device.SensorID)
+			_, found, err := s.reader.GetDeviceBySensorID(ctx, device.SensorID)
 			if err != nil {
-				if !errors.Is(err, storage.ErrNoRows) {
-					return err
-				}
-			} else {
-				exists = true
+				return err
 			}
+			exists = found
 		} else {
-			existing, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
+			existing, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
 			if err != nil {
 				return err
 			}

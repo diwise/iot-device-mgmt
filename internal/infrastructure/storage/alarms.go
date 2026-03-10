@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/jackc/pgx/v5"
 )
@@ -139,8 +139,8 @@ func (s *Storage) Remove(ctx context.Context, deviceID string, alarmType string)
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) Alarms(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Alarms], error) {
-	condition := conditions.NewCondition(conds...)
+func (s *Storage) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+	condition := alarmConditionFromQuery(query)
 
 	args := NamedArgs(condition)
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 5)

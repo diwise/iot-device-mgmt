@@ -104,7 +104,14 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 			return
 		} else {
-			collection, err := svc.Query(ctx, r.URL.Query(), allowedTenants)
+			query, parseErr := deviceQueryFromValues(r.URL.Query(), allowedTenants)
+			if parseErr != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				w.Write([]byte(parseErr.Error()))
+				return
+			}
+
+			collection, err := svc.Query(ctx, query)
 			if err != nil {
 				w.WriteHeader(http.StatusInternalServerError)
 				w.Write([]byte(err.Error()))
@@ -227,7 +234,14 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		statuses, err := svc.Status(ctx, deviceID, r.URL.Query(), allowedTenants)
+		query, parseErr := deviceStatusQueryFromValues(r.URL.Query(), allowedTenants)
+		if parseErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(parseErr.Error()))
+			return
+		}
+
+		statuses, err := svc.Status(ctx, deviceID, query)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -315,7 +329,14 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceA
 
 		ctx = logging.NewContextWithLogger(ctx, logger, slog.String("device_id", deviceID))
 
-		result, err := svc.Measurements(ctx, deviceID, r.URL.Query(), allowedTenants)
+		query, parseErr := deviceMeasurementsQueryFromValues(r.URL.Query(), allowedTenants)
+		if parseErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(parseErr.Error()))
+			return
+		}
+
+		result, err := svc.Measurements(ctx, deviceID, query)
 		if err != nil {
 			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -427,6 +448,7 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 		if !isApplicationJson(r) {
 			logger.Error("Unsupported MediaType")
 			w.WriteHeader(http.StatusUnsupportedMediaType)
+			return
 		}
 
 		body, err := io.ReadAll(r.Body)
@@ -458,6 +480,10 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 		err = svc.Update(ctx, d)
 		if err != nil {
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 			logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -503,8 +529,16 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService)
 
 		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
+			if errors.Is(err, devicemanagement.ErrInvalidPatch) {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
 			logger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
-			w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -539,13 +573,23 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPI
 
 			profiles, err = svc.Profiles(ctx, names...)
 			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
+				if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		} else {
 			profiles, err = svc.Profiles(ctx)
 			if err != nil {
-				w.WriteHeader(http.StatusNotFound)
+				if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+					w.WriteHeader(http.StatusNotFound)
+					return
+				}
+
+				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
 		}
@@ -598,7 +642,12 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		types, err := svc.Lwm2mTypes(ctx, urn)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
@@ -643,9 +692,16 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFun
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, _ = o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		result, err := svc.Alarms(ctx, r.URL.Query(), allowedTenants)
+		query, parseErr := alarmQueryFromValues(r.URL.Query(), allowedTenants)
+		if parseErr != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			w.Write([]byte(parseErr.Error()))
+			return
+		}
+
+		result, err := svc.Alarms(ctx, query)
 		if err != nil {
-			w.WriteHeader(http.StatusNotFound)
+			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 

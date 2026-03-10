@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"strconv"
 	"strings"
 	"time"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -30,7 +29,7 @@ type AlarmStorage interface {
 	Add(ctx context.Context, deviceID string, a types.AlarmDetails) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	Stale(ctx context.Context) (types.Collection[types.Device], error)
-	Alarms(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Alarms], error)
+	Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error)
 }
 
 type svc struct {
@@ -44,7 +43,7 @@ type AlarmService interface {
 	Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	Stale(ctx context.Context) (types.Collection[types.Device], error)
-	Alarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
+	Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error)
 }
 
 type Config struct {
@@ -85,29 +84,12 @@ func (svc *svc) Remove(ctx context.Context, deviceID string, alarmType string) e
 	return svc.storage.Remove(ctx, deviceID, alarmType)
 }
 
-func (svc *svc) Alarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
-	conds := []conditions.ConditionFunc{}
-
-	for k, v := range params {
-		switch strings.ToLower(k) {
-		case "limit":
-			if i, err := strconv.Atoi(v[0]); err == nil {
-				conds = append(conds, conditions.WithLimit(i))
-			}
-		case "offset":
-			if o, err := strconv.Atoi(v[0]); err == nil {
-				conds = append(conds, conditions.WithOffset(o))
-			}
-		case "alarmtype":
-			if v[0] != "" {
-				conds = append(conds, conditions.WithAlarmType(v[0]))
-			}
-		}
+func (svc *svc) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+	if !query.ActiveOnly {
+		query.ActiveOnly = true
 	}
 
-	conds = append(conds, conditions.WithActive(true), conditions.WithTenants(tenants))
-
-	return svc.storage.Alarms(ctx, conds...)
+	return svc.storage.Alarms(ctx, query)
 }
 
 func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmService {

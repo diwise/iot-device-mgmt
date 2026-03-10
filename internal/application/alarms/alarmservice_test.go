@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
@@ -97,4 +98,30 @@ func TestDeviceStatusHandlerWithMessages(t *testing.T) {
 
 	is.Equal(2, len(s.AddCalls()))
 	is.Equal("message2", s.AddCalls()[1].A.AlarmType)
+}
+
+func TestAlarmsQuery(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	storage := &AlarmStorageMock{
+		AlarmsFunc: func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+			return types.Collection[types.Alarms]{
+				Data: []types.Alarms{{DeviceID: "device-1"}},
+			}, nil
+		},
+	}
+	messenger := &messaging.MsgContextMock{}
+
+	svc := New(storage, messenger, &Config{})
+	_, err := svc.Alarms(ctx, alarmquery.Alarms{
+		AllowedTenants: []string{"tenant-a"},
+		AlarmType:      "battery_low",
+	})
+
+	is.NoErr(err)
+	is.Equal(1, len(storage.AlarmsCalls()))
+	is.True(storage.AlarmsCalls()[0].Query.ActiveOnly)
+	is.Equal("battery_low", storage.AlarmsCalls()[0].Query.AlarmType)
+	is.Equal([]string{"tenant-a"}, storage.AlarmsCalls()[0].Query.AllowedTenants)
 }

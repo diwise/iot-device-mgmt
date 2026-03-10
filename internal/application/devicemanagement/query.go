@@ -2,12 +2,10 @@ package devicemanagement
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"slices"
 
-	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
@@ -16,12 +14,13 @@ var errDeviceProfileNotFound = fmt.Errorf("device profile not found")
 var errMissingTenant = fmt.Errorf("missing tenant")
 
 func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
-	d, err := s.reader.GetDeviceBySensorID(ctx, sensorID)
+	d, found, err := s.reader.GetDeviceBySensorID(ctx, sensorID)
 	if err != nil {
-		if errors.Is(err, storage.ErrNoRows) {
-			return types.Device{}, ErrDeviceNotFound
-		}
 		return types.Device{}, err
+	}
+
+	if !found {
+		return types.Device{}, ErrDeviceNotFound
 	}
 
 	if slices.Contains(tenants, d.Tenant) {
@@ -32,11 +31,11 @@ func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []
 }
 
 func (s service) Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-	result, err := s.reader.Query(ctx, conditions.WithDeviceID(deviceID), conditions.WithTenants(tenants))
+	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{
+		DeviceID:       deviceID,
+		AllowedTenants: tenants,
+	}})
 	if err != nil {
-		if errors.Is(err, storage.ErrNoRows) {
-			return types.Device{}, ErrDeviceNotFound
-		}
 		return types.Device{}, err
 	}
 
@@ -47,19 +46,16 @@ func (s service) Device(ctx context.Context, deviceID string, tenants []string) 
 	return result.Data[0], nil
 }
 
-func (s service) Status(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error) {
+func (s service) Status(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
 	if deviceID == "" {
 		return types.Collection[types.SensorStatus]{}, ErrDeviceNotFound
 	}
 
-	if len(tenants) == 0 {
+	if len(query.AllowedTenants) == 0 {
 		return types.Collection[types.SensorStatus]{}, ErrMissingTenant
 	}
 
-	conds := conditions.Parse(ctx, params)
-	conds = append(conds, conditions.WithTenants(tenants))
-
-	return s.reader.GetDeviceStatus(ctx, deviceID, conds...)
+	return s.reader.GetDeviceStatus(ctx, deviceID, query)
 }
 
 func (s service) Alarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error) {
@@ -71,11 +67,8 @@ func (s service) Alarms(ctx context.Context, deviceID string, tenants []string) 
 	return s.reader.GetDeviceAlarms(ctx, deviceID)
 }
 
-func (s service) Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error) {
-	conds := conditions.Parse(ctx, params)
-	conds = append(conds, conditions.WithTenants(tenants))
-
-	return s.reader.Query(ctx, conds...)
+func (s service) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	return s.reader.Query(ctx, query)
 }
 
 func (s service) Tenants(ctx context.Context) (types.Collection[string], error) {
@@ -162,11 +155,10 @@ func (s service) Profiles(ctx context.Context, name ...string) (types.Collection
 	return collection, nil
 }
 
-func (s service) Measurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error) {
-	conds := conditions.Parse(ctx, params)
+func (s service) Measurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+	if len(query.AllowedTenants) == 0 {
+		return types.Collection[types.Measurement]{}, ErrMissingTenant
+	}
 
-	conds = append(conds, conditions.WithDeviceID(deviceID))
-	conds = append(conds, conditions.WithTenants(tenants))
-
-	return s.reader.GetDeviceMeasurements(ctx, deviceID, conds...)
+	return s.reader.GetDeviceMeasurements(ctx, deviceID, query)
 }

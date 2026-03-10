@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
@@ -20,7 +20,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 	ctx := context.Background()
 
 	reader := &DeviceReaderMock{
-		QueryFunc: func(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
 	}

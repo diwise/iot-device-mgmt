@@ -4,7 +4,7 @@ import (
 	"context"
 	"io"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
@@ -13,14 +13,15 @@ var ErrDeviceNotFound = errDeviceNotFound
 var ErrDeviceAlreadyExist = errDeviceAlreadyExist
 var ErrDeviceProfileNotFound = errDeviceProfileNotFound
 var ErrMissingTenant = errMissingTenant
+var ErrInvalidPatch = errInvalidPatch
 
 type DeviceReader interface {
-	Query(ctx context.Context, conditions ...conditions.ConditionFunc) (types.Collection[types.Device], error)
-	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error)
+	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
+	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
-	GetDeviceMeasurements(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.Measurement], error)
-	GetDeviceStatus(ctx context.Context, deviceID string, conditions ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error)
 }
 
 type DeviceWriter interface {
@@ -45,10 +46,10 @@ type DeviceProfileStore interface {
 type DeviceQueryService interface {
 	DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	Status(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.SensorStatus], error)
+	Status(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error)
 	Alarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
-	Measurements(ctx context.Context, deviceID string, params map[string][]string, tenants []string) (types.Collection[types.Measurement], error)
-	Query(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Device], error)
+	Measurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
+	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
 	Tenants(ctx context.Context) (types.Collection[string], error)
 	Lwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
 	Profiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)

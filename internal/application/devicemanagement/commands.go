@@ -2,11 +2,11 @@ package devicemanagement
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -14,7 +14,7 @@ import (
 var errDeviceAlreadyExist = fmt.Errorf("device already exists")
 
 func (s service) Create(ctx context.Context, device types.Device) error {
-	result, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
+	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
 	if err != nil {
 		return err
 	}
@@ -44,7 +44,7 @@ func (s service) Create(ctx context.Context, device types.Device) error {
 }
 
 func (s service) Update(ctx context.Context, device types.Device) error {
-	result, err := s.reader.Query(ctx, conditions.WithDeviceID(device.DeviceID))
+	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
 	if err != nil {
 		return err
 	}
@@ -64,7 +64,7 @@ func (s service) Update(ctx context.Context, device types.Device) error {
 func (s service) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
-	result, err := s.reader.Query(ctx, conditions.WithDeviceID(deviceID), conditions.WithTenants(tenants))
+	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
 	if err != nil {
 		return err
 	}
@@ -88,56 +88,90 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 		case "deviceID":
 			continue
 		case "active":
-			b := v.(bool)
+			b, err := patchBool(k, v)
+			if err != nil {
+				return err
+			}
 			active = &b
 		case "description":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			description = &s
 		case "latitude":
-			lat := v.(float64)
+			lat, err := patchFloat(k, v)
+			if err != nil {
+				return err
+			}
 			if location == nil {
 				location = &types.Location{}
 			}
 			location.Latitude = lat
 		case "longitude":
-			lon := v.(float64)
+			lon, err := patchFloat(k, v)
+			if err != nil {
+				return err
+			}
 			if location == nil {
 				location = &types.Location{}
 			}
 			location.Longitude = lon
 		case "name":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			name = &s
 		case "environment":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			environment = &s
 		case "source":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			source = &s
 		case "tenant":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			tenant = &s
 		case "types":
-			types := v.([]any)
+			types, err := patchStringSlice(k, v)
+			if err != nil {
+				return err
+			}
 			for _, typ := range types {
-				s := typ.(string)
+				s := typ
 				lwm2m = append(lwm2m, s)
 			}
 		case "deviceProfile":
-			s := v.(string)
+			s, err := patchString(k, v)
+			if err != nil {
+				return err
+			}
 			deviceProfile = &s
 		case "interval":
-			s := v.(string)
-			if i, err := strconv.Atoi(s); err == nil {
-				interval = &i
+			i, err := patchInt(k, v)
+			if err != nil {
+				return err
 			}
+			interval = &i
 		default:
-			log.Debug("field not mapped for merge", "device_id", deviceID, "name", k)
+			return fmt.Errorf("%w: unsupported field %q", errInvalidPatch, k)
 		}
 	}
 
 	err = s.writer.UpdateDevice(ctx, deviceID, active, name, description, environment, source, tenant, location, interval)
 	if err != nil {
+		if errors.Is(err, ErrDeviceNotFound) {
+			return err
+		}
 		log.Error("could not update device information", "err", err.Error())
 		return err
 	}
@@ -174,7 +208,7 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 }
 
 func (s service) UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error {
-	result, err := s.reader.Query(ctx, conditions.WithDeviceID(deviceID), conditions.WithTenant(tenant))
+	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: deviceID, Tenant: tenant}})
 	if err != nil {
 		return err
 	}

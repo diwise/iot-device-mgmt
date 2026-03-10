@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -11,11 +12,11 @@ import (
 	"testing"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
@@ -41,6 +42,10 @@ func TestApi(t *testing.T) {
 		testQueryDevices(t, server.URL, mocks)
 	})
 
+	t.Run("GET /devices?limit=invalid", func(t *testing.T) {
+		testQueryDevicesWithInvalidLimit(t, server.URL)
+	})
+
 	t.Run("GET /devices?devEUI=test-sensor-1", func(t *testing.T) {
 		testQueryDevicesBySensorID(t, server.URL, mocks)
 	})
@@ -61,6 +66,38 @@ func TestApi(t *testing.T) {
 		testDeviceMeasurements(t, server.URL, mocks)
 	})
 
+	t.Run("GET /alarms", func(t *testing.T) {
+		testGetAlarms(t, server.URL, &as)
+	})
+
+	t.Run("GET /alarms?limit=invalid", func(t *testing.T) {
+		testGetAlarmsWithInvalidLimit(t, server.URL)
+	})
+
+	t.Run("GET /admin/deviceprofiles", func(t *testing.T) {
+		testGetDeviceProfiles(t, dm)
+	})
+
+	t.Run("GET /admin/deviceprofiles/missing", func(t *testing.T) {
+		testGetDeviceProfilesNotFound(t, dm)
+	})
+
+	t.Run("GET /admin/deviceprofiles internal failure", func(t *testing.T) {
+		testGetDeviceProfilesInternalError(t, dm)
+	})
+
+	t.Run("GET /admin/lwm2mtypes", func(t *testing.T) {
+		testGetLwm2mTypes(t, dm)
+	})
+
+	t.Run("GET /admin/lwm2mtypes/missing", func(t *testing.T) {
+		testGetLwm2mTypesNotFound(t, dm)
+	})
+
+	t.Run("GET /admin/lwm2mtypes internal failure", func(t *testing.T) {
+		testGetLwm2mTypesInternalError(t, dm)
+	})
+
 	t.Run("POST /devices", func(t *testing.T) {
 		testCreateDevice(t, server.URL, mocks)
 	})
@@ -69,6 +106,60 @@ func TestApi(t *testing.T) {
 		testCreateDevices(t, server.URL, mocks)
 	})
 
+	t.Run("PUT /devices/test-device-1", func(t *testing.T) {
+		testUpdateDevice(t, server.URL, mocks)
+	})
+
+	t.Run("PUT /devices/missing-device", func(t *testing.T) {
+		testUpdateDeviceNotFound(t, server.URL, mocks)
+	})
+
+	t.Run("PUT /devices/test-device-1 internal failure", func(t *testing.T) {
+		testUpdateDeviceInternalError(t, server.URL, mocks)
+	})
+
+	t.Run("PATCH /devices/test-device-1", func(t *testing.T) {
+		testPatchDevice(t, server.URL, mocks)
+	})
+
+	t.Run("PATCH /devices/test-device-1 invalid field type", func(t *testing.T) {
+		testPatchDeviceInvalidField(t, server.URL, mocks)
+	})
+
+	t.Run("PATCH /devices/missing-device", func(t *testing.T) {
+		testPatchDeviceNotFound(t, server.URL, mocks)
+	})
+
+	t.Run("PATCH /devices/test-device-1 internal failure", func(t *testing.T) {
+		testPatchDeviceInternalError(t, server.URL, mocks)
+	})
+
+	t.Run("GET /alarms internal failure", func(t *testing.T) {
+		testGetAlarmsInternalError(t, server.URL, &as)
+	})
+
+}
+
+type adminAPIService struct {
+	devicemanagement.DeviceAPIService
+	profilesFunc   func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
+	lwm2mTypesFunc func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
+}
+
+func (s adminAPIService) Profiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
+	if s.profilesFunc != nil {
+		return s.profilesFunc(ctx, name...)
+	}
+
+	return s.DeviceAPIService.Profiles(ctx, name...)
+}
+
+func (s adminAPIService) Lwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+	if s.lwm2mTypesFunc != nil {
+		return s.lwm2mTypesFunc(ctx, urn...)
+	}
+
+	return s.DeviceAPIService.Lwm2mTypes(ctx, urn...)
 }
 
 type deviceManagementMocks struct {
@@ -88,7 +179,7 @@ func newDeviceManagementMocks() deviceManagementMocks {
 }
 
 func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Data: []types.Device{testDevice},
 		}
@@ -105,9 +196,16 @@ func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
+func testQueryDevicesWithInvalidLimit(t *testing.T, baseUrl string) {
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/devices?limit=invalid", nil)
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", statusCode)
+	}
+}
+
 func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
-		return testDevice, nil
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return testDevice, true, nil
 	}
 
 	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices?devEUI=test-sensor-1", nil)
@@ -121,7 +219,7 @@ func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceManage
 }
 
 func testGetDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Count: 1,
 			Data:  []types.Device{testDevice},
@@ -140,7 +238,7 @@ func testGetDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
 }
 
 func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
 		collection := types.Collection[types.SensorStatus]{
 			Data: []types.SensorStatus{
 				{
@@ -162,7 +260,7 @@ func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 }
 
 func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Count: 1,
 			Data:  []types.Device{testDevice},
@@ -192,7 +290,7 @@ func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 }
 
 func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
-	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
+	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
 		collection := types.Collection[types.Measurement]{
 			Data: []types.Measurement{
 				{
@@ -214,12 +312,240 @@ func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceManagement
 	}
 }
 
+func testGetAlarms(t *testing.T, baseUrl string, service *alarms.AlarmServiceMock) {
+	service.AlarmsFunc = func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+		return types.Collection[types.Alarms]{
+			Data: []types.Alarms{{
+				DeviceID:   "test-device-1",
+				AlarmTypes: []string{"battery_low"},
+			}},
+			Count:      1,
+			TotalCount: 1,
+			Limit:      5,
+			Offset:     0,
+		}, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/alarms", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"deviceID":"test-device-1"`) {
+		t.Fatalf("expected response to contain device id 'test-device-1', got %s", string(body))
+	}
+	if !strings.Contains(string(body), `"battery_low"`) {
+		t.Fatalf("expected response to contain alarm type 'battery_low', got %s", string(body))
+	}
+	if len(service.AlarmsCalls()) != 1 || !service.AlarmsCalls()[0].Query.ActiveOnly {
+		t.Fatalf("expected alarms query to set activeOnly, got %+v", service.AlarmsCalls())
+	}
+}
+
+func testGetAlarmsWithInvalidLimit(t *testing.T, baseUrl string) {
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/alarms?limit=invalid", nil)
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", statusCode)
+	}
+}
+
+func testGetAlarmsInternalError(t *testing.T, baseUrl string, service *alarms.AlarmServiceMock) {
+	service.AlarmsFunc = func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+		return types.Collection[types.Alarms]{}, errors.New("storage failure")
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/alarms", nil)
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
+	}
+}
+
+func testGetDeviceProfiles(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		profilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
+			return types.Collection[types.SensorProfile]{
+				Data:       []types.SensorProfile{{Name: "profile-a", Decoder: "profile-a"}},
+				Count:      1,
+				Limit:      1,
+				TotalCount: 1,
+			}, nil
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, body := do(t, http.MethodGet, server.URL+"/api/v0/admin/deviceprofiles", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"name":"profile-a"`) {
+		t.Fatalf("expected response to contain profile name, got %s", string(body))
+	}
+}
+
+func testGetDeviceProfilesNotFound(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		profilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
+			return types.Collection[types.SensorProfile]{}, devicemanagement.ErrDeviceProfileNotFound
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, _ := do(t, http.MethodGet, server.URL+"/api/v0/admin/deviceprofiles/missing", nil)
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testGetDeviceProfilesInternalError(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		profilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
+			return types.Collection[types.SensorProfile]{}, errors.New("profile store failed")
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, _ := do(t, http.MethodGet, server.URL+"/api/v0/admin/deviceprofiles", nil)
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
+	}
+}
+
+func testGetLwm2mTypes(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		lwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+			return types.Collection[types.Lwm2mType]{
+				Data:       []types.Lwm2mType{{Urn: "urn:test:1", Name: "Temperature"}},
+				Count:      1,
+				Limit:      1,
+				TotalCount: 1,
+			}, nil
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, body := do(t, http.MethodGet, server.URL+"/api/v0/admin/lwm2mtypes", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"urn":"urn:test:1"`) {
+		t.Fatalf("expected response to contain lwm2m urn, got %s", string(body))
+	}
+}
+
+func testGetLwm2mTypesNotFound(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		lwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+			return types.Collection[types.Lwm2mType]{}, devicemanagement.ErrDeviceProfileNotFound
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, _ := do(t, http.MethodGet, server.URL+"/api/v0/admin/lwm2mtypes/missing", nil)
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testGetLwm2mTypesInternalError(t *testing.T, dm devicemanagement.DeviceAPIService) {
+	t.Helper()
+
+	policies := io.NopCloser(strings.NewReader(policiesMock))
+	defer policies.Close()
+
+	service := adminAPIService{
+		DeviceAPIService: dm,
+		lwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
+			return types.Collection[types.Lwm2mType]{}, errors.New("type store failed")
+		},
+	}
+
+	mux := http.NewServeMux()
+	if err := RegisterHandlers(t.Context(), mux, policies, service, &alarms.AlarmServiceMock{}); err != nil {
+		t.Fatalf("failed to register handlers: %v", err)
+	}
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	statusCode, _ := do(t, http.MethodGet, server.URL+"/api/v0/admin/lwm2mtypes", nil)
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
+	}
+}
+
 func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
 	}
 
-	mocks.reader.QueryFunc = func(ctx context.Context, conditionsMoqParam ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{},
 		}, nil
@@ -242,8 +568,8 @@ func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks
 		return nil
 	}
 
-	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, error) {
-		return types.Device{}, storage.ErrNoRows
+	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
+		return types.Device{}, false, nil
 	}
 
 	body, contentType := createMultipartFileUpload(t, "fileupload", "devices.csv", csvMock)
@@ -251,6 +577,129 @@ func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks
 	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/devices", body, map[string]string{"Content-Type": contentType})
 	if statusCode != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d", statusCode)
+	}
+}
+
+func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		if d.DeviceID != testDevice.DeviceID {
+			t.Fatalf("expected device id %q, got %q", testDevice.DeviceID, d.DeviceID)
+		}
+		return nil
+	}
+
+	payload := `{"deviceID":"test-device-1","sensorID":"test-sensor-1","tenant":"default"}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 0}, nil
+	}
+
+	payload := `{"deviceID":"missing-device","sensorID":"test-sensor-1","tenant":"default"}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/missing-device", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
+		return errors.New("write failed")
+	}
+
+	payload := `{"deviceID":"test-device-1","sensorID":"test-sensor-1","tenant":"default"}`
+	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
+	}
+}
+
+func testPatchDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.writer.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+		if deviceID != testDevice.DeviceID {
+			t.Fatalf("expected device id %q, got %q", testDevice.DeviceID, deviceID)
+		}
+		if active == nil || !*active {
+			t.Fatalf("expected active=true, got %v", active)
+		}
+		if interval == nil || *interval != 60 {
+			t.Fatalf("expected interval 60, got %v", interval)
+		}
+		if location == nil || location.Latitude != 62.1 || location.Longitude != 17.2 {
+			t.Fatalf("expected parsed location, got %+v", location)
+		}
+		return nil
+	}
+	mocks.writer.SetDeviceProfileTypesFunc = func(ctx context.Context, deviceID string, typesMoqParam []types.Lwm2mType) error {
+		if len(typesMoqParam) != 1 || typesMoqParam[0].Urn != "urn:test:1" {
+			t.Fatalf("expected parsed types, got %+v", typesMoqParam)
+		}
+		return nil
+	}
+	mocks.writer.SetSensorProfileFunc = func(ctx context.Context, deviceID string, dp types.SensorProfile) error {
+		if dp.Decoder != "profile-a" {
+			t.Fatalf("expected profile-a, got %+v", dp)
+		}
+		return nil
+	}
+
+	payload := `{"active":"true","interval":60,"latitude":"62.1","longitude":17.2,"types":["urn:test:1"],"deviceProfile":"profile-a"}`
+	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+
+	payload := `{"active":[true]}`
+	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", statusCode)
+	}
+}
+
+func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 0}, nil
+	}
+
+	payload := `{}`
+	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/missing-device", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusNotFound {
+		t.Fatalf("expected status 404, got %d", statusCode)
+	}
+}
+
+func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
+	}
+	mocks.writer.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
+		return errors.New("write failed")
+	}
+
+	payload := `{"active":true}`
+	statusCode, _ := do(t, http.MethodPatch, baseUrl+"/api/v0/devices/test-device-1", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
+	if statusCode != http.StatusInternalServerError {
+		t.Fatalf("expected status 500, got %d", statusCode)
 	}
 }
 

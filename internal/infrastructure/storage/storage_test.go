@@ -2,9 +2,12 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/google/uuid"
 )
@@ -129,17 +132,30 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("get device by sensor ID", func(t *testing.T) {
-		d, err := s.GetDeviceBySensorID(ctx, sensorID)
+		d, found, err := s.GetDeviceBySensorID(ctx, sensorID)
 		if err != nil {
 			t.Fatalf("failed to get device by sensor ID: %v", err)
+		}
+		if !found {
+			t.Fatal("expected device to be found")
 		}
 		if d.DeviceID != deviceID {
 			t.Fatalf("expected device ID '%s', got '%s'", deviceID, d.DeviceID)
 		}
 	})
 
+	t.Run("get missing device by sensor ID", func(t *testing.T) {
+		_, found, err := s.GetDeviceBySensorID(ctx, "missing-sensor-id")
+		if err != nil {
+			t.Fatalf("expected no error for missing device, got %v", err)
+		}
+		if found {
+			t.Fatal("expected missing device to return found=false")
+		}
+	})
+
 	t.Run("query", func(t *testing.T) {
-		devices, err := s.Query(ctx, conditions.WithSensorID(sensorID))
+		devices, err := s.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{SensorID: sensorID}})
 		if err != nil {
 			t.Fatalf("failed to query devices: %v", err)
 		}
@@ -148,10 +164,49 @@ func TestStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("query alarms", func(t *testing.T) {
+		err := s.Add(ctx, deviceID, types.AlarmDetails{
+			AlarmType:   "battery_low",
+			Description: "Battery is low",
+			ObservedAt:  time.Now().UTC(),
+			Severity:    2,
+		})
+		if err != nil {
+			t.Fatalf("failed to add alarm: %v", err)
+		}
+
+		result, err := s.Alarms(ctx, alarmquery.Alarms{
+			AllowedTenants: []string{"test-tenant"},
+			ActiveOnly:     true,
+		})
+		if err != nil {
+			t.Fatalf("failed to query alarms: %v", err)
+		}
+		if len(result.Data) != 1 {
+			t.Fatalf("expected 1 alarm result, got %d", len(result.Data))
+		}
+		if result.Data[0].DeviceID != deviceID {
+			t.Fatalf("expected device id %q, got %q", deviceID, result.Data[0].DeviceID)
+		}
+	})
+
+	t.Run("add device status for missing device", func(t *testing.T) {
+		err := s.AddDeviceStatus(ctx, types.StatusMessage{
+			DeviceID:  "missing-device-id",
+			Timestamp: time.Now().UTC(),
+		})
+		if !errors.Is(err, ErrStatusDeviceNotFound) {
+			t.Fatalf("expected ErrStatusDeviceNotFound, got %v", err)
+		}
+	})
+
 	t.Run("set active flag on device", func(t *testing.T) {
-		d, err := s.GetDeviceBySensorID(ctx, sensorID)
+		d, found, err := s.GetDeviceBySensorID(ctx, sensorID)
 		if err != nil {
 			t.Fatalf("failed to get device by sensor ID: %v", err)
+		}
+		if !found {
+			t.Fatal("expected device to be found")
 		}
 
 		activeStatus := d.Active
@@ -161,9 +216,12 @@ func TestStorage(t *testing.T) {
 			t.Fatalf("failed to set active flag: %v", err)
 		}
 
-		d, err = s.GetDeviceBySensorID(ctx, sensorID)
+		d, found, err = s.GetDeviceBySensorID(ctx, sensorID)
 		if err != nil {
 			t.Fatalf("failed to get device by sensor ID: %v", err)
+		}
+		if !found {
+			t.Fatal("expected device to be found")
 		}
 
 		if d.Active != newStatus {

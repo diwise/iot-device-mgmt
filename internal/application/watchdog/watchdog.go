@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
@@ -22,50 +23,89 @@ type Watchdog interface {
 }
 
 type watchdogImpl struct {
-	done     chan bool
-	alarmSvc alarms.AlarmService
-	config   *WatchdogConfig
+	mu       sync.Mutex
+	running  atomic.Bool
+	cancel   context.CancelFunc
+	done     chan struct{}
+	watchers []Watcher
 }
 
 func New(a alarms.AlarmService, cfg *WatchdogConfig) Watchdog {
+	interval := 10 * time.Minute
+	if cfg != nil && cfg.Interval > 0 {
+		interval = time.Duration(cfg.Interval) * time.Minute
+	}
+
 	w := &watchdogImpl{
-		done:     make(chan bool),
-		alarmSvc: a,
-		config:   cfg,
+		watchers: []Watcher{
+			&lastObservedWatcher{
+				alarmSvc: a,
+				interval: interval,
+			},
+		},
 	}
 
 	return w
 }
 
 func (w *watchdogImpl) Start(ctx context.Context) {
-	go w.run(ctx)
+	if !w.running.CompareAndSwap(false, true) {
+		return
+	}
+
+	watchCtx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+
+	w.mu.Lock()
+	w.cancel = cancel
+	w.done = done
+	watchers := append([]Watcher(nil), w.watchers...)
+	w.mu.Unlock()
+
+	go func() {
+		defer w.running.Store(false)
+		defer close(done)
+
+		var wg sync.WaitGroup
+		for _, watcher := range watchers {
+			wg.Add(1)
+			go func(watcher Watcher) {
+				defer wg.Done()
+				watcher.Watch(watchCtx)
+			}(watcher)
+		}
+
+		wg.Wait()
+	}()
 }
 
 func (w *watchdogImpl) Stop(ctx context.Context) {
-	w.done <- true
-}
+	w.mu.Lock()
+	cancel := w.cancel
+	done := w.done
+	w.mu.Unlock()
 
-func (w *watchdogImpl) run(ctx context.Context) {
-	l := &lastObservedWatcher{
-		alarmSvc: w.alarmSvc,
-		running:  false,
-		interval: 10 * time.Minute,
+	if cancel == nil {
+		return
 	}
 
-	if w.config.Interval > 0 {
-		l.interval = time.Duration(w.config.Interval) * time.Minute
+	cancel()
+
+	if done == nil {
+		return
 	}
 
-	go l.Watch(ctx)
-
-	for {
-		select {
-		case <-w.done:
-			return
-		case <-ctx.Done():
-			return
-		}
+	select {
+	case <-done:
+	case <-ctx.Done():
 	}
+
+	w.mu.Lock()
+	if w.done == done {
+		w.done = nil
+		w.cancel = nil
+	}
+	w.mu.Unlock()
 }
 
 type Watcher interface {
@@ -74,50 +114,45 @@ type Watcher interface {
 
 type lastObservedWatcher struct {
 	alarmSvc alarms.AlarmService
-	running  bool
+	running  atomic.Bool
 	interval time.Duration
-	mu       sync.Mutex
 }
 
 func (l *lastObservedWatcher) Watch(ctx context.Context) {
 	ticker := time.NewTicker(l.interval)
+	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			go l.checkLastObserved(ctx)
+			l.checkLastObserved(ctx)
 		}
 	}
 }
 
-func (l *lastObservedWatcher) setRunning(b bool) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-
-	l.running = b
-}
-
 func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
-	if l.running {
+	if !l.running.CompareAndSwap(false, true) {
 		return
 	}
-
-	l.setRunning(true)
+	defer l.running.Store(false)
 
 	result, err := l.alarmSvc.Stale(ctx)
 	if err != nil {
-		l.setRunning(false)
 		return
 	}
 
 	if result.TotalCount == 0 {
-		l.setRunning(false)
 		return
 	}
 
 	for _, d := range result.Data {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
 
 		now := time.Now()
 		desc := fmt.Sprintf("current time: %s, interval: %d, last seen: %s, limit: %s", now.UTC().Format(time.RFC3339), d.Interval, d.DeviceState.ObservedAt.Format(time.RFC3339), d.DeviceState.ObservedAt.Add(time.Duration(d.Interval)*time.Second).Format(time.RFC3339))
@@ -129,6 +164,4 @@ func (l *lastObservedWatcher) checkLastObserved(ctx context.Context) {
 			Severity:    types.AlarmSeverityUnknown,
 		})
 	}
-
-	l.setRunning(false)
 }

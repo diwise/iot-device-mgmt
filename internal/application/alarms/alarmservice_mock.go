@@ -5,6 +5,7 @@ package alarms
 
 import (
 	"context"
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"sync"
 )
@@ -22,7 +23,7 @@ var _ AlarmService = &AlarmServiceMock{}
 //			AddFunc: func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 //				panic("mock out the Add method")
 //			},
-//			AlarmsFunc: func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
+//			AlarmsFunc: func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 //				panic("mock out the Alarms method")
 //			},
 //			RemoveFunc: func(ctx context.Context, deviceID string, alarmType string) error {
@@ -42,7 +43,7 @@ type AlarmServiceMock struct {
 	AddFunc func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 
 	// AlarmsFunc mocks the Alarms method.
-	AlarmsFunc func(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error)
+	AlarmsFunc func(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error)
 
 	// RemoveFunc mocks the Remove method.
 	RemoveFunc func(ctx context.Context, deviceID string, alarmType string) error
@@ -65,10 +66,8 @@ type AlarmServiceMock struct {
 		Alarms []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
-			// Params is the params argument value.
-			Params map[string][]string
-			// Tenants is the tenants argument value.
-			Tenants []string
+			// Query is the query argument value.
+			Query alarmquery.Alarms
 		}
 		// Remove holds details about calls to the Remove method.
 		Remove []struct {
@@ -132,23 +131,21 @@ func (mock *AlarmServiceMock) AddCalls() []struct {
 }
 
 // Alarms calls AlarmsFunc.
-func (mock *AlarmServiceMock) Alarms(ctx context.Context, params map[string][]string, tenants []string) (types.Collection[types.Alarms], error) {
+func (mock *AlarmServiceMock) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 	if mock.AlarmsFunc == nil {
 		panic("AlarmServiceMock.AlarmsFunc: method is nil but AlarmService.Alarms was just called")
 	}
 	callInfo := struct {
-		Ctx     context.Context
-		Params  map[string][]string
-		Tenants []string
+		Ctx   context.Context
+		Query alarmquery.Alarms
 	}{
-		Ctx:     ctx,
-		Params:  params,
-		Tenants: tenants,
+		Ctx:   ctx,
+		Query: query,
 	}
 	mock.lockAlarms.Lock()
 	mock.calls.Alarms = append(mock.calls.Alarms, callInfo)
 	mock.lockAlarms.Unlock()
-	return mock.AlarmsFunc(ctx, params, tenants)
+	return mock.AlarmsFunc(ctx, query)
 }
 
 // AlarmsCalls gets all the calls that were made to Alarms.
@@ -156,14 +153,12 @@ func (mock *AlarmServiceMock) Alarms(ctx context.Context, params map[string][]st
 //
 //	len(mockedAlarmService.AlarmsCalls())
 func (mock *AlarmServiceMock) AlarmsCalls() []struct {
-	Ctx     context.Context
-	Params  map[string][]string
-	Tenants []string
+	Ctx   context.Context
+	Query alarmquery.Alarms
 } {
 	var calls []struct {
-		Ctx     context.Context
-		Params  map[string][]string
-		Tenants []string
+		Ctx   context.Context
+		Query alarmquery.Alarms
 	}
 	mock.lockAlarms.RLock()
 	calls = mock.calls.Alarms

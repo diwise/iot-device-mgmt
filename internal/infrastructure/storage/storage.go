@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
@@ -19,14 +19,10 @@ import (
 )
 
 var (
-	ErrNoRows        = errors.New("no rows in result set")
-	ErrTooManyRows   = errors.New("too many rows in result set")
-	ErrQueryRow      = errors.New("could not execute query")
-	ErrStoreFailed   = errors.New("could not store data")
-	ErrNoID          = errors.New("data contains no id")
-	ErrMissingTenant = errors.New("missing tenant information")
-	ErrAlreadyExist  = errors.New("device already exists")
-	ErrDeleted       = errors.New("deleted")
+	ErrStoreFailed          = errors.New("could not store data")
+	ErrNoID                 = errors.New("data contains no id")
+	ErrMissingTenant        = errors.New("missing tenant information")
+	ErrStatusDeviceNotFound = errors.New("device not found for status message")
 )
 
 //go:embed migrate.sql
@@ -573,6 +569,9 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 		ORDER BY device_id ASC
 		LIMIT 1`, args).Scan(&sensorID)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrStatusDeviceNotFound
+		}
 		return err
 	}
 	args["sensor_id"] = sensorID
@@ -593,10 +592,10 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.SensorStatus], error) {
+func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
 	log := logging.GetFromContext(ctx)
 
-	condition := conditions.NewCondition(conds...)
+	condition := statusConditionFromQuery(deviceID, query)
 
 	offsetLimitSql, offset, limit := OffsetLimit(condition, 0, 100)
 
@@ -720,9 +719,9 @@ func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state typ
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, error) {
+func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error) {
 	if sensorID == "" {
-		return types.Device{}, ErrNoID
+		return types.Device{}, false, ErrNoID
 	}
 
 	args := pgx.NamedArgs{
@@ -738,7 +737,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
-		return types.Device{}, err
+		return types.Device{}, false, err
 	}
 	defer c.Release()
 
@@ -760,8 +759,11 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 
 	err = row.Scan(&device_id, &sensor_id, &active, &name, &description, &environment, &source, &tenant, &location, &device_profile, &typesList)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.Device{}, false, nil
+		}
 		log.Debug(fmt.Sprintf("query by sensorID %s did not return any data, reason: %v", sensorID, err))
-		return types.Device{}, ErrNoRows
+		return types.Device{}, false, err
 	}
 
 	d := types.Device{
@@ -792,13 +794,13 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 		}
 	}
 
-	return d, nil
+	return d, true, nil
 }
 
-func (s *Storage) Query(ctx context.Context, conds ...conditions.ConditionFunc) (types.Collection[types.Device], error) {
+func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
 
-	condition := conditions.NewCondition(conds...)
+	condition := deviceConditionFromQuery(query.Filters)
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
 	if condition.Export {
@@ -1114,12 +1116,8 @@ func (s *Storage) GetTenants(ctx context.Context) (types.Collection[string], err
 	}, nil
 }
 
-func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, conds ...conditions.ConditionFunc) (types.Collection[types.Measurement], error) {
-
-	// HACK: to remove where clause for non existing deleted flag
-	conds = append(conds, conditions.WithDeleted())
-
-	condition := conditions.NewCondition(conds...)
+func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+	condition := measurementConditionFromQuery(deviceID, query)
 
 	args := NamedArgs(condition)
 	offsetLimit, offset, limit := OffsetLimit(condition)
