@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	conditions "github.com/diwise/iot-device-mgmt/internal/pkg/types"
@@ -267,5 +268,21 @@ func measurementConditionFromQuery(deviceID string, query dmquery.Measurements) 
 	condition := deviceConditionFromQuery(query.Filters)
 	condition.DeviceID = deviceID
 	condition.IncludeDeleted = true
+	return condition
+}
+
+func alarmConditionFromQuery(query alarmquery.Alarms) *conditions.Condition {
+	condition := &conditions.Condition{
+		AlarmType: query.AlarmType,
+		Tenants:   query.AllowedTenants,
+		Offset:    query.Offset,
+		Limit:     query.Limit,
+	}
+
+	if query.ActiveOnly {
+		active := true
+		condition.Active = &active
+	}
+
 	return condition
 }
