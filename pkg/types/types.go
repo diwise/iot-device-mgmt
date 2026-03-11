@@ -154,3 +154,15 @@ type Measurement struct {
 	Unit      *string   `json:"unit,omitzero"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+type SensorConfig struct {
+	SensorID        string `json:"sensorID"`
+	SensorProfileID string `json:"sensorProfileID"`
+}
+
+type SensorsQuery struct {
+	Offset     *int  `json:"offset,omitempty"`
+	Limit      *int  `json:"limit,omitempty"`
+	Assigned   *bool `json:"assigned,omitempty"`
+	HasProfile *bool `json:"hasProfile,omitempty"`
+}

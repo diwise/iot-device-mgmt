@@ -30,10 +30,10 @@ type DeviceManagementClient interface {
 	CreateDevice(ctx context.Context, device types.Device) error
 	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
-	CreateSensor(ctx context.Context, sensor SensorConfig) error
-	UpdateSensor(ctx context.Context, sensor SensorConfig) error
+	CreateSensor(ctx context.Context, sensor types.SensorConfig) error
+	UpdateSensor(ctx context.Context, sensor types.SensorConfig) error
 	GetSensor(ctx context.Context, sensorID string) (Sensor, error)
-	ListSensors(ctx context.Context, query SensorsQuery) ([]Sensor, error)
+	ListSensors(ctx context.Context, query types.SensorsQuery) ([]Sensor, error)
 	AttachSensorToDevice(ctx context.Context, deviceID, sensorID string) error
 	DetachSensorFromDevice(ctx context.Context, deviceID string) error
 	GetTenants(ctx context.Context) ([]string, error)
@@ -154,10 +154,10 @@ func New(ctx context.Context, baseUrl, oauthTokenURL string, oauthInsecureURL bo
 		queue:       make(chan func()),
 		keepRunning: &atomic.Bool{},
 	}
-	// TODO: with cache removed, this is not really needed anymore, 
+	// TODO: with cache removed, this is not really needed anymore,
 	// but we might want to keep it for future use if we want to add background tasks or caching back in
-	go dmc.run(ctx) 
-	
+	go dmc.run(ctx)
+
 	return dmc, nil
 }
 

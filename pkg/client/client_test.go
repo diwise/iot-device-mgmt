@@ -187,7 +187,7 @@ func TestListSensors(t *testing.T) {
 	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
 	is.NoErr(err)
 
-	sensors, err := client.ListSensors(ctx, SensorsQuery{Assigned: &assigned, HasProfile: &hasProfile, Limit: &limit})
+	sensors, err := client.ListSensors(ctx, types.SensorsQuery{Assigned: &assigned, HasProfile: &hasProfile, Limit: &limit})
 	is.NoErr(err)
 	is.Equal(len(sensors), 2)
 	is.Equal(sensors[0].ID(), "sensor-1")

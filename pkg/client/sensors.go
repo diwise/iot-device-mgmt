@@ -22,18 +22,6 @@ type Sensor interface {
 	Interval() int
 }
 
-type SensorConfig struct {
-	SensorID        string
-	SensorProfileID string
-}
-
-type SensorsQuery struct {
-	Offset     *int
-	Limit      *int
-	Assigned   *bool
-	HasProfile *bool
-}
-
 type sensorRecord struct {
 	SensorID      string               `json:"sensorID"`
 	DeviceID      *string              `json:"deviceID,omitempty"`
@@ -125,7 +113,7 @@ func (dmc *devManagementClient) GetSensor(ctx context.Context, sensorID string) 
 	return &sensorWrapper{impl: &response.Data}, nil
 }
 
-func (dmc *devManagementClient) ListSensors(ctx context.Context, query SensorsQuery) ([]Sensor, error) {
+func (dmc *devManagementClient) ListSensors(ctx context.Context, query types.SensorsQuery) ([]Sensor, error) {
 	var err error
 	ctx, span := tracer.Start(ctx, "list-sensors")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -189,15 +177,15 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query SensorsQu
 	return sensors, nil
 }
 
-func (dmc *devManagementClient) CreateSensor(ctx context.Context, sensor SensorConfig) error {
+func (dmc *devManagementClient) CreateSensor(ctx context.Context, sensor types.SensorConfig) error {
 	return dmc.writeSensor(ctx, http.MethodPost, dmc.baseUrl+"/api/v0/sensors", sensor)
 }
 
-func (dmc *devManagementClient) UpdateSensor(ctx context.Context, sensor SensorConfig) error {
+func (dmc *devManagementClient) UpdateSensor(ctx context.Context, sensor types.SensorConfig) error {
 	return dmc.writeSensor(ctx, http.MethodPut, dmc.baseUrl+"/api/v0/sensors/"+sensor.SensorID, sensor)
 }
 
-func (dmc *devManagementClient) writeSensor(ctx context.Context, method, requestURL string, sensor SensorConfig) error {
+func (dmc *devManagementClient) writeSensor(ctx context.Context, method, requestURL string, sensor types.SensorConfig) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "write-sensor")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
