@@ -98,7 +98,7 @@ func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.C
 
 		err := rows.Scan(&device_id, &alarmtype, &description, &observed_at, &severity)
 		if err != nil {
-			log.Error("could not scan row", "err", err.Error())	
+			log.Error("could not scan row", "err", err.Error())
 			return types.Collection[types.AlarmDetails]{}, err
 		}
 
@@ -203,7 +203,7 @@ func (s *Storage) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Co
 		alarms = append(alarms, types.Alarms{
 			DeviceID:   deviceID,
 			AlarmTypes: typs,
-			ObservedAt: observedAt.UTC(),			
+			ObservedAt: observedAt.UTC(),
 		})
 	}
 

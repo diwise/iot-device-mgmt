@@ -109,7 +109,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		return sensors.Sensor{}, false, nil
 	}
 
-log := logging.GetFromContext(ctx)
+	log := logging.GetFromContext(ctx)
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {

@@ -38,9 +38,9 @@ func (s *Storage) AssignSensor(ctx context.Context, deviceID, sensorID string) e
 	if err != nil {
 		if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok {
 			switch pgErr.Code {
-			case "23503":				
+			case "23503":
 				return devices.ErrSensorNotFound
-			case "23505":				
+			case "23505":
 				return devices.ErrSensorAlreadyAssigned
 			}
 		}

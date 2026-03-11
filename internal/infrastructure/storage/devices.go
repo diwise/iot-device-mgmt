@@ -1022,7 +1022,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 
 func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
 	log := logging.GetFromContext(ctx)
-	
+
 	condition := measurementConditionFromQuery(deviceID, query)
 
 	args := NamedArgs(condition)

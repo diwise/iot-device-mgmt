@@ -25,20 +25,22 @@ type Management interface {
 
 	SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error
 	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
-	SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, validTenants []string, shouldUpdate bool) error
+	SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, validTenants []string) error
 }
 
 type app struct {
-	devices devices.DeviceAPIService
-	sensors sensors.SensorAPIService
-	alarms  alarms.AlarmAPIService
+	devices      devices.DeviceAPIService
+	sensors      sensors.SensorAPIService
+	alarms       alarms.AlarmAPIService
+	shouldUpdate bool
 }
 
-func New(devices devices.DeviceAPIService, sensors sensors.SensorAPIService, alarms alarms.AlarmAPIService) Management {
+func New(devices devices.DeviceAPIService, sensors sensors.SensorAPIService, alarms alarms.AlarmAPIService, shouldUpdate bool) Management {
 	return &app{
-		devices: devices,
-		sensors: sensors,
-		alarms:  alarms,
+		devices:      devices,
+		sensors:      sensors,
+		alarms:       alarms,
+		shouldUpdate: shouldUpdate,
 	}
 }
 
@@ -62,7 +64,7 @@ func (a *app) SeedSensorProfiles(ctx context.Context, profiles []types.SensorPro
 	return a.devices.SeedSensorProfiles(ctx, profiles)
 }
 
-func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, validTenants []string, shouldUpdate bool) error {
+func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, validTenants []string) error {
 
 	log := logging.GetFromContext(ctx)
 	defer input.Close()
@@ -80,7 +82,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 		return err
 	}
 
-	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", shouldUpdate))
+	log.Info("loaded devices from file", slog.Int("rows", len(rows)), slog.Int("records", len(records)), slog.Bool("seed_existing_devices", a.shouldUpdate))
 
 	for _, record := range records {
 		device, _ := record.mapToDevice()
@@ -111,7 +113,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 			}
 
 			log.Debug("seeded new sensor", slog.String("sensor_id", device.SensorID), slog.String("decoder", device.SensorProfile.Decoder))
-		} else if shouldUpdate {
+		} else if a.shouldUpdate {
 			log.Debug("sensor already exists, updating sensor profile if needed", slog.String("sensor_id", device.SensorID), slog.String("decoder", device.SensorProfile.Decoder))
 
 			err := a.sensors.Update(ctx, sensors.Sensor{
@@ -132,7 +134,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 				log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 				return err
 			}
-		} else if shouldUpdate {
+		} else if a.shouldUpdate {
 			log.Debug("device already exists, updating device information if needed", slog.String("device_id", device.DeviceID))
 
 			err := a.devices.Update(ctx, device)

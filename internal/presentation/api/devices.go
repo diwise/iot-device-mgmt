@@ -321,7 +321,7 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 				return
 			}
 
-			err = app.SeedSensorsAndDevices(ctx, file, allowedTenants, true)
+			err = app.SeedSensorsAndDevices(ctx, file, allowedTenants)
 			if err != nil {
 				logger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)

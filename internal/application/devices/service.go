@@ -90,9 +90,8 @@ type DeviceAPIService interface {
 //go:generate moq -rm -out deviceprofilestore_mock.go . DeviceProfileStore
 
 type Config struct {
-	DeviceProfiles      []types.SensorProfile `yaml:"deviceprofiles"`
-	Types               []types.Lwm2mType     `yaml:"types"`
-	SeedExistingDevices bool                  `yaml:"seedExistingDevices"`
+	DeviceProfiles []types.SensorProfile `yaml:"deviceprofiles"`
+	Types          []types.Lwm2mType     `yaml:"types"`
 }
 
 type service struct {

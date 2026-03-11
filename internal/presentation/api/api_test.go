@@ -37,7 +37,7 @@ func TestApi(t *testing.T) {
 	sm := sensors.New(sensorMocks.reader, sensorMocks.writer)
 	as := alarms.AlarmAPIServiceMock{}
 
-	app := application.New(dm, sm, &as)
+	app := application.New(dm, sm, &as, true)
 
 	mux := http.NewServeMux()
 	RegisterHandlers(ctx, mux, policies, app)
@@ -589,7 +589,7 @@ func testGetDeviceProfiles(t *testing.T, dm devices.DeviceAPIService) {
 		},
 	}
 
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 
 	mux := http.NewServeMux()
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
@@ -623,7 +623,7 @@ func testGetDeviceProfilesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
@@ -651,7 +651,7 @@ func testGetDeviceProfilesInternalError(t *testing.T, dm devices.DeviceAPIServic
 	}
 
 	mux := http.NewServeMux()
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
@@ -684,7 +684,7 @@ func testGetLwm2mTypes(t *testing.T, dm devices.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
@@ -716,7 +716,7 @@ func testGetLwm2mTypesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
@@ -744,7 +744,7 @@ func testGetLwm2mTypesInternalError(t *testing.T, dm devices.DeviceAPIService) {
 	}
 
 	mux := http.NewServeMux()
-	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{})
+	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}

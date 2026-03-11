@@ -87,7 +87,6 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 	log := logging.GetFromContext(ctx)
 	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
-	cfg.DeviceManagementConfig.SeedExistingDevices = seedExistingDevices
 
 	probes := map[string]k8shandlers.ServiceProber{
 		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
@@ -128,7 +127,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
 
-			app = application.New(deviceAPI, sensorAPI, alarmsAPI)
+			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
 
 			return nil
 		}),
@@ -145,7 +144,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return
 			}
 
-			err = app.SeedSensorsAndDevices(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","), seedExistingDevices)
+			err = app.SeedSensorsAndDevices(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}

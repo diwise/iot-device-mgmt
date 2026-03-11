@@ -138,12 +138,12 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	}
 
 	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
-	cfg.DeviceManagementConfig.SeedExistingDevices = exisitingDeviceUpdateFlag
+
 	dm := devices.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
 	sm := sensors.New(p, p)
 	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
-	app := application.New(dm, sm, as)
+	app := application.New(dm, sm, as, exisitingDeviceUpdateFlag)
 
 	err = app.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
 	is.NoErr(err)
@@ -151,7 +151,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	err = app.SeedSensorProfiles(ctx, cfg.DeviceManagementConfig.DeviceProfiles)
 	is.NoErr(err)
 
-	err = app.SeedSensorsAndDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"}, exisitingDeviceUpdateFlag)
+	err = app.SeedSensorsAndDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)
