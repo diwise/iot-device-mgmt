@@ -154,9 +154,10 @@ func New(ctx context.Context, baseUrl, oauthTokenURL string, oauthInsecureURL bo
 		queue:       make(chan func()),
 		keepRunning: &atomic.Bool{},
 	}
-
-	go dmc.run(ctx)
-
+	// TODO: with cache removed, this is not really needed anymore, 
+	// but we might want to keep it for future use if we want to add background tasks or caching back in
+	go dmc.run(ctx) 
+	
 	return dmc, nil
 }
 
