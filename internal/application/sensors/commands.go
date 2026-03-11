@@ -1,4 +1,4 @@
-package sensormanagement
+package sensors
 
 import "context"
 

@@ -7,8 +7,8 @@ import (
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 
 	"github.com/diwise/service-chassis/pkg/infrastructure/net/http/router"
@@ -19,7 +19,7 @@ import (
 
 var tracer = otel.Tracer("iot-device-mgmt/api")
 
-func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devicemanagement.DeviceAPIService, sm sensormanagement.SensorAPIService, alarm alarms.AlarmService) error {
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, dm devices.DeviceAPIService, sm sensors.SensorAPIService, alarm alarms.AlarmService) error {
 	const apiPrefix string = "/api/v0"
 
 	log := logging.GetFromContext(ctx)

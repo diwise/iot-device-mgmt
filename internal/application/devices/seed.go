@@ -1,4 +1,4 @@
-package devicemanagement
+package devices
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )

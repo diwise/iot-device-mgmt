@@ -1,4 +1,4 @@
-package devicemanagement
+package devices
 
 import (
 	"errors"

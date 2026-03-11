@@ -1,11 +1,11 @@
-package devicemanagement
+package devices
 
 import (
 	"context"
 	"fmt"
 	"slices"
 
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 

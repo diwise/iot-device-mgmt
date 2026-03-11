@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -18,7 +18,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 )
 
-func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func queryDevicesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -37,7 +37,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 			device, err := svc.DeviceBySensor(ctx, sensorID, allowedTenants)
 			if err != nil {
-				if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+				if errors.Is(err, devices.ErrDeviceNotFound) {
 					logger.Debug(fmt.Sprintf("device %s not found", sensorID))
 					w.WriteHeader(http.StatusNotFound)
 					return
@@ -127,7 +127,7 @@ func queryDevicesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 	}
 }
 
-func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func getDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -147,7 +147,7 @@ func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) h
 
 		device, err := svc.Device(ctx, deviceID, allowedTenants)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -165,7 +165,7 @@ func getDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) h
 	}
 }
 
-func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func getDeviceStatusHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -192,7 +192,7 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		statuses, err := svc.Status(ctx, deviceID, query)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -213,7 +213,7 @@ func getDeviceStatusHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 	}
 }
 
-func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func getDeviceAlarmsHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -233,7 +233,7 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		alarmDetails, err := svc.Alarms(ctx, deviceID, allowedTenants)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -254,7 +254,7 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 	}
 }
 
-func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func getDeviceMeasurementsHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -281,7 +281,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceA
 
 		result, err := svc.Measurements(ctx, deviceID, query)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -302,7 +302,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devicemanagement.DeviceA
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -356,7 +356,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 			err = svc.Create(ctx, d)
 			if err != nil {
-				if errors.Is(err, devicemanagement.ErrDeviceAlreadyExist) {
+				if errors.Is(err, devices.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)
 					return
 				}
@@ -376,7 +376,7 @@ func createDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 	}
 }
 
-func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -420,7 +420,7 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 
 		err = svc.Update(ctx, d)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -434,7 +434,7 @@ func updateDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService
 	}
 }
 
-func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -468,11 +468,11 @@ func patchDeviceHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService)
 
 		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrInvalidPatch) {
+			if errors.Is(err, devices.ErrInvalidPatch) {
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}

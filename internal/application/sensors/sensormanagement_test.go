@@ -1,11 +1,11 @@
-package sensormanagement
+package sensors
 
 import (
 	"context"
 	"errors"
 	"testing"
 
-	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/matryer/is"
 )

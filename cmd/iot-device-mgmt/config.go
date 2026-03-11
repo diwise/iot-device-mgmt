@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/service-chassis/pkg/infrastructure/servicerunner"
 )
@@ -35,12 +35,12 @@ const (
 
 type appConfig struct {
 	AlarmServiceConfig     alarms.Config           `yaml:"alarmservice"`
-	DeviceManagementConfig devicemanagement.Config `yaml:"devicemanagement"`
+	DeviceManagementConfig devices.Config          `yaml:"devicemanagement"`
 	WatchdogConfig         watchdog.WatchdogConfig `yaml:"watchdog"`
 	/*
 	   messenger              messaging.MsgContext
 	   db                     storage.Store
-	   deviceAPI              devicemanagement.DeviceAPIService
+	   deviceAPI              devices.DeviceAPIService
 	   alarm                  alarms.AlarmService
 	   watchdog               watchdog.Watchdog
 	*/

@@ -1,10 +1,10 @@
-package devicemanagement
+package devices
 
 import (
 	"context"
 	"strings"
 
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 )
 
 func (s service) AttachSensor(ctx context.Context, deviceID, sensorID string, tenants []string) error {

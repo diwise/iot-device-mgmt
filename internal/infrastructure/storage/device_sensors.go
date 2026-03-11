@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -14,7 +14,7 @@ func (s *Storage) AssignSensor(ctx context.Context, deviceID, sensorID string) e
 		return ErrNoID
 	}
 	if sensorID == "" {
-		return devicemanagement.ErrSensorNotFound
+		return devices.ErrSensorNotFound
 	}
 
 	c, err := s.conn.Acquire(ctx)
@@ -36,15 +36,15 @@ func (s *Storage) AssignSensor(ctx context.Context, deviceID, sensorID string) e
 		if errors.As(err, &pgErr) {
 			switch pgErr.Code {
 			case "23503":
-				return devicemanagement.ErrSensorNotFound
+				return devices.ErrSensorNotFound
 			case "23505":
-				return devicemanagement.ErrSensorAlreadyAssigned
+				return devices.ErrSensorAlreadyAssigned
 			}
 		}
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return devicemanagement.ErrDeviceNotFound
+		return devices.ErrDeviceNotFound
 	}
 
 	return nil
@@ -72,7 +72,7 @@ func (s *Storage) UnassignSensor(ctx context.Context, deviceID string) error {
 		return err
 	}
 	if result.RowsAffected() == 0 {
-		return devicemanagement.ErrDeviceNotFound
+		return devices.ErrDeviceNotFound
 	}
 
 	return nil

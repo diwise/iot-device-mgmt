@@ -7,9 +7,9 @@ import (
 	"time"
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
-	sensormanagement "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
-	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/google/uuid"
 )
@@ -68,7 +68,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("create sensor for device", func(t *testing.T) {
-		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+		err := s.CreateSensor(ctx, sensors.Sensor{
 			SensorID: sensorID,
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder",
@@ -114,7 +114,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("create standalone sensor", func(t *testing.T) {
-		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+		err := s.CreateSensor(ctx, sensors.Sensor{
 			SensorID: "zz-test-sensor-" + uuid.NewString(),
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder-2",
@@ -183,7 +183,7 @@ func TestStorage(t *testing.T) {
 	standaloneSensorID := "zz-test-sensor-standalone-" + uuid.NewString()
 
 	t.Run("create and get standalone sensor", func(t *testing.T) {
-		err := s.CreateSensor(ctx, sensormanagement.Sensor{
+		err := s.CreateSensor(ctx, sensors.Sensor{
 			SensorID: standaloneSensorID,
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder-2",
@@ -258,7 +258,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("update standalone sensor", func(t *testing.T) {
-		err := s.UpdateSensor(ctx, sensormanagement.Sensor{
+		err := s.UpdateSensor(ctx, sensors.Sensor{
 			SensorID: standaloneSensorID,
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder",

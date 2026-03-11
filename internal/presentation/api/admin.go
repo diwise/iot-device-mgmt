@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 )
 
-func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func queryDeviceProfilesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -38,7 +38,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPI
 
 			profiles, err = svc.Profiles(ctx, names...)
 			if err != nil {
-				if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+				if errors.Is(err, devices.ErrDeviceProfileNotFound) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
@@ -49,7 +49,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPI
 		} else {
 			profiles, err = svc.Profiles(ctx)
 			if err != nil {
-				if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+				if errors.Is(err, devices.ErrDeviceProfileNotFound) {
 					w.WriteHeader(http.StatusNotFound)
 					return
 				}
@@ -79,7 +79,7 @@ func queryDeviceProfilesHandler(log *slog.Logger, svc devicemanagement.DeviceAPI
 	}
 }
 
-func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func queryLwm2mTypesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -96,7 +96,7 @@ func queryLwm2mTypesHandler(log *slog.Logger, svc devicemanagement.DeviceAPIServ
 
 		profileTypes, err := svc.Lwm2mTypes(ctx, urn)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceProfileNotFound) {
+			if errors.Is(err, devices.ErrDeviceProfileNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}

@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
@@ -82,7 +82,7 @@ func main() {
 	exitIf(err, logger, "failed to start service runner")
 }
 
-func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
+func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile, devicesFile io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 
 	log := logging.GetFromContext(ctx)
 	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
@@ -99,10 +99,10 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
 	exitIf(err, log, "failed to init messenger")
 
-	var deviceAPI devicemanagement.DeviceAPIService
-	var deviceBootstrap devicemanagement.DeviceBootstrapService
-	var deviceStatusHandler devicemanagement.DeviceStatusHandler
-	var sensorAPI sensormanagement.SensorAPIService
+	var deviceAPI devices.DeviceAPIService
+	var deviceBootstrap devices.DeviceBootstrapService
+	var deviceStatusHandler devices.DeviceStatusHandler
+	var sensorAPI sensors.SensorAPIService
 	var as alarms.AlarmService
 	var wd watchdog.Watchdog
 
@@ -112,18 +112,18 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		),
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
-				defer policies.Close()
-				return api.RegisterHandlers(ctx, handler, policies, deviceAPI, sensorAPI, as)
+				defer policiesFile.Close()
+				return api.RegisterHandlers(ctx, handler, policiesFile, deviceAPI, sensorAPI, as)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
-			svc := devicemanagement.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
+			svc := devices.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
 			deviceAPI = svc
 			deviceBootstrap = svc
 			deviceStatusHandler = svc
-			sensorAPI = sensormanagement.New(s, s)
+			sensorAPI = sensors.New(s, s)
 			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(as, &ac.WatchdogConfig)
 
@@ -142,14 +142,14 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 				return
 			}
 
-			err = deviceBootstrap.Seed(ctx, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = deviceBootstrap.Seed(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}
 
 			messenger.Start()
 
-			err = devicemanagement.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
+			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
 			if err != nil {
 				return
 			}

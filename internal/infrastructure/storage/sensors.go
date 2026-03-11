@@ -6,14 +6,14 @@ import (
 	"fmt"
 	"strings"
 
-	sensormanagement "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
-	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	internaltypes "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/jackc/pgx/v5"
 )
 
-func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
 	condition := &internaltypes.Condition{Offset: query.Offset, Limit: query.Limit}
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
@@ -47,7 +47,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
-		return types.Collection[sensormanagement.Sensor]{}, err
+		return types.Collection[sensors.Sensor]{}, err
 	}
 	defer c.Release()
 
@@ -66,11 +66,11 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		ORDER BY s.sensor_id ASC
 		%s`, whereClause, offsetLimit), args)
 	if err != nil {
-		return types.Collection[sensormanagement.Sensor]{}, err
+		return types.Collection[sensors.Sensor]{}, err
 	}
 	defer rows.Close()
 
-	items := []sensormanagement.Sensor{}
+	items := []sensors.Sensor{}
 	var count uint64
 	for rows.Next() {
 		var sensorID string
@@ -80,17 +80,17 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 
 		err = rows.Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &count)
 		if err != nil {
-			return types.Collection[sensormanagement.Sensor]{}, err
+			return types.Collection[sensors.Sensor]{}, err
 		}
 
 		items = append(items, sensorFromRow(sensorID, deviceID, profileName, decoder, interval))
 	}
 
 	if err = rows.Err(); err != nil {
-		return types.Collection[sensormanagement.Sensor]{}, err
+		return types.Collection[sensors.Sensor]{}, err
 	}
 
-	return types.Collection[sensormanagement.Sensor]{
+	return types.Collection[sensors.Sensor]{
 		Data:       items,
 		Count:      uint64(len(items)),
 		Offset:     uint64(offset),
@@ -99,14 +99,14 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	}, nil
 }
 
-func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 	if sensorID == "" {
-		return sensormanagement.Sensor{}, false, nil
+		return sensors.Sensor{}, false, nil
 	}
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
-		return sensormanagement.Sensor{}, false, err
+		return sensors.Sensor{}, false, err
 	}
 	defer c.Release()
 
@@ -127,15 +127,15 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensormanagem
 		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &profileName, &decoder, &interval)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return sensormanagement.Sensor{}, false, nil
+			return sensors.Sensor{}, false, nil
 		}
-		return sensormanagement.Sensor{}, false, err
+		return sensors.Sensor{}, false, err
 	}
 
 	return sensorFromRow(sensorID, deviceID, profileName, decoder, interval), true, nil
 }
 
-func (s *Storage) CreateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
 		"sensor_profile": sensorProfileDecoder(sensor),
@@ -156,13 +156,13 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensormanagement.Sens
 	}
 
 	if result.RowsAffected() == 0 {
-		return sensormanagement.ErrSensorAlreadyExists
+		return sensors.ErrSensorAlreadyExists
 	}
 
 	return nil
 }
 
-func (s *Storage) UpdateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
 		"sensor_profile": sensorProfileDecoder(sensor),
@@ -184,13 +184,13 @@ func (s *Storage) UpdateSensor(ctx context.Context, sensor sensormanagement.Sens
 	}
 
 	if result.RowsAffected() == 0 {
-		return sensormanagement.ErrSensorNotFound
+		return sensors.ErrSensorNotFound
 	}
 
 	return nil
 }
 
-func sensorProfileDecoder(sensor sensormanagement.Sensor) any {
+func sensorProfileDecoder(sensor sensors.Sensor) any {
 	if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder == "" {
 		return nil
 	}
@@ -198,8 +198,8 @@ func sensorProfileDecoder(sensor sensormanagement.Sensor) any {
 	return strings.ToLower(strings.TrimSpace(sensor.SensorProfile.Decoder))
 }
 
-func sensorFromRow(sensorID string, deviceID, profileName, decoder *string, interval *int) sensormanagement.Sensor {
-	sensor := sensormanagement.Sensor{SensorID: sensorID, DeviceID: deviceID}
+func sensorFromRow(sensorID string, deviceID, profileName, decoder *string, interval *int) sensors.Sensor {
+	sensor := sensors.Sensor{SensorID: sensorID, DeviceID: deviceID}
 	if decoder == nil {
 		return sensor
 	}

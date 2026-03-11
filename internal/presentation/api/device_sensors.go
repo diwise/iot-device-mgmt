@@ -7,7 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -18,7 +18,7 @@ type attachSensorRequest struct {
 	SensorID string `json:"sensorID"`
 }
 
-func attachDeviceSensorHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -59,9 +59,9 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devicemanagement.DeviceAPIS
 		err = svc.AttachSensor(ctx, deviceID, request.SensorID, allowedTenants)
 		if err != nil {
 			switch {
-			case errors.Is(err, devicemanagement.ErrDeviceNotFound), errors.Is(err, devicemanagement.ErrSensorNotFound):
+			case errors.Is(err, devices.ErrDeviceNotFound), errors.Is(err, devices.ErrSensorNotFound):
 				w.WriteHeader(http.StatusNotFound)
-			case errors.Is(err, devicemanagement.ErrSensorAlreadyAssigned), errors.Is(err, devicemanagement.ErrSensorProfileRequired):
+			case errors.Is(err, devices.ErrSensorAlreadyAssigned), errors.Is(err, devices.ErrSensorProfileRequired):
 				w.WriteHeader(http.StatusConflict)
 			default:
 				logger.Error("unable to attach sensor", "sensor_id", request.SensorID, "err", err.Error())
@@ -75,7 +75,7 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devicemanagement.DeviceAPIS
 	}
 }
 
-func detachDeviceSensorHandler(log *slog.Logger, svc devicemanagement.DeviceAPIService) http.HandlerFunc {
+func detachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
@@ -94,7 +94,7 @@ func detachDeviceSensorHandler(log *slog.Logger, svc devicemanagement.DeviceAPIS
 
 		err = svc.DetachSensor(ctx, deviceID, allowedTenants)
 		if err != nil {
-			if errors.Is(err, devicemanagement.ErrDeviceNotFound) {
+			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}

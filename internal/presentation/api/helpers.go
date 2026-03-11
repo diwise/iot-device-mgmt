@@ -9,8 +9,8 @@ import (
 	"time"
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
-	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 

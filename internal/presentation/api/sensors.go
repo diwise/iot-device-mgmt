@@ -7,13 +7,13 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 )
 
-func querySensorsHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) http.HandlerFunc {
+func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -55,7 +55,7 @@ func querySensorsHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 	}
 }
 
-func getSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) http.HandlerFunc {
+func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -73,7 +73,7 @@ func getSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) h
 
 		sensor, err := svc.Sensor(ctx, sensorID)
 		if err != nil {
-			if errors.Is(err, sensormanagement.ErrSensorNotFound) {
+			if errors.Is(err, sensors.ErrSensorNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
@@ -90,7 +90,7 @@ func getSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) h
 	}
 }
 
-func createSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) http.HandlerFunc {
+func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -111,7 +111,7 @@ func createSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 			return
 		}
 
-		var sensor sensormanagement.Sensor
+		var sensor sensors.Sensor
 		err = json.Unmarshal(body, &sensor)
 		if err != nil {
 			logger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
@@ -126,7 +126,7 @@ func createSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 
 		err = svc.Create(ctx, sensor)
 		if err != nil {
-			if errors.Is(err, sensormanagement.ErrSensorAlreadyExists) {
+			if errors.Is(err, sensors.ErrSensorAlreadyExists) {
 				w.WriteHeader(http.StatusConflict)
 				return
 			}
@@ -141,7 +141,7 @@ func createSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 	}
 }
 
-func updateSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService) http.HandlerFunc {
+func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -162,7 +162,7 @@ func updateSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 			return
 		}
 
-		var sensor sensormanagement.Sensor
+		var sensor sensors.Sensor
 		err = json.Unmarshal(body, &sensor)
 		if err != nil {
 			logger.Error("unable to unmarshal body", "body", string(body), "err", err.Error())
@@ -178,7 +178,7 @@ func updateSensorHandler(log *slog.Logger, svc sensormanagement.SensorAPIService
 
 		err = svc.Update(ctx, sensor)
 		if err != nil {
-			if errors.Is(err, sensormanagement.ErrSensorNotFound) {
+			if errors.Is(err, sensors.ErrSensorNotFound) {
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}

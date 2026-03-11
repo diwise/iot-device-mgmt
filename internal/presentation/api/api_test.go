@@ -13,10 +13,10 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/devicemanagement"
-	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devicemanagement/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensormanagement"
-	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensormanagement/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
+	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -29,11 +29,11 @@ func TestApi(t *testing.T) {
 	defer policies.Close()
 
 	msgMock := &messaging.MsgContextMock{}
-	mocks := newDeviceManagementMocks()
-	sensorMocks := newSensorManagementMocks()
+	mocks := newDeviceMocks()
+	sensorMocks := newSensorMocks()
 
-	dm := devicemanagement.New(mocks.reader, mocks.writer, mocks.statusWriter, mocks.profiles, msgMock, &devicemanagement.Config{})
-	sm := sensormanagement.New(sensorMocks.reader, sensorMocks.writer)
+	dm := devices.New(mocks.reader, mocks.writer, mocks.statusWriter, mocks.profiles, msgMock, &devices.Config{})
+	sm := sensors.New(sensorMocks.reader, sensorMocks.writer)
 	as := alarms.AlarmServiceMock{}
 
 	mux := http.NewServeMux()
@@ -201,7 +201,7 @@ func TestApi(t *testing.T) {
 }
 
 type adminAPIService struct {
-	devicemanagement.DeviceAPIService
+	devices.DeviceAPIService
 	profilesFunc   func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)
 	lwm2mTypesFunc func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
 }
@@ -222,26 +222,26 @@ func (s adminAPIService) Lwm2mTypes(ctx context.Context, urn ...string) (types.C
 	return s.DeviceAPIService.Lwm2mTypes(ctx, urn...)
 }
 
-type deviceManagementMocks struct {
-	reader       *devicemanagement.DeviceReaderMock
-	writer       *devicemanagement.DeviceWriterMock
-	statusWriter *devicemanagement.DeviceStatusWriterMock
-	profiles     *devicemanagement.DeviceProfileStoreMock
+type deviceMocks struct {
+	reader       *devices.DeviceReaderMock
+	writer       *devices.DeviceWriterMock
+	statusWriter *devices.DeviceStatusWriterMock
+	profiles     *devices.DeviceProfileStoreMock
 }
 
 type sensorReaderMock struct {
-	QueryFunc func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error)
-	GetFunc   func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error)
+	QueryFunc func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error)
+	GetFunc   func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error)
 }
 
-func (m *sensorReaderMock) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
+func (m *sensorReaderMock) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
 	if m.QueryFunc == nil {
 		panic("sensorReaderMock.QueryFunc is nil")
 	}
 	return m.QueryFunc(ctx, query)
 }
 
-func (m *sensorReaderMock) GetSensor(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func (m *sensorReaderMock) GetSensor(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 	if m.GetFunc == nil {
 		panic("sensorReaderMock.GetFunc is nil")
 	}
@@ -249,65 +249,65 @@ func (m *sensorReaderMock) GetSensor(ctx context.Context, sensorID string) (sens
 }
 
 type sensorWriterMock struct {
-	CreateFunc func(ctx context.Context, sensor sensormanagement.Sensor) error
-	UpdateFunc func(ctx context.Context, sensor sensormanagement.Sensor) error
+	CreateFunc func(ctx context.Context, sensor sensors.Sensor) error
+	UpdateFunc func(ctx context.Context, sensor sensors.Sensor) error
 }
 
-func (m *sensorWriterMock) CreateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+func (m *sensorWriterMock) CreateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	if m.CreateFunc == nil {
 		panic("sensorWriterMock.CreateFunc is nil")
 	}
 	return m.CreateFunc(ctx, sensor)
 }
 
-func (m *sensorWriterMock) UpdateSensor(ctx context.Context, sensor sensormanagement.Sensor) error {
+func (m *sensorWriterMock) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	if m.UpdateFunc == nil {
 		panic("sensorWriterMock.UpdateFunc is nil")
 	}
 	return m.UpdateFunc(ctx, sensor)
 }
 
-type sensorManagementMocks struct {
+type sensorMocks struct {
 	reader *sensorReaderMock
 	writer *sensorWriterMock
 }
 
-func newSensorManagementMocks() sensorManagementMocks {
-	return sensorManagementMocks{
+func newSensorMocks() sensorMocks {
+	return sensorMocks{
 		reader: &sensorReaderMock{},
 		writer: &sensorWriterMock{},
 	}
 }
 
-func newNoopSensorAPIService() sensormanagement.SensorAPIService {
-	mocks := sensorManagementMocks{
+func newNoopSensorAPIService() sensors.SensorAPIService {
+	mocks := sensorMocks{
 		reader: &sensorReaderMock{
-			QueryFunc: func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
-				return types.Collection[sensormanagement.Sensor]{}, nil
+			QueryFunc: func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
+				return types.Collection[sensors.Sensor]{}, nil
 			},
-			GetFunc: func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-				return sensormanagement.Sensor{}, false, nil
+			GetFunc: func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+				return sensors.Sensor{}, false, nil
 			},
 		},
 		writer: &sensorWriterMock{
-			CreateFunc: func(ctx context.Context, sensor sensormanagement.Sensor) error { return nil },
-			UpdateFunc: func(ctx context.Context, sensor sensormanagement.Sensor) error { return nil },
+			CreateFunc: func(ctx context.Context, sensor sensors.Sensor) error { return nil },
+			UpdateFunc: func(ctx context.Context, sensor sensors.Sensor) error { return nil },
 		},
 	}
 
-	return sensormanagement.New(mocks.reader, mocks.writer)
+	return sensors.New(mocks.reader, mocks.writer)
 }
 
-func newDeviceManagementMocks() deviceManagementMocks {
-	return deviceManagementMocks{
-		reader:       &devicemanagement.DeviceReaderMock{},
-		writer:       &devicemanagement.DeviceWriterMock{},
-		statusWriter: &devicemanagement.DeviceStatusWriterMock{},
-		profiles:     &devicemanagement.DeviceProfileStoreMock{},
+func newDeviceMocks() deviceMocks {
+	return deviceMocks{
+		reader:       &devices.DeviceReaderMock{},
+		writer:       &devices.DeviceWriterMock{},
+		statusWriter: &devices.DeviceStatusWriterMock{},
+		profiles:     &devices.DeviceProfileStoreMock{},
 	}
 }
 
-func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testQueryDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Data: []types.Device{testDevice},
@@ -325,10 +325,10 @@ func testQueryDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
-func testQuerySensors(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
-		return types.Collection[sensormanagement.Sensor]{
-			Data:       []sensormanagement.Sensor{testSensor},
+func testQuerySensors(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
+		return types.Collection[sensors.Sensor]{
+			Data:       []sensors.Sensor{testSensor},
 			Count:      1,
 			Offset:     0,
 			Limit:      10,
@@ -356,9 +356,9 @@ func testQuerySensorsWithInvalidLimit(t *testing.T, baseUrl string) {
 	}
 }
 
-func testQuerySensorsInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensormanagement.Sensor], error) {
-		return types.Collection[sensormanagement.Sensor]{}, errors.New("query failed")
+func testQuerySensorsInternalError(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
+		return types.Collection[sensors.Sensor]{}, errors.New("query failed")
 	}
 
 	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors", nil)
@@ -367,8 +367,8 @@ func testQuerySensorsInternalError(t *testing.T, baseUrl string, mocks sensorMan
 	}
 }
 
-func testGetSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func testGetSensor(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
 
@@ -382,9 +382,9 @@ func testGetSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
 	}
 }
 
-func testGetSensorNotFound(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{}, false, nil
+func testGetSensorNotFound(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{}, false, nil
 	}
 
 	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors/missing", nil)
@@ -393,9 +393,9 @@ func testGetSensorNotFound(t *testing.T, baseUrl string, mocks sensorManagementM
 	}
 }
 
-func testGetSensorInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{}, false, errors.New("lookup failed")
+func testGetSensorInternalError(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{}, false, errors.New("lookup failed")
 	}
 
 	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors/test-sensor-standalone", nil)
@@ -411,7 +411,7 @@ func testQueryDevicesWithInvalidLimit(t *testing.T, baseUrl string) {
 	}
 }
 
-func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return testDevice, true, nil
 	}
@@ -426,7 +426,7 @@ func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceManage
 	}
 }
 
-func testGetDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testGetDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Count: 1,
@@ -445,7 +445,7 @@ func testGetDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
 	}
 }
 
-func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
 		collection := types.Collection[types.SensorStatus]{
 			Data: []types.SensorStatus{
@@ -467,7 +467,7 @@ func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
-func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Count: 1,
@@ -497,7 +497,7 @@ func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
-func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
 		collection := types.Collection[types.Measurement]{
 			Data: []types.Measurement{
@@ -568,7 +568,7 @@ func testGetAlarmsInternalError(t *testing.T, baseUrl string, service *alarms.Al
 	}
 }
 
-func testGetDeviceProfiles(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetDeviceProfiles(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -604,7 +604,7 @@ func testGetDeviceProfiles(t *testing.T, dm devicemanagement.DeviceAPIService) {
 	}
 }
 
-func testGetDeviceProfilesNotFound(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetDeviceProfilesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -613,7 +613,7 @@ func testGetDeviceProfilesNotFound(t *testing.T, dm devicemanagement.DeviceAPISe
 	service := adminAPIService{
 		DeviceAPIService: dm,
 		profilesFunc: func(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error) {
-			return types.Collection[types.SensorProfile]{}, devicemanagement.ErrDeviceProfileNotFound
+			return types.Collection[types.SensorProfile]{}, devices.ErrDeviceProfileNotFound
 		},
 	}
 
@@ -631,7 +631,7 @@ func testGetDeviceProfilesNotFound(t *testing.T, dm devicemanagement.DeviceAPISe
 	}
 }
 
-func testGetDeviceProfilesInternalError(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetDeviceProfilesInternalError(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -658,7 +658,7 @@ func testGetDeviceProfilesInternalError(t *testing.T, dm devicemanagement.Device
 	}
 }
 
-func testGetLwm2mTypes(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetLwm2mTypes(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -694,7 +694,7 @@ func testGetLwm2mTypes(t *testing.T, dm devicemanagement.DeviceAPIService) {
 	}
 }
 
-func testGetLwm2mTypesNotFound(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetLwm2mTypesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -703,7 +703,7 @@ func testGetLwm2mTypesNotFound(t *testing.T, dm devicemanagement.DeviceAPIServic
 	service := adminAPIService{
 		DeviceAPIService: dm,
 		lwm2mTypesFunc: func(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error) {
-			return types.Collection[types.Lwm2mType]{}, devicemanagement.ErrDeviceProfileNotFound
+			return types.Collection[types.Lwm2mType]{}, devices.ErrDeviceProfileNotFound
 		},
 	}
 
@@ -721,7 +721,7 @@ func testGetLwm2mTypesNotFound(t *testing.T, dm devicemanagement.DeviceAPIServic
 	}
 }
 
-func testGetLwm2mTypesInternalError(t *testing.T, dm devicemanagement.DeviceAPIService) {
+func testGetLwm2mTypesInternalError(t *testing.T, dm devices.DeviceAPIService) {
 	t.Helper()
 
 	policies := io.NopCloser(strings.NewReader(policiesMock))
@@ -748,7 +748,7 @@ func testGetLwm2mTypesInternalError(t *testing.T, dm devicemanagement.DeviceAPIS
 	}
 }
 
-func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testCreateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
 	}
@@ -758,8 +758,8 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 			Data: []types.Device{},
 		}, nil
 	}
-	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -777,11 +777,11 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
-func testCreateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{}, false, nil
+func testCreateSensor(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{}, false, nil
 	}
-	mocks.writer.CreateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+	mocks.writer.CreateFunc = func(ctx context.Context, sensor sensors.Sensor) error {
 		if sensor.SensorID != testSensor.SensorID {
 			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
 		}
@@ -798,8 +798,8 @@ func testCreateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks)
 	}
 }
 
-func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
 
@@ -810,7 +810,7 @@ func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorManagem
 	}
 }
 
-func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testCreateDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
 		return nil
 	}
@@ -827,12 +827,12 @@ func testCreateDevices(t *testing.T, baseUrl string, mocks deviceManagementMocks
 	}
 }
 
-func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
-	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return testDevice, true, nil
@@ -851,11 +851,11 @@ func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks)
 	}
 }
 
-func testUpdateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func testUpdateSensor(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
-	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensors.Sensor) error {
 		if sensor.SensorID != testSensor.SensorID {
 			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
 		}
@@ -872,9 +872,9 @@ func testUpdateSensor(t *testing.T, baseUrl string, mocks sensorManagementMocks)
 	}
 }
 
-func testUpdateSensorNotFound(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{}, false, nil
+func testUpdateSensorNotFound(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{}, false, nil
 	}
 
 	payload := `{"sensorID":"missing","sensorProfile":{"decoder":"enviot"}}`
@@ -884,11 +884,11 @@ func testUpdateSensorNotFound(t *testing.T, baseUrl string, mocks sensorManageme
 	}
 }
 
-func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorManagementMocks) {
-	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
+func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
-	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensormanagement.Sensor) error {
+	mocks.writer.UpdateFunc = func(ctx context.Context, sensor sensors.Sensor) error {
 		return errors.New("update failed")
 	}
 
@@ -899,7 +899,7 @@ func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorMan
 	}
 }
 
-func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 0}, nil
 	}
@@ -911,7 +911,7 @@ func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManageme
 	}
 }
 
-func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
@@ -926,7 +926,7 @@ func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMan
 	}
 }
 
-func testPatchDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testPatchDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
@@ -959,12 +959,12 @@ func testPatchDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) 
 	}
 }
 
-func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
-	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -986,12 +986,12 @@ func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceManageme
 	}
 }
 
-func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
-	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensormanagement.Sensor, bool, error) {
-		return sensormanagement.Sensor{SensorID: sensorID}, true, nil
+	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+		return sensors.Sensor{SensorID: sensorID}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -1004,7 +1004,7 @@ func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks device
 	}
 }
 
-func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
@@ -1021,7 +1021,7 @@ func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceManage
 	}
 }
 
-func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
@@ -1033,7 +1033,7 @@ func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceManag
 	}
 }
 
-func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 0}, nil
 	}
@@ -1045,7 +1045,7 @@ func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceManagemen
 	}
 }
 
-func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceManagementMocks) {
+func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
@@ -1110,7 +1110,7 @@ func do(t *testing.T, method, url string, body io.Reader, headers ...map[string]
 
 var testDevice = types.Device{SensorID: "test-sensor-1", DeviceID: "test-device-1", Tenant: "default"}
 
-var testSensor = sensormanagement.Sensor{
+var testSensor = sensors.Sensor{
 	SensorID: "test-sensor-standalone",
 	SensorProfile: &types.SensorProfile{
 		Name:     "Elsys",
