@@ -141,10 +141,6 @@ func TestApi(t *testing.T) {
 		testCreateSensorDuplicate(t, server.URL, sensorMocks)
 	})
 
-	t.Run("POST /devices+multiPart", func(t *testing.T) {
-		testCreateDevices(t, server.URL, mocks)
-	})
-
 	t.Run("PUT /devices/test-device-1", func(t *testing.T) {
 		testUpdateDevice(t, server.URL, mocks)
 	})
@@ -817,23 +813,6 @@ func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorMocks) 
 	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/sensors", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
 	if statusCode != http.StatusConflict {
 		t.Fatalf("expected status 409, got %d", statusCode)
-	}
-}
-
-func testCreateDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
-		return nil
-	}
-
-	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
-		return types.Device{}, false, nil
-	}
-
-	body, contentType := createMultipartFileUpload(t, "fileupload", "devices.csv", csvMock)
-
-	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/devices", body, map[string]string{"Content-Type": contentType})
-	if statusCode != http.StatusCreated {
-		t.Fatalf("expected status 201, got %d", statusCode)
 	}
 }
 

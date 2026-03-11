@@ -1,7 +1,6 @@
 package client
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -86,20 +85,27 @@ func (dmc *devManagementClient) GetSensor(ctx context.Context, sensorID string) 
 	ctx, span := tracer.Start(ctx, "get-sensor")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, dmc.url+"/api/v0/sensors/"+sensorID, nil)
+	url := dmc.baseUrl + "/api/v0/sensors/" + sensorID
+
+	req, err := newJsonRequest(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create http request: %w", err)
 	}
 
-	resp, err := dmc.doRequestWithTokenRetry(ctx, req)
+	resp, err := dmc.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve sensor: %w", err)
 	}
 	defer drainAndCloseResponseBody(resp)
 
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, ErrUnauthorized
+	}
+
 	if resp.StatusCode == http.StatusNotFound {
 		return nil, ErrNotFound
 	}
+
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status code %d", resp.StatusCode)
 	}
@@ -138,21 +144,25 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query SensorsQu
 		params.Set("hasProfile", strconv.FormatBool(*query.HasProfile))
 	}
 
-	requestURL := dmc.url + "/api/v0/sensors"
+	requestURL := dmc.baseUrl + "/api/v0/sensors"
 	if encoded := params.Encode(); encoded != "" {
 		requestURL += "?" + encoded
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
+	req, err := newJsonRequest(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create http request: %w", err)
+		return nil, err
 	}
 
-	resp, err := dmc.doRequestWithTokenRetry(ctx, req)
+	resp, err := dmc.httpClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query sensors: %w", err)
 	}
 	defer drainAndCloseResponseBody(resp)
+
+	if resp.StatusCode == http.StatusUnauthorized {
+		return nil, ErrUnauthorized
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("request failed with status code %d", resp.StatusCode)
@@ -180,11 +190,11 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query SensorsQu
 }
 
 func (dmc *devManagementClient) CreateSensor(ctx context.Context, sensor SensorConfig) error {
-	return dmc.writeSensor(ctx, http.MethodPost, dmc.url+"/api/v0/sensors", sensor)
+	return dmc.writeSensor(ctx, http.MethodPost, dmc.baseUrl+"/api/v0/sensors", sensor)
 }
 
 func (dmc *devManagementClient) UpdateSensor(ctx context.Context, sensor SensorConfig) error {
-	return dmc.writeSensor(ctx, http.MethodPut, dmc.url+"/api/v0/sensors/"+sensor.SensorID, sensor)
+	return dmc.writeSensor(ctx, http.MethodPut, dmc.baseUrl+"/api/v0/sensors/"+sensor.SensorID, sensor)
 }
 
 func (dmc *devManagementClient) writeSensor(ctx context.Context, method, requestURL string, sensor SensorConfig) error {
@@ -202,18 +212,12 @@ func (dmc *devManagementClient) writeSensor(ctx context.Context, method, request
 		payload.SensorProfile = &types.SensorProfile{Decoder: sensor.SensorProfileID}
 	}
 
-	requestBody, err := json.Marshal(payload)
+	req, err := newJsonRequest(ctx, method, requestURL, payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal sensor: %w", err)
+		return err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, requestURL, bytes.NewReader(requestBody))
-	if err != nil {
-		return fmt.Errorf("failed to create http request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := dmc.doRequestWithTokenRetry(ctx, req)
+	resp, err := dmc.httpClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to write sensor: %w", err)
 	}
@@ -226,6 +230,8 @@ func (dmc *devManagementClient) writeSensor(ctx context.Context, method, request
 		return ErrNotFound
 	case http.StatusConflict:
 		return ErrConflict
+	case http.StatusUnauthorized:
+		return ErrUnauthorized
 	default:
 		return fmt.Errorf("request failed with status code %d", resp.StatusCode)
 	}
