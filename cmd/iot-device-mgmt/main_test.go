@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/diwise/iot-device-mgmt/internal/application"
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
@@ -142,18 +143,20 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	sm := sensors.New(p, p)
 	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
 
-	err = dm.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
+	app := application.New(dm, sm, as)
+
+	err = app.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
 	is.NoErr(err)
 
-	err = dm.SeedSensorProfiles(ctx, cfg.DeviceManagementConfig.DeviceProfiles)
+	err = app.SeedSensorProfiles(ctx, cfg.DeviceManagementConfig.DeviceProfiles)
 	is.NoErr(err)
 
-	err = dm.Seed(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	err = app.SeedSensorsAndDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"}, exisitingDeviceUpdateFlag)
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, dm, sm, as)
+	api.RegisterHandlers(ctx, mux, policies, app)
 
 	return mux, is
 }

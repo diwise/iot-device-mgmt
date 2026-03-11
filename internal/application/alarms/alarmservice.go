@@ -38,8 +38,8 @@ type svc struct {
 	config    map[string]types.AlarmType
 }
 
-//go:generate moq -rm -out alarmservice_mock.go . AlarmService
-type AlarmService interface {
+//go:generate moq -rm -out alarmservice_mock.go . AlarmAPIService
+type AlarmAPIService interface {
 	Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 	Remove(ctx context.Context, deviceID string, alarmType string) error
 	Stale(ctx context.Context) (types.Collection[types.Device], error)
@@ -92,7 +92,7 @@ func (svc *svc) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Coll
 	return svc.storage.Alarms(ctx, query)
 }
 
-func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmService {
+func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmAPIService {
 	svc := &svc{
 		storage:   s,
 		messenger: m,
@@ -106,11 +106,11 @@ func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmService {
 	return svc
 }
 
-func RegisterTopicMessageHandler(ctx context.Context, svc AlarmService, messenger messaging.MsgContext) error {
+func RegisterTopicMessageHandler(ctx context.Context, svc AlarmAPIService, messenger messaging.MsgContext) error {
 	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc))
 }
 
-func newDeviceStatusHandler(svc AlarmService) messaging.TopicMessageHandler {
+func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
 		var err error
 

@@ -2,7 +2,6 @@ package devices
 
 import (
 	"context"
-	"io"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
@@ -63,7 +62,6 @@ type DeviceQueryService interface {
 
 type DeviceCommandService interface {
 	Create(ctx context.Context, device types.Device) error
-	CreateMany(ctx context.Context, devices io.ReadCloser, validTenants []string) error
 	Update(ctx context.Context, device types.Device) error
 	Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 	AttachSensor(ctx context.Context, deviceID, sensorID string, tenants []string) error
@@ -72,7 +70,6 @@ type DeviceCommandService interface {
 }
 
 type DeviceBootstrapService interface {
-	Seed(ctx context.Context, devices io.ReadCloser, validTenants []string) error
 	SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error
 	SeedSensorProfiles(ctx context.Context, profiles []types.SensorProfile) error
 }
@@ -84,6 +81,7 @@ type DeviceStatusHandler interface {
 type DeviceAPIService interface {
 	DeviceQueryService
 	DeviceCommandService
+	DeviceBootstrapService
 }
 
 //go:generate moq -rm -out devicereader_mock.go . DeviceReader

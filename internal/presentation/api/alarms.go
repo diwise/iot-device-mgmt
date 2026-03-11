@@ -10,7 +10,7 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
 )
 
-func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmService) http.HandlerFunc {
+func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 

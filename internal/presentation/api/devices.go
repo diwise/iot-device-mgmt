@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/diwise/iot-device-mgmt/internal/application"
 	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -302,7 +303,7 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devices.DeviceAPIService
 	}
 }
 
-func createDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
+func createDeviceHandler(log *slog.Logger, app application.Management) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
@@ -320,7 +321,7 @@ func createDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 				return
 			}
 
-			err = svc.CreateMany(ctx, file, allowedTenants)
+			err = app.SeedSensorsAndDevices(ctx, file, allowedTenants, true)
 			if err != nil {
 				logger.Error("failed to import data", "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -354,7 +355,7 @@ func createDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 				return
 			}
 
-			err = svc.Create(ctx, d)
+			err = app.DeviceService().Create(ctx, d)
 			if err != nil {
 				if errors.Is(err, devices.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)

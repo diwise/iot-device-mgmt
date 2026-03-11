@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diwise/iot-device-mgmt/internal/application"
 	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
 	"github.com/diwise/iot-device-mgmt/internal/application/devices"
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
@@ -100,11 +101,12 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 	exitIf(err, log, "failed to init messenger")
 
 	var deviceAPI devices.DeviceAPIService
-	var deviceBootstrap devices.DeviceBootstrapService
-	var deviceStatusHandler devices.DeviceStatusHandler
 	var sensorAPI sensors.SensorAPIService
-	var as alarms.AlarmService
+	var alarmsAPI alarms.AlarmAPIService
 	var wd watchdog.Watchdog
+	var deviceStatusHandler devices.DeviceStatusHandler
+
+	var app application.Management
 
 	_, runner := servicerunner.New(ctx, *cfg,
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
@@ -113,7 +115,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policiesFile.Close()
-				return api.RegisterHandlers(ctx, handler, policiesFile, deviceAPI, sensorAPI, as)
+				return api.RegisterHandlers(ctx, handler, policiesFile, app)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
@@ -121,28 +123,29 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 			svc := devices.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
 			deviceAPI = svc
-			deviceBootstrap = svc
 			deviceStatusHandler = svc
 			sensorAPI = sensors.New(s, s)
-			as = alarms.New(s, messenger, &ac.AlarmServiceConfig)
-			wd = watchdog.New(as, &ac.WatchdogConfig)
+			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
+			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
+
+			app = application.New(deviceAPI, sensorAPI, alarmsAPI)
 
 			return nil
 		}),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
 
-			err = deviceBootstrap.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
+			err = app.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
 			}
 
-			err = deviceBootstrap.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
+			err = app.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = deviceBootstrap.Seed(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","))
+			err = app.SeedSensorsAndDevices(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","), seedExistingDevices)
 			if err != nil {
 				return
 			}
@@ -154,7 +157,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return
 			}
 
-			err = alarms.RegisterTopicMessageHandler(ctx, as, messenger)
+			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, messenger)
 			if err != nil {
 				return
 			}

@@ -10,16 +10,16 @@ import (
 	"sync"
 )
 
-// Ensure, that AlarmServiceMock does implement AlarmService.
+// Ensure, that AlarmAPIServiceMock does implement AlarmAPIService.
 // If this is not the case, regenerate this file with moq.
-var _ AlarmService = &AlarmServiceMock{}
+var _ AlarmAPIService = &AlarmAPIServiceMock{}
 
-// AlarmServiceMock is a mock implementation of AlarmService.
+// AlarmAPIServiceMock is a mock implementation of AlarmAPIService.
 //
-//	func TestSomethingThatUsesAlarmService(t *testing.T) {
+//	func TestSomethingThatUsesAlarmAPIService(t *testing.T) {
 //
-//		// make and configure a mocked AlarmService
-//		mockedAlarmService := &AlarmServiceMock{
+//		// make and configure a mocked AlarmAPIService
+//		mockedAlarmAPIService := &AlarmAPIServiceMock{
 //			AddFunc: func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 //				panic("mock out the Add method")
 //			},
@@ -34,11 +34,11 @@ var _ AlarmService = &AlarmServiceMock{}
 //			},
 //		}
 //
-//		// use mockedAlarmService in code that requires AlarmService
+//		// use mockedAlarmAPIService in code that requires AlarmAPIService
 //		// and then make assertions.
 //
 //	}
-type AlarmServiceMock struct {
+type AlarmAPIServiceMock struct {
 	// AddFunc mocks the Add method.
 	AddFunc func(ctx context.Context, deviceID string, alarm types.AlarmDetails) error
 
@@ -91,9 +91,9 @@ type AlarmServiceMock struct {
 }
 
 // Add calls AddFunc.
-func (mock *AlarmServiceMock) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
+func (mock *AlarmAPIServiceMock) Add(ctx context.Context, deviceID string, alarm types.AlarmDetails) error {
 	if mock.AddFunc == nil {
-		panic("AlarmServiceMock.AddFunc: method is nil but AlarmService.Add was just called")
+		panic("AlarmAPIServiceMock.AddFunc: method is nil but AlarmAPIService.Add was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
@@ -113,8 +113,8 @@ func (mock *AlarmServiceMock) Add(ctx context.Context, deviceID string, alarm ty
 // AddCalls gets all the calls that were made to Add.
 // Check the length with:
 //
-//	len(mockedAlarmService.AddCalls())
-func (mock *AlarmServiceMock) AddCalls() []struct {
+//	len(mockedAlarmAPIService.AddCalls())
+func (mock *AlarmAPIServiceMock) AddCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
 	Alarm    types.AlarmDetails
@@ -131,9 +131,9 @@ func (mock *AlarmServiceMock) AddCalls() []struct {
 }
 
 // Alarms calls AlarmsFunc.
-func (mock *AlarmServiceMock) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
+func (mock *AlarmAPIServiceMock) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 	if mock.AlarmsFunc == nil {
-		panic("AlarmServiceMock.AlarmsFunc: method is nil but AlarmService.Alarms was just called")
+		panic("AlarmAPIServiceMock.AlarmsFunc: method is nil but AlarmAPIService.Alarms was just called")
 	}
 	callInfo := struct {
 		Ctx   context.Context
@@ -151,8 +151,8 @@ func (mock *AlarmServiceMock) Alarms(ctx context.Context, query alarmquery.Alarm
 // AlarmsCalls gets all the calls that were made to Alarms.
 // Check the length with:
 //
-//	len(mockedAlarmService.AlarmsCalls())
-func (mock *AlarmServiceMock) AlarmsCalls() []struct {
+//	len(mockedAlarmAPIService.AlarmsCalls())
+func (mock *AlarmAPIServiceMock) AlarmsCalls() []struct {
 	Ctx   context.Context
 	Query alarmquery.Alarms
 } {
@@ -167,9 +167,9 @@ func (mock *AlarmServiceMock) AlarmsCalls() []struct {
 }
 
 // Remove calls RemoveFunc.
-func (mock *AlarmServiceMock) Remove(ctx context.Context, deviceID string, alarmType string) error {
+func (mock *AlarmAPIServiceMock) Remove(ctx context.Context, deviceID string, alarmType string) error {
 	if mock.RemoveFunc == nil {
-		panic("AlarmServiceMock.RemoveFunc: method is nil but AlarmService.Remove was just called")
+		panic("AlarmAPIServiceMock.RemoveFunc: method is nil but AlarmAPIService.Remove was just called")
 	}
 	callInfo := struct {
 		Ctx       context.Context
@@ -189,8 +189,8 @@ func (mock *AlarmServiceMock) Remove(ctx context.Context, deviceID string, alarm
 // RemoveCalls gets all the calls that were made to Remove.
 // Check the length with:
 //
-//	len(mockedAlarmService.RemoveCalls())
-func (mock *AlarmServiceMock) RemoveCalls() []struct {
+//	len(mockedAlarmAPIService.RemoveCalls())
+func (mock *AlarmAPIServiceMock) RemoveCalls() []struct {
 	Ctx       context.Context
 	DeviceID  string
 	AlarmType string
@@ -207,9 +207,9 @@ func (mock *AlarmServiceMock) RemoveCalls() []struct {
 }
 
 // Stale calls StaleFunc.
-func (mock *AlarmServiceMock) Stale(ctx context.Context) (types.Collection[types.Device], error) {
+func (mock *AlarmAPIServiceMock) Stale(ctx context.Context) (types.Collection[types.Device], error) {
 	if mock.StaleFunc == nil {
-		panic("AlarmServiceMock.StaleFunc: method is nil but AlarmService.Stale was just called")
+		panic("AlarmAPIServiceMock.StaleFunc: method is nil but AlarmAPIService.Stale was just called")
 	}
 	callInfo := struct {
 		Ctx context.Context
@@ -225,8 +225,8 @@ func (mock *AlarmServiceMock) Stale(ctx context.Context) (types.Collection[types
 // StaleCalls gets all the calls that were made to Stale.
 // Check the length with:
 //
-//	len(mockedAlarmService.StaleCalls())
-func (mock *AlarmServiceMock) StaleCalls() []struct {
+//	len(mockedAlarmAPIService.StaleCalls())
+func (mock *AlarmAPIServiceMock) StaleCalls() []struct {
 	Ctx context.Context
 } {
 	var calls []struct {

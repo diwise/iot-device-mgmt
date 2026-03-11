@@ -30,7 +30,7 @@ type watchdogImpl struct {
 	watchers []Watcher
 }
 
-func New(a alarms.AlarmService, cfg *WatchdogConfig) Watchdog {
+func New(a alarms.AlarmAPIService, cfg *WatchdogConfig) Watchdog {
 	interval := 10 * time.Minute
 	if cfg != nil && cfg.Interval > 0 {
 		interval = time.Duration(cfg.Interval) * time.Minute
@@ -113,7 +113,7 @@ type Watcher interface {
 }
 
 type lastObservedWatcher struct {
-	alarmSvc alarms.AlarmService
+	alarmSvc alarms.AlarmAPIService
 	running  atomic.Bool
 	interval time.Duration
 }
