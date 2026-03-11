@@ -155,6 +155,12 @@ type Measurement struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+type Sensor struct {
+	SensorID      string         `json:"sensorID"`
+	DeviceID      *string        `json:"deviceID,omitempty"`
+	SensorProfile *SensorProfile `json:"sensorProfile,omitempty"`
+}
+
 type SensorConfig struct {
 	SensorID        string `json:"sensorID"`
 	SensorProfileID string `json:"sensorProfileID"`

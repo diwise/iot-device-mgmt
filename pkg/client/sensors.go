@@ -22,14 +22,8 @@ type Sensor interface {
 	Interval() int
 }
 
-type sensorRecord struct {
-	SensorID      string               `json:"sensorID"`
-	DeviceID      *string              `json:"deviceID,omitempty"`
-	SensorProfile *types.SensorProfile `json:"sensorProfile,omitempty"`
-}
-
 type sensorWrapper struct {
-	impl *sensorRecord
+	impl *types.Sensor
 }
 
 func (s *sensorWrapper) ID() string {
@@ -104,7 +98,7 @@ func (dmc *devManagementClient) GetSensor(ctx context.Context, sensorID string) 
 	}
 
 	response := struct {
-		Data sensorRecord `json:"data"`
+		Data types.Sensor `json:"data"`
 	}{}
 	if err = json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
@@ -162,7 +156,7 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query types.Sen
 	}
 
 	response := struct {
-		Data []sensorRecord `json:"data"`
+		Data []types.Sensor `json:"data"`
 	}{}
 	if err = json.Unmarshal(body, &response); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal response body: %w", err)
