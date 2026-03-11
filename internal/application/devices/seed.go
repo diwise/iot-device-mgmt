@@ -8,6 +8,8 @@ import (
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
 
+//TODO: move to sensors
+
 func (s service) SeedLwm2mTypes(ctx context.Context, lwm2m []types.Lwm2mType) error {
 
 	log := logging.GetFromContext(ctx)
@@ -30,10 +32,10 @@ func (s service) SeedSensorProfiles(ctx context.Context, profiles []types.Sensor
 	for _, p := range profiles {
 		err := s.profiles.CreateSensorProfile(ctx, p)
 		if err != nil {
-			log.Debug("failed to seed device profile", "decoder", p.Decoder, "name", p.Name)
+			log.Debug("failed to seed sensor profile", "decoder", p.Decoder, "name", p.Name)
 			errs = append(errs, err)
 		}
-		log.Debug("added device profile", "name", p.Name, "decoder", p.Decoder)
+		log.Debug("added sensor profile", "name", p.Name, "decoder", p.Decoder)
 	}
 	return errors.Join(errs...)
 
