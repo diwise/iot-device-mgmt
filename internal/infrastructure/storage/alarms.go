@@ -7,6 +7,7 @@ import (
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -18,6 +19,8 @@ func (s *Storage) Add(ctx context.Context, deviceID string, a types.AlarmDetails
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	log := logging.GetFromContext(ctx)
+
 	args := pgx.NamedArgs{
 		"device_id":   deviceID,
 		"type":        a.AlarmType,
@@ -28,6 +31,7 @@ func (s *Storage) Add(ctx context.Context, deviceID string, a types.AlarmDetails
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -49,6 +53,7 @@ func (s *Storage) Add(ctx context.Context, deviceID string, a types.AlarmDetails
 				count = device_alarms.count + 1
 				`, args)
 	if err != nil {
+		log.Error("could not insert or update device alarm", "err", err.Error())
 		return err
 	}
 
@@ -64,8 +69,11 @@ func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.C
 		"device_id": deviceID,
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[types.AlarmDetails]{}, err
 	}
 	defer c.Release()
@@ -76,6 +84,7 @@ func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.C
 		WHERE device_id=@device_id
 		ORDER BY observed_at ASC`, args)
 	if err != nil {
+		log.Error("could not query device alarms", "err", err.Error())
 		return types.Collection[types.AlarmDetails]{}, err
 	}
 	defer rows.Close()
@@ -89,6 +98,7 @@ func (s *Storage) GetDeviceAlarms(ctx context.Context, deviceID string) (types.C
 
 		err := rows.Scan(&device_id, &alarmtype, &description, &observed_at, &severity)
 		if err != nil {
+			log.Error("could not scan row", "err", err.Error())	
 			return types.Collection[types.AlarmDetails]{}, err
 		}
 
@@ -119,20 +129,25 @@ func (s *Storage) Remove(ctx context.Context, deviceID string, alarmType string)
 		"alarm_type": alarmType,
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
 
 	tx, err := c.Begin(ctx)
 	if err != nil {
+		log.Error("could not begin transaction", "err", err.Error())
 		return err
 	}
 	defer tx.Rollback(ctx)
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_alarms WHERE device_id=@device_id AND type=@alarm_type`, args)
 	if err != nil {
+		log.Error("could not delete device alarm", "err", err.Error())
 		return err
 	}
 
@@ -141,6 +156,8 @@ func (s *Storage) Remove(ctx context.Context, deviceID string, alarmType string)
 
 func (s *Storage) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error) {
 	condition := alarmConditionFromQuery(query)
+
+	log := logging.GetFromContext(ctx)
 
 	args := NamedArgs(condition)
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 5)
@@ -157,12 +174,14 @@ func (s *Storage) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Co
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[types.Alarms]{}, err
 	}
 	defer c.Release()
 
 	rows, err := c.Query(ctx, sql, args)
 	if err != nil {
+		log.Error("could not query alarms", "err", err.Error())
 		return types.Collection[types.Alarms]{}, err
 	}
 	defer rows.Close()
@@ -178,12 +197,13 @@ func (s *Storage) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Co
 
 		err := rows.Scan(&deviceID, &typs, &severity, &observedAt, &totalCount)
 		if err != nil {
+			log.Error("could not scan row", "err", err.Error())
 			return types.Collection[types.Alarms]{}, err
 		}
 		alarms = append(alarms, types.Alarms{
 			DeviceID:   deviceID,
 			AlarmTypes: typs,
-			ObservedAt: observedAt.UTC(),
+			ObservedAt: observedAt.UTC(),			
 		})
 	}
 

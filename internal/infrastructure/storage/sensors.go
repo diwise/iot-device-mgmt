@@ -9,6 +9,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -44,8 +45,11 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		whereClause = "WHERE " + strings.Join(where, " AND ")
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[sensors.Sensor]{}, err
 	}
 	defer c.Release()
@@ -65,6 +69,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		ORDER BY s.sensor_id ASC
 		%s`, whereClause, offsetLimit), args)
 	if err != nil {
+		log.Error("failed to query sensors", "args", args, "err", err.Error())
 		return types.Collection[sensors.Sensor]{}, err
 	}
 	defer rows.Close()
@@ -79,6 +84,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 
 		err = rows.Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &count)
 		if err != nil {
+			log.Error("failed to scan sensor row", "err", err.Error())
 			return types.Collection[sensors.Sensor]{}, err
 		}
 
@@ -103,8 +109,11 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		return sensors.Sensor{}, false, nil
 	}
 
+log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return sensors.Sensor{}, false, err
 	}
 	defer c.Release()
@@ -128,6 +137,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		if errors.Is(err, pgx.ErrNoRows) {
 			return sensors.Sensor{}, false, nil
 		}
+		log.Error("failed to query sensor", "sensor_id", sensorID, "err", err.Error())
 		return sensors.Sensor{}, false, err
 	}
 
@@ -140,8 +150,11 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error
 		"sensor_profile": sensorProfileDecoder(sensor),
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -151,6 +164,7 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error
 		VALUES (@sensor_id, @sensor_profile)
 		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
+		log.Error("could not insert sensor", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -167,8 +181,11 @@ func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error
 		"sensor_profile": sensorProfileDecoder(sensor),
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -179,6 +196,7 @@ func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error
 			modified_on = NOW()
 		WHERE sensor_id = @sensor_id`, args)
 	if err != nil {
+		log.Error("could not update sensor", "args", args, "err", err.Error())
 		return err
 	}
 

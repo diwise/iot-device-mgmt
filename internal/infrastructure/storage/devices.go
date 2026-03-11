@@ -16,14 +16,18 @@ import (
 )
 
 func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile) error {
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
 
 	tx, err := c.Begin(ctx)
 	if err != nil {
+		log.Error("could not begin transaction", "err", err.Error())
 		return err
 	}
 	defer tx.Rollback(ctx)
@@ -40,6 +44,7 @@ func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile
 		VALUES (@sensor_profile_id, @name, @decoder, @interval)
 		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
+		log.Error("could not insert sensor profile", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -50,6 +55,7 @@ func (s *Storage) CreateSensorProfile(ctx context.Context, p types.SensorProfile
 			VALUES (@sensor_profile_id, @sensor_profile_type_id)
 			ON CONFLICT DO NOTHING`, args)
 		if err != nil {
+			log.Error("could not insert sensor profile type relation", "args", args, "err", err.Error())
 			return err
 		}
 	}
@@ -63,8 +69,11 @@ func (s *Storage) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType
 		"name":                   strings.TrimSpace(t.Name),
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -80,6 +89,7 @@ func (s *Storage) CreateSensorProfileType(ctx context.Context, t types.Lwm2mType
 		VALUES (@sensor_profile_type_id, @name)
 		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
+		log.Error("could not insert sensor profile type", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -91,8 +101,11 @@ func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp type
 		return fmt.Errorf("device profile contains no decoder")
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -115,6 +128,7 @@ func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp type
 			modified_on=NOW()
 		WHERE device_id=@device_id AND deleted=FALSE`, args)
 	if err != nil {
+		log.Error("could not update interval for device", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -127,6 +141,7 @@ func (s *Storage) SetSensorProfile(ctx context.Context, deviceID string, dp type
 			AND d.deleted=FALSE
 			AND d.sensor_id = s.sensor_id`, args)
 	if err != nil {
+		log.Error("could not update sensor profile for device", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -138,6 +153,7 @@ func (s *Storage) SetDeviceProfileTypes(ctx context.Context, deviceID string, ty
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -154,6 +170,7 @@ func (s *Storage) SetDeviceProfileTypes(ctx context.Context, deviceID string, ty
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_sensor_profile_types WHERE device_id=@device_id;`, args)
 	if err != nil {
+		log.Error("could not delete existing device profile types", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -181,6 +198,7 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -228,17 +246,20 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 			WHERE devices.deleted = FALSE
 		`, args)
 	if err != nil {
+		log.Error("could not insert or update device", "args", args, "err", err.Error())
 		return err
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_device_tags WHERE device_id=@device_id;`, args)
 	if err != nil {
+		log.Error("could not delete existing device tags", "args", args, "err", err.Error())
 		return err
 	}
 
 	for _, t := range d.Tags {
 		err = createTagTx(ctx, tx, t)
 		if err != nil {
+			log.Error("could not create tag", "tag", t, "err", err.Error())
 			return err
 		}
 
@@ -248,12 +269,14 @@ func (s *Storage) CreateOrUpdateDevice(ctx context.Context, d types.Device) erro
 			VALUES (@device_id, @tag_name)
 			ON CONFLICT DO NOTHING;`, args)
 		if err != nil {
+			log.Error("could not add tag to device", "args", args, "err", err.Error())
 			return err
 		}
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM device_sensor_profile_types WHERE device_id=@device_id;`, args)
 	if err != nil {
+		log.Error("could not delete existing device profile types", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -295,6 +318,8 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 	if deviceID == "" {
 		return ErrNoID
 	}
+
+	log := logging.GetFromContext(ctx)
 
 	args := pgx.NamedArgs{
 		"device_id": deviceID,
@@ -349,6 +374,7 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -363,6 +389,7 @@ func (s *Storage) UpdateDevice(ctx context.Context, deviceID string, active *boo
 
 	_, err = tx.Exec(ctx, sql, args)
 	if err != nil {
+		log.Error("could not update device", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -374,8 +401,11 @@ func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) erro
 		return ErrNoID
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -393,6 +423,7 @@ func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) erro
 
 	_, err = tx.Exec(ctx, `INSERT INTO device_device_tags (device_id, name) VALUES (@device_id, @tag_name) ON CONFLICT DO NOTHING;`, args)
 	if err != nil {
+		log.Error("could not add tag to device", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -400,8 +431,11 @@ func (s *Storage) AddTag(ctx context.Context, deviceID string, t types.Tag) erro
 }
 
 func (s *Storage) CreateTag(ctx context.Context, t types.Tag) error {
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -414,6 +448,7 @@ func (s *Storage) CreateTag(ctx context.Context, t types.Tag) error {
 
 	err = createTagTx(ctx, tx, t)
 	if err != nil {
+		log.Error("could not create tag", "tag", t, "err", err.Error())
 		return err
 	}
 
@@ -440,8 +475,11 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 		"dr":            status.DR,
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -465,6 +503,8 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 		if errors.Is(err, pgx.ErrNoRows) {
 			return ErrStatusDeviceNotFound
 		}
+		log.Error("could not find sensor for device status", "lookup_id", status.DeviceID, "err", err.Error())
+
 		return err
 	}
 	args["sensor_id"] = sensorID
@@ -474,11 +514,13 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 		VALUES (@observed_at, @sensor_id, @battery_level, @rssi, @snr, @fq, @sf, @dr)
 		ON CONFLICT DO NOTHING;`, args)
 	if err != nil {
+		log.Error("could not insert device status", "args", args, "err", err.Error())
 		return err
 	}
 
 	_, err = tx.Exec(ctx, `DELETE FROM sensor_status WHERE sensor_id=@sensor_id AND observed_at < NOW() - INTERVAL '3 weeks'`, args)
 	if err != nil {
+		log.Error("could not delete old device statuses", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -513,18 +555,19 @@ func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dm
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[types.SensorStatus]{}, err
 	}
 	defer c.Release()
 
 	rows, err := c.Query(ctx, sql, args)
 	if err != nil {
-		log.Debug("failed to query device statuses", "sql", sql, "args", args, "err", err.Error())
+		log.Debug("failed to query device statuses", "args", args, "err", err.Error())
 		return types.Collection[types.SensorStatus]{}, err
 	}
 	defer rows.Close()
 
-	log.Debug("GetDeviceStatus", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
+	log.Debug("get device statuses", slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	statuses := []types.SensorStatus{}
 
@@ -537,6 +580,7 @@ func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dm
 	for rows.Next() {
 		err := rows.Scan(&observed_at, &battery_level, &rssi, &snr, &fq, &sf, &dr, &count)
 		if err != nil {
+			log.Error("could not scan device status row", "args", args, "err", err.Error())
 			return types.Collection[types.SensorStatus]{}, err
 		}
 
@@ -583,8 +627,11 @@ func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state typ
 		"state":       state.State,
 	}
 
+	log := logging.GetFromContext(ctx)
+
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return err
 	}
 	defer c.Release()
@@ -606,6 +653,7 @@ func (s *Storage) SetDeviceState(ctx context.Context, deviceID string, state typ
 				modified_on = NOW();
 		`, args)
 	if err != nil {
+		log.Error("could not insert or update device state", "args", args, "err", err.Error())
 		return err
 	}
 
@@ -630,6 +678,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Device{}, false, err
 	}
 	defer c.Release()
@@ -655,7 +704,8 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Device{}, false, nil
 		}
-		log.Debug(fmt.Sprintf("query by sensorID %s did not return any data, reason: %v", sensorID, err))
+
+		log.Error("could not query device by sensorID", "sensorID", sensorID, "err", err)
 		return types.Device{}, false, err
 	}
 
@@ -794,18 +844,19 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 	defer c.Release()
 
 	rows, err := c.Query(ctx, sql, args)
 	if err != nil {
-		log.Debug("failed to query database", "sql", sql, "args", args, "err", err.Error())
+		log.Error("failed to query database", "args", args, "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 	defer rows.Close()
 
-	log.Debug("Query", slog.String("sql", sql), slog.Any("args", args), slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
+	log.Debug("query executed", slog.Duration("duration", time.Duration(time.Since(now).Milliseconds())))
 
 	var devices []types.Device
 	var count uint64
@@ -855,7 +906,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 			&count,
 		)
 		if err != nil {
-			log.Debug("could not scan row", "err", err.Error())
+			log.Error("could not scan row", "err", err.Error())
 			return types.Collection[types.Device]{}, err
 		}
 
@@ -952,6 +1003,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 	}
 
 	if err := rows.Err(); err != nil {
+		log.Error("error iterating rows", "err", err.Error())
 		return types.Collection[types.Device]{}, err
 	}
 
@@ -969,6 +1021,8 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 }
 
 func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+	log := logging.GetFromContext(ctx)
+	
 	condition := measurementConditionFromQuery(deviceID, query)
 
 	args := NamedArgs(condition)
@@ -988,12 +1042,14 @@ func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, qu
 
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
 		return types.Collection[types.Measurement]{}, err
 	}
 	defer c.Release()
 
 	rows, err := c.Query(ctx, sql, args)
 	if err != nil {
+		log.Error("failed to query measurements", "args", args, "err", err.Error())
 		return types.Collection[types.Measurement]{}, err
 	}
 	defer rows.Close()
@@ -1009,6 +1065,7 @@ func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, qu
 	for rows.Next() {
 		err := rows.Scan(&ts, &id, &urn, &n, &v, &vs, &vb, &unit, &totalCount)
 		if err != nil {
+			log.Error("failed to scan measurement row", "err", err.Error())
 			return types.Collection[types.Measurement]{}, err
 		}
 
@@ -1036,6 +1093,7 @@ func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, qu
 	}
 
 	if err := rows.Err(); err != nil {
+		log.Error("error iterating rows", "err", err.Error())
 		return types.Collection[types.Measurement]{}, err
 	}
 
