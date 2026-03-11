@@ -8,13 +8,12 @@ import (
 
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
-	internaltypes "github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/jackc/pgx/v5"
 )
 
 func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
-	condition := &internaltypes.Condition{Offset: query.Offset, Limit: query.Limit}
+	condition := &Condition{Offset: query.Offset, Limit: query.Limit}
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
 	args := pgx.NamedArgs{}

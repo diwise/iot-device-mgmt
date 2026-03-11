@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/types"
 	"github.com/matryer/is"
 )
 
@@ -14,12 +13,12 @@ func TestWhere(t *testing.T) {
 	is := is.New(t)
 
 	t.Run("default includes non-deleted", func(t *testing.T) {
-		where := Where(&types.Condition{})
+		where := Where(&Condition{})
 		is.Equal(where, "WHERE d.deleted=FALSE")
 	})
 
 	t.Run("include deleted removes default filter", func(t *testing.T) {
-		where := Where(&types.Condition{IncludeDeleted: true})
+		where := Where(&Condition{IncludeDeleted: true})
 		is.Equal(where, "")
 	})
 
@@ -28,7 +27,7 @@ func TestWhere(t *testing.T) {
 		online := true
 		lastSeen := time.Date(2024, 4, 2, 10, 11, 12, 0, time.UTC)
 
-		where := Where(&types.Condition{
+		where := Where(&Condition{
 			DeviceID:    "dev-1",
 			SensorID:    "sen-1",
 			Tenant:      "tenant-1",
@@ -36,7 +35,7 @@ func TestWhere(t *testing.T) {
 			Online:      &online,
 			Types:       []string{"decoder-1"},
 			ProfileName: []string{"profile-a", "profile-b"},
-			Bounds:      &types.Box{MinX: 1.1, MinY: 2.2, MaxX: 3.3, MaxY: 4.4},
+			Bounds:      &Box{MinX: 1.1, MinY: 2.2, MaxX: 3.3, MaxY: 4.4},
 			Search:      "thing",
 			LastSeen:    lastSeen,
 			Name:        "name-1",
@@ -61,29 +60,29 @@ func TestWhere(t *testing.T) {
 	})
 
 	t.Run("tenants take precedence over tenant", func(t *testing.T) {
-		where := Where(&types.Condition{Tenant: "tenant-1", Tenants: []string{"tenant-1", "tenant-2"}})
+		where := Where(&Condition{Tenant: "tenant-1", Tenants: []string{"tenant-1", "tenant-2"}})
 		is.True(strings.Contains(where, "d.tenant = ANY(@tenants)"))
 		is.True(!strings.Contains(where, "d.tenant = @tenant"))
 	})
 
 	t.Run("online false includes null status", func(t *testing.T) {
 		online := false
-		where := Where(&types.Condition{Online: &online})
+		where := Where(&Condition{Online: &online})
 		is.True(strings.Contains(where, "(dst.online = @online OR dst.online IS NULL)"))
 	})
 
 	t.Run("multiple types use profiles arg", func(t *testing.T) {
-		where := Where(&types.Condition{Types: []string{"a", "b"}})
+		where := Where(&Condition{Types: []string{"a", "b"}})
 		is.True(strings.Contains(where, "sp.decoder = ANY(@profiles)"))
 	})
 
 	t.Run("metadata with explicit value", func(t *testing.T) {
-		where := Where(&types.Condition{Metadata: map[string]string{"key": "value"}})
+		where := Where(&Condition{Metadata: map[string]string{"key": "value"}})
 		is.True(strings.Contains(where, "EXISTS (SELECT 1 FROM device_metadata dm WHERE dm.device_id = d.device_id AND dm.key = @meta_key_key AND dm.vs = @meta_value_key)"))
 	})
 
 	t.Run("metadata with empty value", func(t *testing.T) {
-		where := Where(&types.Condition{Metadata: map[string]string{"key": ""}})
+		where := Where(&Condition{Metadata: map[string]string{"key": ""}})
 		is.True(strings.Contains(where, "EXISTS (SELECT 1 FROM device_metadata dm WHERE dm.device_id = d.device_id AND dm.key = @meta_key_key)"))
 		is.True(!strings.Contains(where, "@meta_value_key"))
 	})
@@ -93,7 +92,7 @@ func TestNamedArgs(t *testing.T) {
 	is := is.New(t)
 
 	t.Run("empty condition returns no args", func(t *testing.T) {
-		args := NamedArgs(&types.Condition{})
+		args := NamedArgs(&Condition{})
 		is.Equal(len(args), 0)
 	})
 
@@ -104,7 +103,7 @@ func TestNamedArgs(t *testing.T) {
 		limit := 15
 		lastSeen := time.Date(2024, 1, 10, 9, 8, 7, 0, time.FixedZone("UTC+2", 2*3600))
 
-		args := NamedArgs(&types.Condition{
+		args := NamedArgs(&Condition{
 			DeviceID:    "dev-1",
 			SensorID:    "sen-1",
 			Tenants:     []string{"t1", "t2"},
@@ -147,7 +146,7 @@ func TestNamedArgs(t *testing.T) {
 	})
 
 	t.Run("single type uses profile key", func(t *testing.T) {
-		args := NamedArgs(&types.Condition{Types: []string{"decoder-1"}})
+		args := NamedArgs(&Condition{Types: []string{"decoder-1"}})
 		_, hasProfile := args["profile"]
 		_, hasProfiles := args["profiles"]
 		is.True(hasProfile)
@@ -155,13 +154,13 @@ func TestNamedArgs(t *testing.T) {
 	})
 
 	t.Run("tenants key set when non-nil empty slice", func(t *testing.T) {
-		args := NamedArgs(&types.Condition{Tenants: []string{}})
+		args := NamedArgs(&Condition{Tenants: []string{}})
 		_, hasTenants := args["tenants"]
 		is.True(hasTenants)
 	})
 
 	t.Run("search term with wildcard is not wrapped", func(t *testing.T) {
-		args := NamedArgs(&types.Condition{Search: "%abc%"})
+		args := NamedArgs(&Condition{Search: "%abc%"})
 		is.Equal(args["search"], "%abc%")
 	})
 }
@@ -170,14 +169,14 @@ func TestOffsetLimit(t *testing.T) {
 	is := is.New(t)
 
 	t.Run("uses built-in defaults", func(t *testing.T) {
-		query, offset, limit := OffsetLimit(&types.Condition{})
+		query, offset, limit := OffsetLimit(&Condition{})
 		is.Equal(query, "OFFSET 0 LIMIT 10 ")
 		is.Equal(offset, 0)
 		is.Equal(limit, 10)
 	})
 
 	t.Run("uses provided fallback values", func(t *testing.T) {
-		query, offset, limit := OffsetLimit(&types.Condition{}, 5, 20)
+		query, offset, limit := OffsetLimit(&Condition{}, 5, 20)
 		is.Equal(query, "OFFSET 5 LIMIT 20 ")
 		is.Equal(offset, 5)
 		is.Equal(limit, 20)
@@ -186,7 +185,7 @@ func TestOffsetLimit(t *testing.T) {
 	t.Run("condition offset and limit override fallback", func(t *testing.T) {
 		offsetValue := 3
 		limitValue := 9
-		query, offset, limit := OffsetLimit(&types.Condition{Offset: &offsetValue, Limit: &limitValue}, 5, 20)
+		query, offset, limit := OffsetLimit(&Condition{Offset: &offsetValue, Limit: &limitValue}, 5, 20)
 		is.Equal(query, "OFFSET @offset LIMIT @limit ")
 		is.Equal(offset, 3)
 		is.Equal(limit, 9)
@@ -194,7 +193,7 @@ func TestOffsetLimit(t *testing.T) {
 
 	t.Run("offset only", func(t *testing.T) {
 		offsetValue := 11
-		query, offset, limit := OffsetLimit(&types.Condition{Offset: &offsetValue})
+		query, offset, limit := OffsetLimit(&Condition{Offset: &offsetValue})
 		is.Equal(query, "OFFSET @offset LIMIT 10 ")
 		is.Equal(offset, 11)
 		is.Equal(limit, 10)
@@ -202,7 +201,7 @@ func TestOffsetLimit(t *testing.T) {
 
 	t.Run("limit only", func(t *testing.T) {
 		limitValue := 4
-		query, offset, limit := OffsetLimit(&types.Condition{Limit: &limitValue})
+		query, offset, limit := OffsetLimit(&Condition{Limit: &limitValue})
 		is.Equal(query, "OFFSET 0 LIMIT @limit ")
 		is.Equal(offset, 0)
 		is.Equal(limit, 4)
@@ -213,22 +212,22 @@ func TestOrderByWithFallback(t *testing.T) {
 	is := is.New(t)
 
 	t.Run("explicit sort with explicit order", func(t *testing.T) {
-		order := OrderByWithFallback(&types.Condition{SortBy: "d.device_id", SortOrder: "DESC "}, "ORDER BY d.sensor_id ASC")
+		order := OrderByWithFallback(&Condition{SortBy: "d.device_id", SortOrder: "DESC "}, "ORDER BY d.sensor_id ASC")
 		is.Equal(order, "ORDER BY d.device_id DESC ")
 	})
 
 	t.Run("explicit sort defaults to ascending", func(t *testing.T) {
-		order := OrderByWithFallback(&types.Condition{SortBy: "d.device_id"}, "ORDER BY d.sensor_id ASC")
+		order := OrderByWithFallback(&Condition{SortBy: "d.device_id"}, "ORDER BY d.sensor_id ASC")
 		is.Equal(order, "ORDER BY d.device_id ASC ")
 	})
 
 	t.Run("fallback used when sort missing", func(t *testing.T) {
-		order := OrderByWithFallback(&types.Condition{}, "ORDER BY d.device_id DESC")
+		order := OrderByWithFallback(&Condition{}, "ORDER BY d.device_id DESC")
 		is.Equal(order, "ORDER BY d.device_id DESC")
 	})
 
 	t.Run("empty when no sort and no fallback", func(t *testing.T) {
-		order := OrderByWithFallback(&types.Condition{}, "")
+		order := OrderByWithFallback(&Condition{}, "")
 		is.Equal(order, "")
 	})
 }
