@@ -172,6 +172,8 @@ func TestListSensors(t *testing.T) {
 			expects.QueryParamContains("assigned", "false"),
 			expects.QueryParamContains("hasProfile", "true"),
 			expects.QueryParamContains("limit", "10"),
+			expects.QueryParamContains("profileName", "Elsys"),
+			expects.QueryParamContains("types", "urn:oma:lwm2m:ext:3303"),
 			expects.RequestMethod("GET"),
 		),
 		test.Returns(response.Code(200), response.Body([]byte(resBody))),
@@ -187,7 +189,13 @@ func TestListSensors(t *testing.T) {
 	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
 	is.NoErr(err)
 
-	sensors, err := client.ListSensors(ctx, types.SensorsQuery{Assigned: &assigned, HasProfile: &hasProfile, Limit: &limit})
+	sensors, err := client.ListSensors(ctx, types.SensorsQuery{
+		Assigned:    &assigned,
+		HasProfile:  &hasProfile,
+		Limit:       &limit,
+		ProfileName: "Elsys",
+		Types:       []string{"urn:oma:lwm2m:ext:3303"},
+	})
 	is.NoErr(err)
 	is.Equal(len(sensors), 2)
 	is.Equal(sensors[0].ID(), "sensor-1")

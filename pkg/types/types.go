@@ -167,8 +167,10 @@ type SensorConfig struct {
 }
 
 type SensorsQuery struct {
-	Offset     *int  `json:"offset,omitempty"`
-	Limit      *int  `json:"limit,omitempty"`
-	Assigned   *bool `json:"assigned,omitempty"`
-	HasProfile *bool `json:"hasProfile,omitempty"`
+	Offset      *int     `json:"offset,omitempty"`
+	Limit       *int     `json:"limit,omitempty"`
+	Assigned    *bool    `json:"assigned,omitempty"`
+	HasProfile  *bool    `json:"hasProfile,omitempty"`
+	ProfileName string   `json:"profileName,omitempty"`
+	Types       []string `json:"types,omitempty"`
 }

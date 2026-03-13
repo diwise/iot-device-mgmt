@@ -103,6 +103,10 @@ func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
 				return sensorquery.Sensors{}, fmt.Errorf("invalid hasProfile value: %w", err)
 			}
 			query.HasProfile = &parsed
+		case "profilename", "sensortype":
+			query.ProfileName = value[0]
+		case "type", "types":
+			query.Types = append([]string(nil), value...)
 		}
 	}
 

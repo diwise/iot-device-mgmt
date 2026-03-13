@@ -257,6 +257,47 @@ func TestStorage(t *testing.T) {
 		}
 	})
 
+	t.Run("query sensors by profileName case insensitive", func(t *testing.T) {
+		limit := 1000
+		result, err := s.QuerySensors(ctx, sensorquery.Sensors{Limit: &limit, ProfileName: "TESTDECODER-2"})
+		if err != nil {
+			t.Fatalf("failed to query sensors by profileName: %v", err)
+		}
+		if result.Count == 0 {
+			t.Fatal("expected at least one sensor for profileName filter")
+		}
+
+		for _, sensor := range result.Data {
+			if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "TestDecoder-2" {
+				t.Fatalf("expected only TestDecoder-2 sensors, got %+v", sensor.SensorProfile)
+			}
+		}
+	})
+
+	t.Run("query sensors by profile type", func(t *testing.T) {
+		limit := 1000
+		result, err := s.QuerySensors(ctx, sensorquery.Sensors{Limit: &limit, Types: []string{"URN:OMA:LWM2M:EXT:3303"}})
+		if err != nil {
+			t.Fatalf("failed to query sensors by profile type: %v", err)
+		}
+		if result.Count == 0 {
+			t.Fatal("expected at least one sensor for profile type filter")
+		}
+
+		foundStandalone := false
+		for _, sensor := range result.Data {
+			if sensor.SensorProfile == nil {
+				t.Fatalf("expected profile on typed sensor, got %+v", sensor)
+			}
+			if sensor.SensorID == standaloneSensorID {
+				foundStandalone = true
+			}
+		}
+		if !foundStandalone {
+			t.Fatalf("expected typed sensor query to include sensor %q", standaloneSensorID)
+		}
+	})
+
 	t.Run("update standalone sensor", func(t *testing.T) {
 		err := s.UpdateSensor(ctx, sensors.Sensor{
 			SensorID: standaloneSensorID,

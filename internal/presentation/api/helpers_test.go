@@ -99,10 +99,12 @@ func TestContentTypeHelpers(t *testing.T) {
 
 func TestSensorQueryFromValues(t *testing.T) {
 	query, err := sensorQueryFromValues(url.Values{
-		"limit":      {"5"},
-		"offset":     {"10"},
-		"assigned":   {"false"},
-		"hasProfile": {"true"},
+		"limit":       {"5"},
+		"offset":      {"10"},
+		"assigned":    {"false"},
+		"hasProfile":  {"true"},
+		"profileName": {"ElSys"},
+		"types":       {"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"},
 	})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -119,6 +121,23 @@ func TestSensorQueryFromValues(t *testing.T) {
 	}
 	if query.HasProfile == nil || !*query.HasProfile {
 		t.Fatalf("expected hasProfile=true, got %v", query.HasProfile)
+	}
+	if query.ProfileName != "ElSys" {
+		t.Fatalf("expected profileName ElSys, got %q", query.ProfileName)
+	}
+	if len(query.Types) != 2 || query.Types[0] != "urn:oma:lwm2m:ext:3303" || query.Types[1] != "urn:oma:lwm2m:ext:3304" {
+		t.Fatalf("expected types to be preserved, got %+v", query.Types)
+	}
+}
+
+func TestSensorQueryFromValuesSupportsSensorTypeAlias(t *testing.T) {
+	query, err := sensorQueryFromValues(url.Values{"sensorType": {"Elsys"}})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if query.ProfileName != "Elsys" {
+		t.Fatalf("expected profileName from sensorType alias, got %q", query.ProfileName)
 	}
 }
 

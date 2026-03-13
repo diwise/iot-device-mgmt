@@ -53,6 +53,10 @@ func TestApi(t *testing.T) {
 		testQuerySensors(t, server.URL, sensorMocks)
 	})
 
+	t.Run("GET /sensors with decoder and types filters", func(t *testing.T) {
+		testQuerySensorsWithFilters(t, server.URL, sensorMocks)
+	})
+
 	t.Run("GET /sensors?limit=invalid", func(t *testing.T) {
 		testQuerySensorsWithInvalidLimit(t, server.URL)
 	})
@@ -345,6 +349,30 @@ func testQuerySensors(t *testing.T, baseUrl string, mocks sensorMocks) {
 	}
 	if !strings.Contains(string(body), `"decoder":"elsys"`) {
 		t.Fatalf("expected response to contain sensor profile decoder, got %s", string(body))
+	}
+}
+
+func testQuerySensorsWithFilters(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
+		if query.ProfileName != "Elsys" {
+			t.Fatalf("expected profileName filter Elsys, got %q", query.ProfileName)
+		}
+		if len(query.Types) != 2 || query.Types[0] != "urn:oma:lwm2m:ext:3303" || query.Types[1] != "urn:oma:lwm2m:ext:3304" {
+			t.Fatalf("expected types filter, got %+v", query.Types)
+		}
+
+		return types.Collection[sensors.Sensor]{
+			Data:       []sensors.Sensor{testSensor},
+			Count:      1,
+			Offset:     0,
+			Limit:      10,
+			TotalCount: 1,
+		}, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?profileName=Elsys&types=urn:oma:lwm2m:ext:3303&types=urn:oma:lwm2m:ext:3304", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
 	}
 }
 

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
@@ -124,6 +125,12 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query types.Sen
 	}
 	if query.HasProfile != nil {
 		params.Set("hasProfile", strconv.FormatBool(*query.HasProfile))
+	}
+	if profileName := strings.TrimSpace(query.ProfileName); profileName != "" {
+		params.Set("profileName", profileName)
+	}
+	if len(query.Types) > 0 {
+		params["types"] = append([]string(nil), query.Types...)
 	}
 
 	requestURL := dmc.baseUrl + "/api/v0/sensors"

@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
@@ -38,6 +40,19 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		} else {
 			where = append(where, "(s.sensor_profile IS NULL OR s.sensor_profile = '')")
 		}
+	}
+	if profileName := strings.ToLower(strings.TrimSpace(query.ProfileName)); profileName != "" {
+		args["decoder"] = profileName
+		where = append(where, "LOWER(sp.decoder) = @decoder")
+	}
+	if profileTypes := normalizeSensorProfileTypes(query.Types); len(profileTypes) > 0 {
+		args["profile_types"] = profileTypes
+		where = append(where, `EXISTS (
+			SELECT 1
+			FROM sensor_profiles_sensor_profile_types sppt
+			WHERE sppt.sensor_profile_id = s.sensor_profile
+				AND LOWER(sppt.sensor_profile_type_id) = ANY(@profile_types)
+		)`)
 	}
 
 	whereClause := ""
@@ -121,18 +136,40 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 	var profileName, decoder *string
 	var deviceID *string
 	var interval *int
+	var batteryLevel *int
+	var rssi, snr, sf *float64
+	var fq *int64
+	var dr *int
+	var statusObservedAt *time.Time
 
 	err = c.QueryRow(ctx, `
+		WITH latest_status AS (
+			SELECT DISTINCT ON (sensor_id)
+				sensor_id, battery_level, rssi, snr, fq, sf, dr, observed_at
+			FROM sensor_status
+			ORDER BY sensor_id, observed_at DESC
+		)
+
 		SELECT
 			s.sensor_id,
 			d.device_id,
 			sp.name,
 			sp.decoder,
-			sp.interval
+			sp.interval,
+
+			ls.battery_level,
+			ls.rssi,
+			ls.snr,
+			ls.fq,
+			ls.sf,
+			ls.dr,
+			ls.observed_at  AS status_observed_at
+
 		FROM sensors s
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
-		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &profileName, &decoder, &interval)
+		LEFT JOIN latest_status ls ON ls.sensor_id = s.sensor_id
+		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return sensors.Sensor{}, false, nil
@@ -141,7 +178,24 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		return sensors.Sensor{}, false, err
 	}
 
-	return sensorFromRow(sensorID, deviceID, profileName, decoder, interval), true, nil
+	sens := sensorFromRow(sensorID, deviceID, profileName, decoder, interval)
+
+	if statusObservedAt != nil {
+		sens.SensorStatus = &types.SensorStatus{
+			RSSI:            rssi,
+			LoRaSNR:         snr,
+			Frequency:       fq,
+			SpreadingFactor: sf,
+			DR:              dr,
+			ObservedAt:      statusObservedAt.UTC(),
+		}
+		if batteryLevel != nil {
+			bat := *batteryLevel
+			sens.SensorStatus.BatteryLevel = int(bat)
+		}
+	}
+
+	return sens, true, nil
 }
 
 func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error {
@@ -213,6 +267,27 @@ func sensorProfileDecoder(sensor sensors.Sensor) any {
 	}
 
 	return strings.ToLower(strings.TrimSpace(sensor.SensorProfile.Decoder))
+}
+
+func normalizeSensorProfileTypes(values []string) []string {
+	if len(values) == 0 {
+		return nil
+	}
+
+	normalized := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.ToLower(strings.TrimSpace(value))
+		if trimmed == "" || slices.Contains(normalized, trimmed) {
+			continue
+		}
+		normalized = append(normalized, trimmed)
+	}
+
+	if len(normalized) == 0 {
+		return nil
+	}
+
+	return normalized
 }
 
 func sensorFromRow(sensorID string, deviceID, profileName, decoder *string, interval *int) sensors.Sensor {
