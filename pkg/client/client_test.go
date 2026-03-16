@@ -204,6 +204,47 @@ func TestListSensors(t *testing.T) {
 	client.Close(ctx)
 }
 
+func TestCreateSensorIncludesNameAndLocation(t *testing.T) {
+	is := is.New(t)
+	name := "Outdoor sensor"
+	location := &types.Location{Latitude: 62.3901, Longitude: 17.3069}
+
+	mockedService := test.NewMockServiceThat(
+		test.Expects(is,
+			expects.RequestPath("/api/v0/sensors"),
+			expects.RequestMethod("POST"),
+			expects.RequestHeaderContains("Content-Type", "application/json"),
+			expects.RequestBodyContaining(
+				`"sensorID":"sensor-1"`,
+				`"name":"Outdoor sensor"`,
+				`"location":{"latitude":62.3901,"longitude":17.3069}`,
+				`"decoder":"elsys"`,
+			),
+		),
+		test.Returns(response.Code(201)),
+	)
+
+	mockOAuth := test.NewMockServiceThat(
+		test.Expects(is, expects.RequestPath("/token")),
+		test.Returns(response.ContentType("application/json"), response.Code(200), response.Body([]byte(TokenResponse))),
+	)
+	defer mockOAuth.Close()
+
+	ctx := context.Background()
+	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
+	is.NoErr(err)
+
+	err = client.CreateSensor(ctx, types.SensorConfig{
+		SensorID:        "sensor-1",
+		SensorProfileID: "elsys",
+		Name:            &name,
+		Location:        location,
+	})
+	is.NoErr(err)
+
+	client.Close(ctx)
+}
+
 func TestAttachAndDetachSensorToDevice(t *testing.T) {
 	is := is.New(t)
 

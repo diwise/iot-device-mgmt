@@ -13,6 +13,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
@@ -73,6 +74,8 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		SELECT
 			s.sensor_id,
 			d.device_id,
+			s.name,
+			s.location,
 			sp.name,
 			sp.decoder,
 			sp.interval,
@@ -94,16 +97,18 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	for rows.Next() {
 		var sensorID string
 		var deviceID *string
+		var name *string
+		var location pgtype.Point
 		var profileName, decoder *string
 		var interval *int
 
-		err = rows.Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &count)
+		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &count)
 		if err != nil {
 			log.Error("failed to scan sensor row", "err", err.Error())
 			return types.Collection[sensors.Sensor]{}, err
 		}
 
-		items = append(items, sensorFromRow(sensorID, deviceID, profileName, decoder, interval))
+		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -135,6 +140,8 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 
 	var profileName, decoder *string
 	var deviceID *string
+	var name *string
+	var location pgtype.Point
 	var interval *int
 	var batteryLevel *int
 	var rssi, snr, sf *float64
@@ -153,6 +160,8 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		SELECT
 			s.sensor_id,
 			d.device_id,
+			s.name,
+			s.location,
 			sp.name,
 			sp.decoder,
 			sp.interval,
@@ -169,7 +178,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
 		LEFT JOIN latest_status ls ON ls.sensor_id = s.sensor_id
-		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
+		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return sensors.Sensor{}, false, nil
@@ -178,7 +187,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		return sensors.Sensor{}, false, err
 	}
 
-	sens := sensorFromRow(sensorID, deviceID, profileName, decoder, interval)
+	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval)
 
 	if statusObservedAt != nil {
 		sens.SensorStatus = &types.SensorStatus{
@@ -201,6 +210,8 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
+		"name":           sensorName(sensor.Name),
+		"location":       sensorPoint(sensor.Location),
 		"sensor_profile": sensorProfileDecoder(sensor),
 	}
 
@@ -214,8 +225,8 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error
 	defer c.Release()
 
 	result, err := c.Exec(ctx, `
-		INSERT INTO sensors (sensor_id, sensor_profile)
-		VALUES (@sensor_id, @sensor_profile)
+		INSERT INTO sensors (sensor_id, name, location, sensor_profile)
+		VALUES (@sensor_id, @name, @location, @sensor_profile)
 		ON CONFLICT DO NOTHING`, args)
 	if err != nil {
 		log.Error("could not insert sensor", "args", args, "err", err.Error())
@@ -232,6 +243,8 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error
 func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
+		"name":           sensorName(sensor.Name),
+		"location":       sensorPoint(sensor.Location),
 		"sensor_profile": sensorProfileDecoder(sensor),
 	}
 
@@ -246,7 +259,9 @@ func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error
 
 	result, err := c.Exec(ctx, `
 		UPDATE sensors
-		SET sensor_profile = @sensor_profile,
+		SET name = @name,
+			location = @location,
+			sensor_profile = @sensor_profile,
 			modified_on = NOW()
 		WHERE sensor_id = @sensor_id`, args)
 	if err != nil {
@@ -267,6 +282,30 @@ func sensorProfileDecoder(sensor sensors.Sensor) any {
 	}
 
 	return strings.ToLower(strings.TrimSpace(sensor.SensorProfile.Decoder))
+}
+
+func sensorName(name *string) any {
+	if name == nil {
+		return nil
+	}
+
+	trimmed := strings.TrimSpace(*name)
+	if trimmed == "" {
+		return nil
+	}
+
+	return trimmed
+}
+
+func sensorPoint(location *types.Location) any {
+	if location == nil {
+		return nil
+	}
+
+	return pgtype.Point{
+		P:     pgtype.Vec2{X: location.Longitude, Y: location.Latitude},
+		Valid: true,
+	}
 }
 
 func normalizeSensorProfileTypes(values []string) []string {
@@ -290,8 +329,11 @@ func normalizeSensorProfileTypes(values []string) []string {
 	return normalized
 }
 
-func sensorFromRow(sensorID string, deviceID, profileName, decoder *string, interval *int) sensors.Sensor {
-	sensor := sensors.Sensor{SensorID: sensorID, DeviceID: deviceID}
+func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int) sensors.Sensor {
+	sensor := sensors.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name}
+	if location.Valid {
+		sensor.Location = &types.Location{Latitude: location.P.Y, Longitude: location.P.X}
+	}
 	if decoder == nil {
 		return sensor
 	}

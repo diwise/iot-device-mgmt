@@ -819,13 +819,19 @@ func testCreateSensor(t *testing.T, baseUrl string, mocks sensorMocks) {
 		if sensor.SensorID != testSensor.SensorID {
 			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
 		}
+		if sensor.Name == nil || *sensor.Name != "Outdoor sensor" {
+			t.Fatalf("expected sensor name Outdoor sensor, got %+v", sensor.Name)
+		}
+		if sensor.Location == nil || sensor.Location.Latitude != 62.3901 || sensor.Location.Longitude != 17.3069 {
+			t.Fatalf("expected sensor location {62.3901 17.3069}, got %+v", sensor.Location)
+		}
 		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "elsys" {
 			t.Fatalf("expected sensor profile decoder elsys, got %+v", sensor.SensorProfile)
 		}
 		return nil
 	}
 
-	payload := `{"sensorID":"test-sensor-standalone","sensorProfile":{"decoder":"elsys"}}`
+	payload := `{"sensorID":"test-sensor-standalone","name":"Outdoor sensor","location":{"latitude":62.3901,"longitude":17.3069},"sensorProfile":{"decoder":"elsys"}}`
 	statusCode, _ := do(t, http.MethodPost, baseUrl+"/api/v0/sensors", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
 	if statusCode != http.StatusCreated {
 		t.Fatalf("expected status 201, got %d", statusCode)

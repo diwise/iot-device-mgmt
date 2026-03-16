@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS sensor_profile_types (
 
 CREATE TABLE IF NOT EXISTS sensors (
 	sensor_id	TEXT NOT NULL,
+	name		TEXT NULL,
+	location	POINT NULL,
 	sensor_profile	TEXT NULL,
 	created_on  timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	modified_on timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -51,6 +53,8 @@ CREATE TABLE IF NOT EXISTS devices (
 );
 
 ALTER TABLE sensors ADD COLUMN IF NOT EXISTS sensor_profile TEXT NULL;
+ALTER TABLE sensors ADD COLUMN IF NOT EXISTS name TEXT NULL;
+ALTER TABLE sensors ADD COLUMN IF NOT EXISTS location POINT NULL;
 ALTER TABLE sensors DROP COLUMN IF EXISTS source;
 ALTER TABLE devices DROP CONSTRAINT IF EXISTS fk_device_profiles;
 

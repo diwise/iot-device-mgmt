@@ -193,9 +193,13 @@ func (dmc *devManagementClient) writeSensor(ctx context.Context, method, request
 
 	payload := struct {
 		SensorID      string               `json:"sensorID"`
+		Name          *string              `json:"name,omitempty"`
+		Location      *types.Location      `json:"location,omitempty"`
 		SensorProfile *types.SensorProfile `json:"sensorProfile,omitempty"`
 	}{
 		SensorID: sensor.SensorID,
+		Name:     sensor.Name,
+		Location: sensor.Location,
 	}
 	if sensor.SensorProfileID != "" {
 		payload.SensorProfile = &types.SensorProfile{Decoder: sensor.SensorProfileID}

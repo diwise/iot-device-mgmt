@@ -415,6 +415,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 
 		id := r.PathValue("id")
 		if id != d.DeviceID {
+			logger.Debug("payload contains mismatched device ID", "id", id, "deviceID", d.DeviceID)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -425,7 +426,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
-			logger.Error("unable to create device", "device_id", d.DeviceID, "err", err.Error())
+			logger.Error("unable to update device", "device_id", d.DeviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -444,8 +445,11 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
+		logger.Debug("patch device request received")
+
 		deviceID := r.PathValue("id")
 		if deviceID == "" {
+			logger.Error("device id is required")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -458,6 +462,7 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		defer r.Body.Close()
 
 		var fields map[string]any
 		err = json.Unmarshal(b, &fields)
@@ -470,6 +475,7 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 		err = svc.Merge(ctx, deviceID, fields, allowedTenants)
 		if err != nil {
 			if errors.Is(err, devices.ErrInvalidPatch) {
+				logger.Error("invalid patch data", "device_id", deviceID, "err", err.Error())
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -477,6 +483,7 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+
 			logger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return

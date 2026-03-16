@@ -114,8 +114,11 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("create standalone sensor", func(t *testing.T) {
+		name := "Standalone test sensor"
 		err := s.CreateSensor(ctx, sensors.Sensor{
 			SensorID: "zz-test-sensor-" + uuid.NewString(),
+			Name:     &name,
+			Location: &types.Location{Latitude: 62.3901, Longitude: 17.3069},
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder-2",
 			},
@@ -183,8 +186,11 @@ func TestStorage(t *testing.T) {
 	standaloneSensorID := "zz-test-sensor-standalone-" + uuid.NewString()
 
 	t.Run("create and get standalone sensor", func(t *testing.T) {
+		name := "Standalone roundtrip sensor"
 		err := s.CreateSensor(ctx, sensors.Sensor{
 			SensorID: standaloneSensorID,
+			Name:     &name,
+			Location: &types.Location{Latitude: 63.101, Longitude: 17.802},
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder-2",
 			},
@@ -202,6 +208,12 @@ func TestStorage(t *testing.T) {
 		}
 		if sensor.SensorID != standaloneSensorID {
 			t.Fatalf("expected sensor id %q, got %q", standaloneSensorID, sensor.SensorID)
+		}
+		if sensor.Name == nil || *sensor.Name != name {
+			t.Fatalf("expected sensor name %q, got %+v", name, sensor.Name)
+		}
+		if sensor.Location == nil || sensor.Location.Latitude != 63.101 || sensor.Location.Longitude != 17.802 {
+			t.Fatalf("expected sensor location {63.101 17.802}, got %+v", sensor.Location)
 		}
 		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "TestDecoder-2" {
 			t.Fatalf("expected joined sensor profile decoder TestDecoder-2, got %+v", sensor.SensorProfile)
@@ -299,8 +311,11 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("update standalone sensor", func(t *testing.T) {
+		name := "Updated standalone sensor"
 		err := s.UpdateSensor(ctx, sensors.Sensor{
 			SensorID: standaloneSensorID,
+			Name:     &name,
+			Location: &types.Location{Latitude: 64.001, Longitude: 18.123},
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder",
 			},
@@ -318,6 +333,12 @@ func TestStorage(t *testing.T) {
 		}
 		if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder != "TestDecoder" {
 			t.Fatalf("expected updated decoder TestDecoder, got %+v", sensor.SensorProfile)
+		}
+		if sensor.Name == nil || *sensor.Name != name {
+			t.Fatalf("expected updated name %q, got %+v", name, sensor.Name)
+		}
+		if sensor.Location == nil || sensor.Location.Latitude != 64.001 || sensor.Location.Longitude != 18.123 {
+			t.Fatalf("expected updated location {64.001 18.123}, got %+v", sensor.Location)
 		}
 	})
 
