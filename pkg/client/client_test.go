@@ -234,7 +234,7 @@ func TestCreateSensorIncludesNameAndLocation(t *testing.T) {
 	client, err := New(ctx, mockedService.URL(), mockOAuth.URL()+"/token", false, "", "")
 	is.NoErr(err)
 
-	err = client.CreateSensor(ctx, types.SensorConfig{
+	err = client.CreateSensor(ctx, types.SensorInputModel{
 		SensorID:        "sensor-1",
 		SensorProfileID: "elsys",
 		Name:            &name,

@@ -10,34 +10,28 @@ import (
 
 var ErrSensorNotFound = errors.New("sensor not found")
 var ErrSensorAlreadyExists = errors.New("sensor already exists")
-
-type Sensor struct {
-	SensorID      string               `json:"sensorID"`
-	DeviceID      *string              `json:"deviceID,omitempty"`
-	Name          *string              `json:"name,omitempty"`
-	Location      *types.Location      `json:"location,omitempty"`
-	SensorProfile *types.SensorProfile `json:"sensorProfile,omitempty"`
-	SensorStatus  *types.SensorStatus  `json:"sensorStatus,omitempty"`
-}
+var ErrSensorProfileNotFound = errors.New("sensor profile not found")
 
 type SensorReader interface {
-	QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[Sensor], error)
-	GetSensor(ctx context.Context, sensorID string) (Sensor, bool, error)
+	QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error)
+	GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error)
+	GetSensorProfile(ctx context.Context, profileID string) (types.SensorProfile, bool, error)
 }
 
 type SensorWriter interface {
-	CreateSensor(ctx context.Context, sensor Sensor) error
-	UpdateSensor(ctx context.Context, sensor Sensor) error
+	CreateSensor(ctx context.Context, sensor types.Sensor) error
+	UpdateSensor(ctx context.Context, sensor types.Sensor) error
 }
 
 type SensorQueryService interface {
-	Query(ctx context.Context, query sensorquery.Sensors) (types.Collection[Sensor], error)
-	Sensor(ctx context.Context, sensorID string) (Sensor, error)
+	Query(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error)
+	Sensor(ctx context.Context, sensorID string) (types.Sensor, error)
+	SensorProfile(ctx context.Context, profileID string) (types.SensorProfile, error)
 }
 
 type SensorCommandService interface {
-	Create(ctx context.Context, sensor Sensor) error
-	Update(ctx context.Context, sensor Sensor) error
+	Create(ctx context.Context, sensor types.Sensor) error
+	Update(ctx context.Context, sensor types.Sensor) error
 }
 
 type SensorAPIService interface {

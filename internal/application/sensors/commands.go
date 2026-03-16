@@ -1,8 +1,12 @@
 package sensors
 
-import "context"
+import (
+	"context"
 
-func (s service) Create(ctx context.Context, sensor Sensor) error {
+	"github.com/diwise/iot-device-mgmt/pkg/types"
+)
+
+func (s service) Create(ctx context.Context, sensor types.Sensor) error {
 	_, found, err := s.reader.GetSensor(ctx, sensor.SensorID)
 	if err != nil {
 		return err
@@ -20,7 +24,7 @@ func (s service) Create(ctx context.Context, sensor Sensor) error {
 	return nil
 }
 
-func (s service) Update(ctx context.Context, sensor Sensor) error {
+func (s service) Update(ctx context.Context, sensor types.Sensor) error {
 	_, found, err := s.reader.GetSensor(ctx, sensor.SensorID)
 	if err != nil {
 		return err

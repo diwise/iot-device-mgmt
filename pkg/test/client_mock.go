@@ -7,8 +7,8 @@ import (
 	"context"
 	"sync"
 
-	"github.com/diwise/iot-device-mgmt/pkg/types"
 	. "github.com/diwise/iot-device-mgmt/pkg/client"
+	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
 // Ensure, that DeviceManagementClientMock does implement DeviceManagementClient.
@@ -77,7 +77,7 @@ type DeviceManagementClientMock struct {
 	CreateDeviceFunc func(ctx context.Context, device types.Device) error
 
 	// CreateSensorFunc mocks the CreateSensor method.
-	CreateSensorFunc func(ctx context.Context, sensor types.SensorConfig) error
+	CreateSensorFunc func(ctx context.Context, sensor types.SensorInputModel) error
 
 	// DetachSensorFromDeviceFunc mocks the DetachSensorFromDevice method.
 	DetachSensorFromDeviceFunc func(ctx context.Context, deviceID string) error
@@ -104,7 +104,7 @@ type DeviceManagementClientMock struct {
 	ListSensorsFunc func(ctx context.Context, query types.SensorsQuery) ([]Sensor, error)
 
 	// UpdateSensorFunc mocks the UpdateSensor method.
-	UpdateSensorFunc func(ctx context.Context, sensor types.SensorConfig) error
+	UpdateSensorFunc func(ctx context.Context, sensor types.SensorInputModel) error
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -134,7 +134,7 @@ type DeviceManagementClientMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Sensor is the sensor argument value.
-			Sensor types.SensorConfig
+			Sensor types.SensorInputModel
 		}
 		// DetachSensorFromDevice holds details about calls to the DetachSensorFromDevice method.
 		DetachSensorFromDevice []struct {
@@ -193,7 +193,7 @@ type DeviceManagementClientMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Sensor is the sensor argument value.
-			Sensor types.SensorConfig
+			Sensor types.SensorInputModel
 		}
 	}
 	lockAttachSensorToDevice     sync.RWMutex
@@ -320,13 +320,13 @@ func (mock *DeviceManagementClientMock) CreateDeviceCalls() []struct {
 }
 
 // CreateSensor calls CreateSensorFunc.
-func (mock *DeviceManagementClientMock) CreateSensor(ctx context.Context, sensor types.SensorConfig) error {
+func (mock *DeviceManagementClientMock) CreateSensor(ctx context.Context, sensor types.SensorInputModel) error {
 	if mock.CreateSensorFunc == nil {
 		panic("DeviceManagementClientMock.CreateSensorFunc: method is nil but DeviceManagementClient.CreateSensor was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
-		Sensor types.SensorConfig
+		Sensor types.SensorInputModel
 	}{
 		Ctx:    ctx,
 		Sensor: sensor,
@@ -343,11 +343,11 @@ func (mock *DeviceManagementClientMock) CreateSensor(ctx context.Context, sensor
 //	len(mockedDeviceManagementClient.CreateSensorCalls())
 func (mock *DeviceManagementClientMock) CreateSensorCalls() []struct {
 	Ctx    context.Context
-	Sensor types.SensorConfig
+	Sensor types.SensorInputModel
 } {
 	var calls []struct {
 		Ctx    context.Context
-		Sensor types.SensorConfig
+		Sensor types.SensorInputModel
 	}
 	mock.lockCreateSensor.RLock()
 	calls = mock.calls.CreateSensor
@@ -636,13 +636,13 @@ func (mock *DeviceManagementClientMock) ListSensorsCalls() []struct {
 }
 
 // UpdateSensor calls UpdateSensorFunc.
-func (mock *DeviceManagementClientMock) UpdateSensor(ctx context.Context, sensor types.SensorConfig) error {
+func (mock *DeviceManagementClientMock) UpdateSensor(ctx context.Context, sensor types.SensorInputModel) error {
 	if mock.UpdateSensorFunc == nil {
 		panic("DeviceManagementClientMock.UpdateSensorFunc: method is nil but DeviceManagementClient.UpdateSensor was just called")
 	}
 	callInfo := struct {
 		Ctx    context.Context
-		Sensor types.SensorConfig
+		Sensor types.SensorInputModel
 	}{
 		Ctx:    ctx,
 		Sensor: sensor,
@@ -659,11 +659,11 @@ func (mock *DeviceManagementClientMock) UpdateSensor(ctx context.Context, sensor
 //	len(mockedDeviceManagementClient.UpdateSensorCalls())
 func (mock *DeviceManagementClientMock) UpdateSensorCalls() []struct {
 	Ctx    context.Context
-	Sensor types.SensorConfig
+	Sensor types.SensorInputModel
 } {
 	var calls []struct {
 		Ctx    context.Context
-		Sensor types.SensorConfig
+		Sensor types.SensorInputModel
 	}
 	mock.lockUpdateSensor.RLock()
 	calls = mock.calls.UpdateSensor

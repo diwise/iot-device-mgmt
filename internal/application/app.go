@@ -96,7 +96,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 		existingDevice, _ := a.existingDevice(ctx, device.DeviceID, validTenants)
 
 		if !existingSensor {
-			s := sensors.Sensor{
+			s := types.Sensor{
 				SensorID:      device.SensorID,
 				SensorProfile: &device.SensorProfile,
 			}
@@ -116,7 +116,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 		} else if a.shouldUpdate {
 			log.Debug("sensor already exists, updating sensor profile if needed", slog.String("sensor_id", device.SensorID), slog.String("decoder", device.SensorProfile.Decoder))
 
-			err := a.sensors.Update(ctx, sensors.Sensor{
+			err := a.sensors.Update(ctx, types.Sensor{
 				SensorID:      device.SensorID,
 				SensorProfile: &device.SensorProfile,
 			})

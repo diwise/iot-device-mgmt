@@ -8,7 +8,6 @@ import (
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/google/uuid"
@@ -68,7 +67,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("create sensor for device", func(t *testing.T) {
-		err := s.CreateSensor(ctx, sensors.Sensor{
+		err := s.CreateSensor(ctx, types.Sensor{
 			SensorID: sensorID,
 			SensorProfile: &types.SensorProfile{
 				Decoder: "testdecoder",
@@ -115,7 +114,7 @@ func TestStorage(t *testing.T) {
 
 	t.Run("create standalone sensor", func(t *testing.T) {
 		name := "Standalone test sensor"
-		err := s.CreateSensor(ctx, sensors.Sensor{
+		err := s.CreateSensor(ctx, types.Sensor{
 			SensorID: "zz-test-sensor-" + uuid.NewString(),
 			Name:     &name,
 			Location: &types.Location{Latitude: 62.3901, Longitude: 17.3069},
@@ -187,7 +186,7 @@ func TestStorage(t *testing.T) {
 
 	t.Run("create and get standalone sensor", func(t *testing.T) {
 		name := "Standalone roundtrip sensor"
-		err := s.CreateSensor(ctx, sensors.Sensor{
+		err := s.CreateSensor(ctx, types.Sensor{
 			SensorID: standaloneSensorID,
 			Name:     &name,
 			Location: &types.Location{Latitude: 63.101, Longitude: 17.802},
@@ -312,7 +311,7 @@ func TestStorage(t *testing.T) {
 
 	t.Run("update standalone sensor", func(t *testing.T) {
 		name := "Updated standalone sensor"
-		err := s.UpdateSensor(ctx, sensors.Sensor{
+		err := s.UpdateSensor(ctx, types.Sensor{
 			SensorID: standaloneSensorID,
 			Name:     &name,
 			Location: &types.Location{Latitude: 64.001, Longitude: 18.123},

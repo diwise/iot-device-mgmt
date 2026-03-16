@@ -11,36 +11,41 @@ import (
 )
 
 type readerStub struct {
-	queryFunc func(context.Context, sensorquery.Sensors) (types.Collection[Sensor], error)
-	getFunc   func(context.Context, string) (Sensor, bool, error)
+	queryFunc func(context.Context, sensorquery.Sensors) (types.Collection[types.Sensor], error)
+	getFunc   func(context.Context, string) (types.Sensor, bool, error)
+	getSensorProfileFunc func(context.Context, string) (types.SensorProfile, bool, error)
 }
 
-func (s readerStub) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[Sensor], error) {
+func (s readerStub) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
 	return s.queryFunc(ctx, query)
 }
 
-func (s readerStub) GetSensor(ctx context.Context, sensorID string) (Sensor, bool, error) {
+func (s readerStub) GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 	return s.getFunc(ctx, sensorID)
 }
 
-type writerStub struct {
-	createFunc func(context.Context, Sensor) error
-	updateFunc func(context.Context, Sensor) error
+func (s readerStub) GetSensorProfile(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
+	return s.getSensorProfileFunc(ctx, profileID)
 }
 
-func (s writerStub) CreateSensor(ctx context.Context, sensor Sensor) error {
+type writerStub struct {
+	createFunc func(context.Context, types.Sensor) error
+	updateFunc func(context.Context, types.Sensor) error
+}
+
+func (s writerStub) CreateSensor(ctx context.Context, sensor types.Sensor) error {
 	return s.createFunc(ctx, sensor)
 }
 
-func (s writerStub) UpdateSensor(ctx context.Context, sensor Sensor) error {
+func (s writerStub) UpdateSensor(ctx context.Context, sensor types.Sensor) error {
 	return s.updateFunc(ctx, sensor)
 }
 
 func TestSensor(t *testing.T) {
 	is := is.New(t)
 	svc := New(readerStub{
-		getFunc: func(context.Context, string) (Sensor, bool, error) {
-			return Sensor{SensorID: "sensor-1"}, true, nil
+		getFunc: func(context.Context, string) (types.Sensor, bool, error) {
+			return types.Sensor{SensorID: "sensor-1"}, true, nil
 		},
 	}, writerStub{})
 
@@ -52,8 +57,8 @@ func TestSensor(t *testing.T) {
 func TestSensorNotFound(t *testing.T) {
 	is := is.New(t)
 	svc := New(readerStub{
-		getFunc: func(context.Context, string) (Sensor, bool, error) {
-			return Sensor{}, false, nil
+		getFunc: func(context.Context, string) (types.Sensor, bool, error) {
+			return types.Sensor{}, false, nil
 		},
 	}, writerStub{})
 
@@ -64,38 +69,38 @@ func TestSensorNotFound(t *testing.T) {
 func TestCreateSensorAlreadyExists(t *testing.T) {
 	is := is.New(t)
 	svc := New(readerStub{
-		getFunc: func(context.Context, string) (Sensor, bool, error) {
-			return Sensor{SensorID: "sensor-1"}, true, nil
+		getFunc: func(context.Context, string) (types.Sensor, bool, error) {
+			return types.Sensor{SensorID: "sensor-1"}, true, nil
 		},
 	}, writerStub{})
 
-	err := svc.Create(context.Background(), Sensor{SensorID: "sensor-1"})
+	err := svc.Create(context.Background(), types.Sensor{SensorID: "sensor-1"})
 	is.True(errors.Is(err, ErrSensorAlreadyExists))
 }
 
 func TestUpdateSensorNotFound(t *testing.T) {
 	is := is.New(t)
 	svc := New(readerStub{
-		getFunc: func(context.Context, string) (Sensor, bool, error) {
-			return Sensor{}, false, nil
+		getFunc: func(context.Context, string) (types.Sensor, bool, error) {
+			return types.Sensor{}, false, nil
 		},
 	}, writerStub{})
 
-	err := svc.Update(context.Background(), Sensor{SensorID: "missing"})
+	err := svc.Update(context.Background(), types.Sensor{SensorID: "missing"})
 	is.True(errors.Is(err, ErrSensorNotFound))
 }
 
 func TestQuerySensors(t *testing.T) {
 	is := is.New(t)
 	svc := New(readerStub{
-		queryFunc: func(context.Context, sensorquery.Sensors) (types.Collection[Sensor], error) {
-			return types.Collection[Sensor]{
-				Data:  []Sensor{{SensorID: "sensor-1", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}},
+		queryFunc: func(context.Context, sensorquery.Sensors) (types.Collection[types.Sensor], error) {
+			return types.Collection[types.Sensor]{
+				Data:  []types.Sensor{{SensorID: "sensor-1", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}},
 				Count: 1,
 			}, nil
 		},
-		getFunc: func(context.Context, string) (Sensor, bool, error) {
-			return Sensor{}, false, nil
+		getFunc: func(context.Context, string) (types.Sensor, bool, error) {
+			return types.Sensor{}, false, nil
 		},
 	}, writerStub{})
 

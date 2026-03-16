@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 )
 
@@ -28,7 +27,7 @@ var _ DeviceReader = &DeviceReaderMock{}
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 //				panic("mock out the GetDeviceBySensorID method")
 //			},
-//			GetSensorFunc: func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+//			GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 //				panic("mock out the GetSensor method")
 //			},
 //			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
@@ -57,7 +56,7 @@ type DeviceReaderMock struct {
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, bool, error)
 
 	// GetSensorFunc mocks the GetSensor method.
-	GetSensorFunc func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error)
+	GetSensorFunc func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
@@ -207,7 +206,7 @@ func (mock *DeviceReaderMock) GetDeviceBySensorIDCalls() []struct {
 }
 
 // GetSensor calls GetSensorFunc.
-func (mock *DeviceReaderMock) GetSensor(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+func (mock *DeviceReaderMock) GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 	if mock.GetSensorFunc == nil {
 		panic("DeviceReaderMock.GetSensorFunc: method is nil but DeviceReader.GetSensor was just called")
 	}

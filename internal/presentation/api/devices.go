@@ -313,6 +313,8 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
+		logger = logger.With(slog.String("method", r.Method), slog.String("url", r.URL.String()))
+
 		if isMultipartFormData(r) {
 			file, _, err := r.FormFile("fileupload")
 			if err != nil {
@@ -385,6 +387,8 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 		ctx, span := tracer.Start(r.Context(), "update-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
+
+		logger = logger.With(slog.String("method", r.Method), slog.String("url", r.URL.String()))
 
 		if !isApplicationJson(r) {
 			logger.Error("Unsupported MediaType")

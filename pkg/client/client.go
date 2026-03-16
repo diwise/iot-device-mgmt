@@ -30,8 +30,8 @@ type DeviceManagementClient interface {
 	CreateDevice(ctx context.Context, device types.Device) error
 	FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error)
 	FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error)
-	CreateSensor(ctx context.Context, sensor types.SensorConfig) error
-	UpdateSensor(ctx context.Context, sensor types.SensorConfig) error
+	CreateSensor(ctx context.Context, sensor types.SensorInputModel) error
+	UpdateSensor(ctx context.Context, sensor types.SensorInputModel) error
 	GetSensor(ctx context.Context, sensorID string) (Sensor, error)
 	ListSensors(ctx context.Context, query types.SensorsQuery) ([]Sensor, error)
 	AttachSensorToDevice(ctx context.Context, deviceID, sensorID string) error

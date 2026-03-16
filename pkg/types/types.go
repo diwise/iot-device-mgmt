@@ -159,9 +159,12 @@ type Sensor struct {
 	SensorID      string         `json:"sensorID"`
 	DeviceID      *string        `json:"deviceID,omitempty"`
 	SensorProfile *SensorProfile `json:"sensorProfile,omitempty"`
+	Name          *string        `json:"name,omitempty"`
+	Location      *Location      `json:"location,omitempty"`
+	SensorStatus  *SensorStatus  `json:"sensorStatus,omitempty"`
 }
 
-type SensorConfig struct {
+type SensorInputModel struct {
 	SensorID        string    `json:"sensorID"`
 	SensorProfileID string    `json:"sensorProfileID"`
 	Name            *string   `json:"name,omitempty"`

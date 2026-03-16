@@ -4,7 +4,6 @@ import (
 	"context"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
@@ -21,7 +20,7 @@ var ErrSensorProfileRequired = errSensorProfileRequired
 type DeviceReader interface {
 	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error)
-	GetSensor(ctx context.Context, sensorID string) (sensors.Sensor, bool, error)
+	GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)

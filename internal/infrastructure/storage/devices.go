@@ -693,7 +693,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 			GROUP BY ddpt.device_id
 		)
 
-		SELECT d.device_id,d.sensor_id,active,name,description,environment,d.source,tenant,location,s.sensor_profile,types_list.types
+		SELECT d.device_id,d.sensor_id,d.active,d.name,d.description,d.environment,d.source,d.tenant,d.location,s.sensor_profile,types_list.types
 		FROM devices d
 		LEFT JOIN sensors s ON s.sensor_id = d.sensor_id
 		LEFT JOIN types_list ON types_list.device_id = d.device_id

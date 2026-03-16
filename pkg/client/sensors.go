@@ -178,15 +178,15 @@ func (dmc *devManagementClient) ListSensors(ctx context.Context, query types.Sen
 	return sensors, nil
 }
 
-func (dmc *devManagementClient) CreateSensor(ctx context.Context, sensor types.SensorConfig) error {
+func (dmc *devManagementClient) CreateSensor(ctx context.Context, sensor types.SensorInputModel) error {
 	return dmc.writeSensor(ctx, http.MethodPost, dmc.baseUrl+"/api/v0/sensors", sensor)
 }
 
-func (dmc *devManagementClient) UpdateSensor(ctx context.Context, sensor types.SensorConfig) error {
+func (dmc *devManagementClient) UpdateSensor(ctx context.Context, sensor types.SensorInputModel) error {
 	return dmc.writeSensor(ctx, http.MethodPut, dmc.baseUrl+"/api/v0/sensors/"+sensor.SensorID, sensor)
 }
 
-func (dmc *devManagementClient) writeSensor(ctx context.Context, method, requestURL string, sensor types.SensorConfig) error {
+func (dmc *devManagementClient) writeSensor(ctx context.Context, method, requestURL string, sensor types.SensorInputModel) error {
 	var err error
 	ctx, span := tracer.Start(ctx, "write-sensor")
 	defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()

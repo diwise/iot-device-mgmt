@@ -16,7 +16,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[sensors.Sensor], error) {
+func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
 	condition := &Condition{Offset: query.Offset, Limit: query.Limit}
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
@@ -66,7 +66,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		log.Error("could not acquire connection", "err", err.Error())
-		return types.Collection[sensors.Sensor]{}, err
+		return types.Collection[types.Sensor]{}, err
 	}
 	defer c.Release()
 
@@ -88,11 +88,11 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		%s`, whereClause, offsetLimit), args)
 	if err != nil {
 		log.Error("failed to query sensors", "args", args, "err", err.Error())
-		return types.Collection[sensors.Sensor]{}, err
+		return types.Collection[types.Sensor]{}, err
 	}
 	defer rows.Close()
 
-	items := []sensors.Sensor{}
+	items := []types.Sensor{}
 	var count uint64
 	for rows.Next() {
 		var sensorID string
@@ -105,17 +105,17 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &count)
 		if err != nil {
 			log.Error("failed to scan sensor row", "err", err.Error())
-			return types.Collection[sensors.Sensor]{}, err
+			return types.Collection[types.Sensor]{}, err
 		}
 
 		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval))
 	}
 
 	if err = rows.Err(); err != nil {
-		return types.Collection[sensors.Sensor]{}, err
+		return types.Collection[types.Sensor]{}, err
 	}
 
-	return types.Collection[sensors.Sensor]{
+	return types.Collection[types.Sensor]{
 		Data:       items,
 		Count:      uint64(len(items)),
 		Offset:     uint64(offset),
@@ -124,9 +124,9 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 	}, nil
 }
 
-func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
+func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 	if sensorID == "" {
-		return sensors.Sensor{}, false, nil
+		return types.Sensor{}, false, nil
 	}
 
 	log := logging.GetFromContext(ctx)
@@ -134,7 +134,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 	c, err := s.conn.Acquire(ctx)
 	if err != nil {
 		log.Error("could not acquire connection", "err", err.Error())
-		return sensors.Sensor{}, false, err
+		return types.Sensor{}, false, err
 	}
 	defer c.Release()
 
@@ -181,10 +181,10 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return sensors.Sensor{}, false, nil
+			return types.Sensor{}, false, nil
 		}
 		log.Error("failed to query sensor", "sensor_id", sensorID, "err", err.Error())
-		return sensors.Sensor{}, false, err
+		return types.Sensor{}, false, err
 	}
 
 	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval)
@@ -207,7 +207,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (sensors.Senso
 	return sens, true, nil
 }
 
-func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error {
+func (s *Storage) CreateSensor(ctx context.Context, sensor types.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
 		"name":           sensorName(sensor.Name),
@@ -240,7 +240,7 @@ func (s *Storage) CreateSensor(ctx context.Context, sensor sensors.Sensor) error
 	return nil
 }
 
-func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error {
+func (s *Storage) UpdateSensor(ctx context.Context, sensor types.Sensor) error {
 	args := pgx.NamedArgs{
 		"sensor_id":      strings.TrimSpace(sensor.SensorID),
 		"name":           sensorName(sensor.Name),
@@ -276,7 +276,75 @@ func (s *Storage) UpdateSensor(ctx context.Context, sensor sensors.Sensor) error
 	return nil
 }
 
-func sensorProfileDecoder(sensor sensors.Sensor) any {
+func (s *Storage) GetSensorProfile(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
+	if profileID == "" {
+		return types.SensorProfile{}, false, nil
+	}
+
+	log := logging.GetFromContext(ctx)
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
+		return types.SensorProfile{}, false, err
+	}
+	defer c.Release()
+
+	rows, err := c.Query(ctx, `
+		SELECT sp.name, sp.decoder, sp.description, sp.interval, spspt.sensor_profile_type_id as urn, spt.name as type_name
+		FROM sensor_profiles sp
+		JOIN sensor_profiles_sensor_profile_types spspt ON sp.sensor_profile_id = spspt.sensor_profile_id
+		JOIN sensor_profile_types spt ON spt.sensor_profile_type_id = spspt.sensor_profile_type_id
+		WHERE sp.sensor_profile_id = @sensor_profile_id`, pgx.NamedArgs{"sensor_profile_id": profileID})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return types.SensorProfile{}, false, nil
+		}
+		log.Error("failed to query sensor profile", "profile_id", profileID, "err", err.Error())
+		return types.SensorProfile{}, false, err
+	}
+	defer rows.Close()
+
+	profile := types.SensorProfile{}
+	profileTypes := []string{}
+
+	var name, decoder, description *string
+	var interval *int
+
+	for rows.Next() {
+		var urn string
+		var typeName string
+
+		err = rows.Scan(&name, &decoder, &description, &interval, &urn, &typeName)
+		if err != nil {
+			log.Error("failed to scan sensor profile row", "err", err.Error())
+			return types.SensorProfile{}, false, err
+		}
+
+		profileTypes = append(profileTypes, urn)
+	}
+
+	if err = rows.Err(); err != nil {
+		return types.SensorProfile{}, false, err
+	}
+
+	if name == nil || decoder == nil {
+		log.Error("incomplete sensor profile data", "profile_id", profileID)
+		return types.SensorProfile{}, false, errors.New("incomplete sensor profile data")
+	}
+
+	profile.Name = *name
+	profile.Decoder = *decoder
+
+	if interval != nil {
+		profile.Interval = *interval
+	}
+	profile.Types = profileTypes
+
+	return profile, true, nil
+}
+
+func sensorProfileDecoder(sensor types.Sensor) any {
 	if sensor.SensorProfile == nil || sensor.SensorProfile.Decoder == "" {
 		return nil
 	}
@@ -329,8 +397,8 @@ func normalizeSensorProfileTypes(values []string) []string {
 	return normalized
 }
 
-func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int) sensors.Sensor {
-	sensor := sensors.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name}
+func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int) types.Sensor {
+	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name}
 	if location.Valid {
 		sensor.Location = &types.Location{Latitude: location.P.Y, Longitude: location.P.X}
 	}

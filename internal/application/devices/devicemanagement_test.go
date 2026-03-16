@@ -9,7 +9,6 @@ import (
 	"time"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
-	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/google/uuid"
@@ -25,8 +24,8 @@ func TestDeviceStatusHandler(t *testing.T) {
 		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
-		GetSensorFunc: func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
-			return sensors.Sensor{
+		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
+			return types.Sensor{
 				SensorID: sensorID,
 				SensorProfile: &types.SensorProfile{
 					Decoder: "test",
@@ -115,8 +114,8 @@ func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
 		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
-		GetSensorFunc: func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
-			return sensors.Sensor{SensorID: sensorID}, true, nil
+		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
+			return types.Sensor{SensorID: sensorID}, true, nil
 		},
 		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 			return types.Device{}, false, nil
@@ -135,8 +134,8 @@ func TestAttachSensorRejectsAssignedSensor(t *testing.T) {
 		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil
 		},
-		GetSensorFunc: func(ctx context.Context, sensorID string) (sensors.Sensor, bool, error) {
-			return sensors.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
+			return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 		},
 		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 			return types.Device{DeviceID: "device-2", Tenant: "default"}, true, nil
