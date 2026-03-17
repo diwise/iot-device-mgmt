@@ -10,12 +10,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
+	"github.com/diwise/iot-device-mgmt/internal/application"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/go-chi/jwtauth/v5"
@@ -118,27 +120,11 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	exisitingDeviceUpdateFlag := true
 
-	config := storage.NewConfig(
-		"localhost",
-		"postgres",
-		"password",
-		"5432",
-		"postgres",
-		"disable",
-		exisitingDeviceUpdateFlag,
-	)
+	config := storage.NewConfig("localhost", "postgres", "postgres", "5432", "postgres", "disable")
 
-	p, err := storage.NewPool(ctx, config)
+	p, err := storage.New(ctx, config)
 	if err != nil {
 		t.Log("could not connect to postgres, will skip test")
-		t.SkipNow()
-	}
-
-	s := storage.NewWithPool(p)
-
-	err = s.Initialize(ctx)
-	if err != nil {
-		t.Log("could not initialize storage, will skip test")
 		t.SkipNow()
 	}
 
@@ -152,21 +138,25 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 	}
 
 	cfg, _ := parseExternalConfigFile(context.Background(), io.NopCloser(strings.NewReader(configYaml)))
-	dm := devicemanagement.New(s, &msgCtx, &cfg.DeviceManagementConfig)
-	as := alarms.New(alarms.NewStorage(s), &msgCtx, &cfg.AlarmServiceConfig)
 
-	err = storage.SeedLwm2mTypes(ctx, s, dm.Config().Types)
+	dm := devices.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
+	sm := sensors.New(p, p)
+	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
+
+	app := application.New(dm, sm, as, exisitingDeviceUpdateFlag)
+
+	err = app.SeedLwm2mTypes(ctx, cfg.DeviceManagementConfig.Types)
 	is.NoErr(err)
 
-	err = storage.SeedDeviceProfiles(ctx, s, dm.Config().DeviceProfiles)
+	err = app.SeedSensorProfiles(ctx, cfg.DeviceManagementConfig.DeviceProfiles)
 	is.NoErr(err)
 
-	err = storage.SeedDevices(ctx, s, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
+	err = app.SeedSensorsAndDevices(ctx, io.NopCloser(strings.NewReader(csvMock)), []string{"default"})
 	is.NoErr(err)
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, dm, as, s)
+	api.RegisterHandlers(ctx, mux, policies, app)
 
 	return mux, is
 }
