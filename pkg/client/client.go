@@ -39,6 +39,7 @@ type DeviceManagementClient interface {
 	GetTenants(ctx context.Context) ([]string, error)
 	GetDeviceProfiles(ctx context.Context) ([]types.SensorProfile, error)
 	GetDeviceProfile(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
+	Client() *http.Client
 }
 
 /*
@@ -186,6 +187,10 @@ func (dmc *devManagementClient) run(ctx context.Context) {
 	}
 
 	logger.Info("device management client exiting")
+}
+
+func (dmc *devManagementClient) Client() *http.Client {
+	return &dmc.httpClient
 }
 
 func (dmc *devManagementClient) Close(ctx context.Context) {
