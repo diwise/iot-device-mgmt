@@ -85,6 +85,14 @@ CREATE TABLE IF NOT EXISTS device_tags (
 	CONSTRAINT pk_device_tags PRIMARY KEY (name)
 );
 
+UPDATE devices SET sensor_id = NULL WHERE sensor_id = '';
+
+INSERT INTO sensors (sensor_id)
+SELECT DISTINCT sensor_id
+FROM devices
+WHERE sensor_id IS NOT NULL
+ON CONFLICT (sensor_id) DO NOTHING;
+
 CREATE TABLE IF NOT EXISTS sensor_status (
 	observed_at		timestamp with time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
 	sensor_id		TEXT 	NOT NULL,
@@ -203,14 +211,6 @@ BEGIN
 		ON CONFLICT (device_id, sensor_profile_type_id) DO NOTHING;
 	END IF;
 END $$;
-
-UPDATE devices SET sensor_id = NULL WHERE sensor_id = '';
-
-INSERT INTO sensors (sensor_id)
-SELECT DISTINCT sensor_id
-FROM devices
-WHERE sensor_id IS NOT NULL
-ON CONFLICT (sensor_id) DO NOTHING;
 
 DO $$
 BEGIN
