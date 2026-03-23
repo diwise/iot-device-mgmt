@@ -5,15 +5,15 @@ package client
 
 import (
 	"context"
-	"sync"
-
-	. "github.com/diwise/iot-device-mgmt/pkg/client"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"net/http"
+	"sync"
+	"github.com/diwise/iot-device-mgmt/pkg/client"
 )
 
 // Ensure, that DeviceManagementClientMock does implement DeviceManagementClient.
 // If this is not the case, regenerate this file with moq.
-var _ DeviceManagementClient = &DeviceManagementClientMock{}
+var _ client.DeviceManagementClient = &DeviceManagementClientMock{}
 
 // DeviceManagementClientMock is a mock implementation of DeviceManagementClient.
 //
@@ -24,13 +24,16 @@ var _ DeviceManagementClient = &DeviceManagementClientMock{}
 //			AttachSensorToDeviceFunc: func(ctx context.Context, deviceID string, sensorID string) error {
 //				panic("mock out the AttachSensorToDevice method")
 //			},
+//			ClientFunc: func() *http.Client {
+//				panic("mock out the Client method")
+//			},
 //			CloseFunc: func(ctx context.Context)  {
 //				panic("mock out the Close method")
 //			},
 //			CreateDeviceFunc: func(ctx context.Context, device types.Device) error {
 //				panic("mock out the CreateDevice method")
 //			},
-//			CreateSensorFunc: func(ctx context.Context, sensor types.SensorConfig) error {
+//			CreateSensorFunc: func(ctx context.Context, sensor types.SensorInputModel) error {
 //				panic("mock out the CreateSensor method")
 //			},
 //			DetachSensorFromDeviceFunc: func(ctx context.Context, deviceID string) error {
@@ -57,7 +60,7 @@ var _ DeviceManagementClient = &DeviceManagementClientMock{}
 //			ListSensorsFunc: func(ctx context.Context, query types.SensorsQuery) ([]Sensor, error) {
 //				panic("mock out the ListSensors method")
 //			},
-//			UpdateSensorFunc: func(ctx context.Context, sensor types.SensorConfig) error {
+//			UpdateSensorFunc: func(ctx context.Context, sensor types.SensorInputModel) error {
 //				panic("mock out the UpdateSensor method")
 //			},
 //		}
@@ -69,6 +72,9 @@ var _ DeviceManagementClient = &DeviceManagementClientMock{}
 type DeviceManagementClientMock struct {
 	// AttachSensorToDeviceFunc mocks the AttachSensorToDevice method.
 	AttachSensorToDeviceFunc func(ctx context.Context, deviceID string, sensorID string) error
+
+	// ClientFunc mocks the Client method.
+	ClientFunc func() *http.Client
 
 	// CloseFunc mocks the Close method.
 	CloseFunc func(ctx context.Context)
@@ -83,10 +89,10 @@ type DeviceManagementClientMock struct {
 	DetachSensorFromDeviceFunc func(ctx context.Context, deviceID string) error
 
 	// FindDeviceFromDevEUIFunc mocks the FindDeviceFromDevEUI method.
-	FindDeviceFromDevEUIFunc func(ctx context.Context, devEUI string) (Device, error)
+	FindDeviceFromDevEUIFunc func(ctx context.Context, devEUI string) (client.Device, error)
 
 	// FindDeviceFromInternalIDFunc mocks the FindDeviceFromInternalID method.
-	FindDeviceFromInternalIDFunc func(ctx context.Context, deviceID string) (Device, error)
+	FindDeviceFromInternalIDFunc func(ctx context.Context, deviceID string) (client.Device, error)
 
 	// GetDeviceProfileFunc mocks the GetDeviceProfile method.
 	GetDeviceProfileFunc func(ctx context.Context, deviceProfileID string) (*types.SensorProfile, error)
@@ -95,13 +101,13 @@ type DeviceManagementClientMock struct {
 	GetDeviceProfilesFunc func(ctx context.Context) ([]types.SensorProfile, error)
 
 	// GetSensorFunc mocks the GetSensor method.
-	GetSensorFunc func(ctx context.Context, sensorID string) (Sensor, error)
+	GetSensorFunc func(ctx context.Context, sensorID string) (client.Sensor, error)
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) ([]string, error)
 
 	// ListSensorsFunc mocks the ListSensors method.
-	ListSensorsFunc func(ctx context.Context, query types.SensorsQuery) ([]Sensor, error)
+	ListSensorsFunc func(ctx context.Context, query types.SensorsQuery) ([]client.Sensor, error)
 
 	// UpdateSensorFunc mocks the UpdateSensor method.
 	UpdateSensorFunc func(ctx context.Context, sensor types.SensorInputModel) error
@@ -116,6 +122,9 @@ type DeviceManagementClientMock struct {
 			DeviceID string
 			// SensorID is the sensorID argument value.
 			SensorID string
+		}
+		// Client holds details about calls to the Client method.
+		Client []struct {
 		}
 		// Close holds details about calls to the Close method.
 		Close []struct {
@@ -197,6 +206,7 @@ type DeviceManagementClientMock struct {
 		}
 	}
 	lockAttachSensorToDevice     sync.RWMutex
+	lockClient                   sync.RWMutex
 	lockClose                    sync.RWMutex
 	lockCreateDevice             sync.RWMutex
 	lockCreateSensor             sync.RWMutex
@@ -248,6 +258,33 @@ func (mock *DeviceManagementClientMock) AttachSensorToDeviceCalls() []struct {
 	mock.lockAttachSensorToDevice.RLock()
 	calls = mock.calls.AttachSensorToDevice
 	mock.lockAttachSensorToDevice.RUnlock()
+	return calls
+}
+
+// Client calls ClientFunc.
+func (mock *DeviceManagementClientMock) Client() *http.Client {
+	if mock.ClientFunc == nil {
+		panic("DeviceManagementClientMock.ClientFunc: method is nil but DeviceManagementClient.Client was just called")
+	}
+	callInfo := struct {
+	}{}
+	mock.lockClient.Lock()
+	mock.calls.Client = append(mock.calls.Client, callInfo)
+	mock.lockClient.Unlock()
+	return mock.ClientFunc()
+}
+
+// ClientCalls gets all the calls that were made to Client.
+// Check the length with:
+//
+//	len(mockedDeviceManagementClient.ClientCalls())
+func (mock *DeviceManagementClientMock) ClientCalls() []struct {
+} {
+	var calls []struct {
+	}
+	mock.lockClient.RLock()
+	calls = mock.calls.Client
+	mock.lockClient.RUnlock()
 	return calls
 }
 
@@ -392,7 +429,7 @@ func (mock *DeviceManagementClientMock) DetachSensorFromDeviceCalls() []struct {
 }
 
 // FindDeviceFromDevEUI calls FindDeviceFromDevEUIFunc.
-func (mock *DeviceManagementClientMock) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (Device, error) {
+func (mock *DeviceManagementClientMock) FindDeviceFromDevEUI(ctx context.Context, devEUI string) (client.Device, error) {
 	if mock.FindDeviceFromDevEUIFunc == nil {
 		panic("DeviceManagementClientMock.FindDeviceFromDevEUIFunc: method is nil but DeviceManagementClient.FindDeviceFromDevEUI was just called")
 	}
@@ -428,7 +465,7 @@ func (mock *DeviceManagementClientMock) FindDeviceFromDevEUICalls() []struct {
 }
 
 // FindDeviceFromInternalID calls FindDeviceFromInternalIDFunc.
-func (mock *DeviceManagementClientMock) FindDeviceFromInternalID(ctx context.Context, deviceID string) (Device, error) {
+func (mock *DeviceManagementClientMock) FindDeviceFromInternalID(ctx context.Context, deviceID string) (client.Device, error) {
 	if mock.FindDeviceFromInternalIDFunc == nil {
 		panic("DeviceManagementClientMock.FindDeviceFromInternalIDFunc: method is nil but DeviceManagementClient.FindDeviceFromInternalID was just called")
 	}
@@ -532,7 +569,7 @@ func (mock *DeviceManagementClientMock) GetDeviceProfilesCalls() []struct {
 }
 
 // GetSensor calls GetSensorFunc.
-func (mock *DeviceManagementClientMock) GetSensor(ctx context.Context, sensorID string) (Sensor, error) {
+func (mock *DeviceManagementClientMock) GetSensor(ctx context.Context, sensorID string) (client.Sensor, error) {
 	if mock.GetSensorFunc == nil {
 		panic("DeviceManagementClientMock.GetSensorFunc: method is nil but DeviceManagementClient.GetSensor was just called")
 	}
@@ -600,7 +637,7 @@ func (mock *DeviceManagementClientMock) GetTenantsCalls() []struct {
 }
 
 // ListSensors calls ListSensorsFunc.
-func (mock *DeviceManagementClientMock) ListSensors(ctx context.Context, query types.SensorsQuery) ([]Sensor, error) {
+func (mock *DeviceManagementClientMock) ListSensors(ctx context.Context, query types.SensorsQuery) ([]client.Sensor, error) {
 	if mock.ListSensorsFunc == nil {
 		panic("DeviceManagementClientMock.ListSensorsFunc: method is nil but DeviceManagementClient.ListSensors was just called")
 	}
