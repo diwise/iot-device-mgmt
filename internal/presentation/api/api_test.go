@@ -233,8 +233,8 @@ type deviceMocks struct {
 }
 
 type sensorReaderMock struct {
-	QueryFunc func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error)
-	GetFunc   func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
+	QueryFunc            func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error)
+	GetFunc              func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 	GetSensorProfileFunc func(ctx context.Context, profileID string) (types.SensorProfile, bool, error)
 }
 
@@ -886,16 +886,16 @@ func testUpdateSensor(t *testing.T, baseUrl string, mocks sensorMocks) {
 	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
-mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
-if profileID != "enviot" {
-t.Fatalf("expected profile id enviot, got %q", profileID)
-}
-return types.SensorProfile{
-Name:     "Enviot",
-Decoder:  "enviot",
-Interval: 60,
-}, true, nil
-}
+	mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
+		if profileID != "enviot" {
+			t.Fatalf("expected profile id enviot, got %q", profileID)
+		}
+		return types.SensorProfile{
+			Name:     "Enviot",
+			Decoder:  "enviot",
+			Interval: 60,
+		}, true, nil
+	}
 	mocks.writer.UpdateFunc = func(ctx context.Context, sensor types.Sensor) error {
 		if sensor.SensorID != testSensor.SensorID {
 			t.Fatalf("expected sensor id %q, got %q", testSensor.SensorID, sensor.SensorID)
@@ -917,16 +917,16 @@ func testUpdateSensorNotFound(t *testing.T, baseUrl string, mocks sensorMocks) {
 	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 		return types.Sensor{}, false, nil
 	}
-mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
-if profileID != "enviot" {
-t.Fatalf("expected profile id enviot, got %q", profileID)
-}
-return types.SensorProfile{
-Name:     "Enviot",
-Decoder:  "enviot",
-Interval: 60,
-}, true, nil
-}
+	mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
+		if profileID != "enviot" {
+			t.Fatalf("expected profile id enviot, got %q", profileID)
+		}
+		return types.SensorProfile{
+			Name:     "Enviot",
+			Decoder:  "enviot",
+			Interval: 60,
+		}, true, nil
+	}
 
 	payload := `{"sensorID":"missing","sensorProfileID":"enviot"}`
 	statusCode, _ := do(t, http.MethodPut, baseUrl+"/api/v0/sensors/missing", strings.NewReader(payload), map[string]string{"Content-Type": "application/json"})
@@ -939,16 +939,16 @@ func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorMoc
 	mocks.reader.GetFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 		return testSensor, true, nil
 	}
-mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
-if profileID != "enviot" {
-t.Fatalf("expected profile id enviot, got %q", profileID)
-}
-return types.SensorProfile{
-Name:     "Enviot",
-Decoder:  "enviot",
-Interval: 60,
-}, true, nil
-}
+	mocks.reader.GetSensorProfileFunc = func(ctx context.Context, profileID string) (types.SensorProfile, bool, error) {
+		if profileID != "enviot" {
+			t.Fatalf("expected profile id enviot, got %q", profileID)
+		}
+		return types.SensorProfile{
+			Name:     "Enviot",
+			Decoder:  "enviot",
+			Interval: 60,
+		}, true, nil
+	}
 	mocks.writer.UpdateFunc = func(ctx context.Context, sensor types.Sensor) error {
 		return errors.New("update failed")
 	}
