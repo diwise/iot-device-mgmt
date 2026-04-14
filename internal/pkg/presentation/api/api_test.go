@@ -441,7 +441,7 @@ func TestGetAlarmsWithFilterHandler(t *testing.T) {
 	for _, f := range calls[0].Conditions {
 		c = f(c)
 	}
-	is.Equal(c.AlarmType, "device_not_observed")
+	is.Equal(c.AlarmType, alarms.AlarmDeviceNotObserved)
 }
 
 func testSetup(t *testing.T) (*is.I, devicemanagement.DeviceManagement, *messaging.MsgContextMock, *storage.StoreMock, *slog.Logger, context.Context, *http.ServeMux) {
