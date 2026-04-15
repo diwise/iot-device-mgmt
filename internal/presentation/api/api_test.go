@@ -1167,7 +1167,10 @@ allow = response if {
             "default": [
                 "devices.create",
                 "devices.read",
-                "devices.update"
+                "devices.update",
+                "sensors.create",
+                "sensors.read",
+                "sensors.update"
             ]
         }
 	}
