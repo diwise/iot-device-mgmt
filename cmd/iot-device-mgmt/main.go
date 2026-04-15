@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -13,11 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/alarms"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/devicemanagement"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/application/watchdog"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/infrastructure/storage"
-	"github.com/diwise/iot-device-mgmt/internal/pkg/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/application"
+	"github.com/diwise/iot-device-mgmt/internal/application/alarms"
+	"github.com/diwise/iot-device-mgmt/internal/application/devices"
+	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
+	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
+	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -82,10 +83,10 @@ func main() {
 	exitIf(err, logger, "failed to start service runner")
 }
 
-func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, devices io.ReadCloser) (servicerunner.Runner[appConfig], error) {
-	defer policies.Close()
+func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile, devicesFile io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 
 	log := logging.GetFromContext(ctx)
+	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
 
 	probes := map[string]k8shandlers.ServiceProber{
 		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
@@ -93,14 +94,18 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	}
 
 	s, err := newStorage(ctx, flags)
-	exitIf(err, log, "could not create or connect to database")
+	exitIf(err, log, "could not connrect to, or create, database")
 
 	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
 	exitIf(err, log, "failed to init messenger")
 
-	var dm devicemanagement.DeviceManagement
-	var as alarms.AlarmService
+	var deviceAPI devices.DeviceAPIService
+	var sensorAPI sensors.SensorAPIService
+	var alarmsAPI alarms.AlarmAPIService
 	var wd watchdog.Watchdog
+	var deviceStatusHandler devices.DeviceStatusHandler
+
+	var app application.Management
 
 	_, runner := servicerunner.New(ctx, *cfg,
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
@@ -108,48 +113,50 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 		),
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
-				return api.RegisterHandlers(ctx, handler, policies, dm, as, s)
+				defer policiesFile.Close()
+				return api.RegisterHandlers(ctx, handler, policiesFile, app)
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
-			dm = devicemanagement.New(devicemanagement.NewStorage(s), messenger, &ac.DeviceManagementConfig)
-			as = alarms.New(alarms.NewStorage(s), messenger, &ac.AlarmServiceConfig)
-			wd = watchdog.New(as, &ac.WatchdogConfig)
+			svc := devices.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
+			deviceAPI = svc
+			deviceStatusHandler = svc
+			sensorAPI = sensors.New(s, s)
+			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
+			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
+
+			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
 
 			return nil
 		}),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
 
-			err = s.Initialize(ctx)
-			if err != nil {
-				return
-			}
-			err = storage.SeedLwm2mTypes(ctx, s, appCfg.DeviceManagementConfig.Types)
+			err = app.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedDeviceProfiles(ctx, s, appCfg.DeviceManagementConfig.DeviceProfiles)
+			err = app.SeedSensorProfiles(ctx, appCfg.DeviceManagementConfig.DeviceProfiles)
 			if err != nil {
 				return
 			}
 
-			err = storage.SeedDevices(ctx, s, devices, strings.Split(flags[allowedSeedTenants], ","))
+			err = app.SeedSensorsAndDevices(ctx, devicesFile, strings.Split(flags[allowedSeedTenants], ","))
 			if err != nil {
 				return
 			}
 
 			messenger.Start()
 
-			err = dm.RegisterTopicMessageHandler(ctx)
+			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
 			if err != nil {
 				return
 			}
 
-			err = as.RegisterTopicMessageHandler(ctx)
+			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, messenger)
 			if err != nil {
 				return
 			}
@@ -172,15 +179,8 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policies, de
 	return runner, nil
 }
 
-func newStorage(ctx context.Context, flags flagMap) (storage.Store, error) {
-
-	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
-
-	if flags[devmode] == "true" {
-		return &storage.StoreMock{}, fmt.Errorf("not implemented")
-	}
-
-	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode], seedExistingDevices))
+func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
+	return storage.New(ctx, storage.NewConfig(flags[dbHost], flags[dbUser], flags[dbPassword], flags[dbPort], flags[dbName], flags[dbSSLMode]))
 }
 
 func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConfig, error) {
@@ -197,12 +197,12 @@ func parseExternalConfigFile(_ context.Context, cfgFile io.ReadCloser) (*appConf
 		return nil, err
 	}
 
-	i := slices.IndexFunc(cfg.DeviceManagementConfig.DeviceProfiles, func(dp types.DeviceProfile) bool {
+	i := slices.IndexFunc(cfg.DeviceManagementConfig.DeviceProfiles, func(dp types.SensorProfile) bool {
 		return dp.Decoder == "unknown"
 	})
 
 	if i < 0 {
-		cfg.DeviceManagementConfig.DeviceProfiles = append(cfg.DeviceManagementConfig.DeviceProfiles, types.DeviceProfile{
+		cfg.DeviceManagementConfig.DeviceProfiles = append(cfg.DeviceManagementConfig.DeviceProfiles, types.SensorProfile{
 			Name:    "unknown",
 			Decoder: "unknown",
 		})
