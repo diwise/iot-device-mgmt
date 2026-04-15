@@ -7,4 +7,5 @@ type Sensors struct {
 	HasProfile  *bool
 	ProfileName string
 	Types       []string
+	Search      string
 }

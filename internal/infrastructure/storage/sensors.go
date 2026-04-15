@@ -55,6 +55,10 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 				AND LOWER(sppt.sensor_profile_type_id) = ANY(@profile_types)
 		)`)
 	}
+	if search := strings.TrimSpace(query.Search); search != "" {
+		args["search"] = "%" + search + "%"
+		where = append(where, "(s.sensor_id ILIKE @search OR s.name ILIKE @search)")
+	}
 
 	whereClause := ""
 	if len(where) > 0 {
