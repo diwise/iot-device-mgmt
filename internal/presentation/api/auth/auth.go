@@ -42,6 +42,16 @@ func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
 		validate_scopes = append(validate_scopes, string(s))
 	}
 
+	containsAllRequiredScopes := func(allowed map[Scope]struct{}) bool {
+		for _, requiredScope := range validate_scopes {
+			if _, ok := allowed[Scope(requiredScope)]; !ok {
+				return false
+			}
+		}
+
+		return true
+	}
+
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var err error
@@ -120,11 +130,16 @@ func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
 						return
 					}
 
-					accessObj[tenant] = map[Scope]struct{}{}
+					tenantScopes := map[Scope]struct{}{}
 
 					for _, s := range scopes {
 						scope := s.(string)
-						accessObj[tenant][Scope(scope)] = struct{}{}
+						tenantScopes[Scope(scope)] = struct{}{}
+					}
+
+					// only allow requests for this tenant if all required scopes are allowed
+					if containsAllRequiredScopes(tenantScopes) {
+						accessObj[tenant] = tenantScopes
 					}
 				}
 
