@@ -107,6 +107,8 @@ func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
 			query.ProfileName = value[0]
 		case "type", "types":
 			query.Types = append([]string(nil), value...)
+		case "search":
+			query.Search = value[0]
 		}
 	}
 
