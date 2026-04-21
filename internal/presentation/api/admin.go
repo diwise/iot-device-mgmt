@@ -129,7 +129,7 @@ func queryTenantsHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), auth.AnyScope)
 
 		_, span := tracer.Start(r.Context(), "query-tenants")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()

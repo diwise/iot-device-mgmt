@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -17,6 +18,13 @@ import (
 func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadSensors)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "query-sensors")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -60,6 +68,13 @@ func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadSensors)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		ctx, span := tracer.Start(r.Context(), "get-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
@@ -94,6 +109,13 @@ func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Handl
 func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), CreateSensors)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "create-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -147,6 +169,13 @@ func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateSensors)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "update-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()

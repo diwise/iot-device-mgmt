@@ -1,11 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1121,30 +1119,6 @@ func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMock
 	}
 }
 
-func createMultipartFileUpload(t *testing.T, fieldName, fileName, content string) (*bytes.Buffer, string) {
-	t.Helper()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile(fieldName, fileName)
-	if err != nil {
-		t.Fatalf("failed to create multipart file field: %v", err)
-	}
-
-	_, err = io.Copy(part, strings.NewReader(content))
-	if err != nil {
-		t.Fatalf("failed to write multipart content: %v", err)
-	}
-
-	err = writer.Close()
-	if err != nil {
-		t.Fatalf("failed to finalize multipart body: %v", err)
-	}
-
-	return body, writer.FormDataContentType()
-}
-
 func do(t *testing.T, method, url string, body io.Reader, headers ...map[string]string) (int, []byte) {
 	req, _ := http.NewRequest(method, url, body)
 	req.Header.Set("Authorization", "Bearer mock-token")
@@ -1180,13 +1154,6 @@ var testSensor = types.Sensor{
 	},
 }
 
-const csvMock string = `sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;key=value
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;_default;60;source;
-1234;intern-1234;0.0;0.0;air;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3304;enviot;name-1234;desc-1234;true;_test;60;källa;
-5678;intern-5678;0.0;0.0;soil;urn:oma:lwm2m:ext:3303;enviot;name-5678;desc-5678;true;_test;60;;
-`
-
 const policiesMock string = `
 package example.authz
 
@@ -1194,8 +1161,17 @@ package example.authz
 
 default allow := false
 
-allow = response {
+allow = response if {
 	response := {
-		"tenants": ["default"]
+		"access": {
+            "default": [
+                "devices.create",
+                "devices.read",
+                "devices.update",
+                "sensors.create",
+                "sensors.read",
+                "sensors.update"
+            ]
+        }
 	}
 }`
