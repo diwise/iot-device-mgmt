@@ -88,6 +88,26 @@ func TestWhere(t *testing.T) {
 	})
 }
 
+func TestDeviceWhere(t *testing.T) {
+	is := is.New(t)
+
+	t.Run("device query keeps plain urn filter behavior", func(t *testing.T) {
+		where := DeviceWhere(&Condition{Urn: "3303/0/5700"})
+		is.True(strings.Contains(where, "d.urn=@urn"))
+		is.True(!strings.Contains(where, "device_sensor_profile_types"))
+	})
+
+	t.Run("single device type urn uses relation filter", func(t *testing.T) {
+		where := DeviceWhere(&Condition{DeviceTypeUrns: []string{"urn:oma:lwm2m:ext:3303"}})
+		is.True(strings.Contains(where, "EXISTS (SELECT 1 FROM device_sensor_profile_types dspt WHERE dspt.device_id = d.device_id AND dspt.sensor_profile_type_id = @device_type_urn)"))
+	})
+
+	t.Run("multiple device type urns use relation any filter", func(t *testing.T) {
+		where := DeviceWhere(&Condition{DeviceTypeUrns: []string{"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"}})
+		is.True(strings.Contains(where, "EXISTS (SELECT 1 FROM device_sensor_profile_types dspt WHERE dspt.device_id = d.device_id AND dspt.sensor_profile_type_id = ANY(@device_type_urns))"))
+	})
+}
+
 func TestNamedArgs(t *testing.T) {
 	is := is.New(t)
 
@@ -151,6 +171,16 @@ func TestNamedArgs(t *testing.T) {
 		_, hasProfiles := args["profiles"]
 		is.True(hasProfile)
 		is.True(!hasProfiles)
+	})
+
+	t.Run("single device type urn uses dedicated key", func(t *testing.T) {
+		args := NamedArgs(&Condition{DeviceTypeUrns: []string{"urn:oma:lwm2m:ext:3303"}})
+		is.Equal(args["device_type_urn"], "urn:oma:lwm2m:ext:3303")
+	})
+
+	t.Run("multiple device type urns use dedicated array key", func(t *testing.T) {
+		args := NamedArgs(&Condition{DeviceTypeUrns: []string{"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"}})
+		is.Equal(fmt.Sprintf("%v", args["device_type_urns"]), "[urn:oma:lwm2m:ext:3303 urn:oma:lwm2m:ext:3304]")
 	})
 
 	t.Run("tenants key set when non-nil empty slice", func(t *testing.T) {
