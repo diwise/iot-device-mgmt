@@ -49,6 +49,10 @@ func TestApi(t *testing.T) {
 		testQueryDevices(t, server.URL, mocks)
 	})
 
+	t.Run("GET /devices with urns filter", func(t *testing.T) {
+		testQueryDevicesWithUrnsFilter(t, server.URL, mocks)
+	})
+
 	t.Run("GET /sensors", func(t *testing.T) {
 		testQuerySensors(t, server.URL, sensorMocks)
 	})
@@ -333,6 +337,26 @@ func testQueryDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
 
 	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
 		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testQueryDevicesWithUrnsFilter(t *testing.T, baseUrl string, mocks deviceMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		if len(query.Urns) != 2 || query.Urns[0] != "urn:oma:lwm2m:ext:3303" || query.Urns[1] != "urn:oma:lwm2m:ext:3304" {
+			t.Fatalf("expected urns filter, got %+v", query.Urns)
+		}
+		if query.Urn != "" {
+			t.Fatalf("expected legacy urn filter to be ignored for devices, got %q", query.Urn)
+		}
+
+		return types.Collection[types.Device]{
+			Data: []types.Device{testDevice},
+		}, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/devices?urn=3303/0/5700&urns=urn:oma:lwm2m:ext:3303&urns=urn:oma:lwm2m:ext:3304", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
 	}
 }
 

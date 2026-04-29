@@ -743,7 +743,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
 
-	condition := deviceConditionFromQuery(query.Filters)
+	condition := deviceConditionFromQuery(query)
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
 	if condition.Export {
@@ -836,7 +836,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 		LEFT JOIN metadata_list ml ON ml.device_id = d.device_id
 		%s
 		%s
-		%s;`, Where(condition), OrderByWithFallback(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
+		%s;`, DeviceWhere(condition), OrderByWithFallback(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
 
 	args := NamedArgs(condition)
 

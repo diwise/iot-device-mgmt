@@ -148,12 +148,15 @@ func alarmQueryFromValues(values url.Values, allowedTenants []string) (alarmquer
 }
 
 func deviceQueryFromValues(values url.Values, allowedTenants []string) (dmquery.Devices, error) {
-	filters, err := filtersFromValues(values, allowedTenants)
+	filters, err := filtersFromValues(filterValuesWithoutKeys(values, "urn", "urns"), allowedTenants)
 	if err != nil {
 		return dmquery.Devices{}, err
 	}
 
-	return dmquery.Devices{Filters: filters}, nil
+	return dmquery.Devices{
+		Filters: filters,
+		Urns:    append([]string(nil), values["urns"]...),
+	}, nil
 }
 
 func deviceStatusQueryFromValues(values url.Values, allowedTenants []string) (dmquery.Status, error) {
@@ -255,6 +258,24 @@ func filtersFromValues(values url.Values, allowedTenants []string) (dmquery.Filt
 	}
 
 	return filters, nil
+}
+
+func filterValuesWithoutKeys(values url.Values, keys ...string) url.Values {
+	filtered := make(url.Values, len(values))
+	skip := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		skip[strings.ToLower(key)] = struct{}{}
+	}
+
+	for key, value := range values {
+		if _, ok := skip[strings.ToLower(key)]; ok {
+			continue
+		}
+
+		filtered[key] = append([]string(nil), value...)
+	}
+
+	return filtered
 }
 
 func boundsFromValue(value string) (*types.Bounds, error) {

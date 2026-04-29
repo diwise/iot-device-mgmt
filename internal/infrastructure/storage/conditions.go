@@ -44,8 +44,9 @@ type Condition struct {
 
 	Bounds *Box
 
-	Name string
-	Urn  string
+	Name           string
+	Urn            string
+	DeviceTypeUrns []string
 
 	IncludeDeleted bool
 
@@ -366,6 +367,14 @@ func extractCoordsFromQuery(bounds string) Bounds {
 }
 
 func Where(c *Condition) string {
+	return where(c, nil)
+}
+
+func DeviceWhere(c *Condition) string {
+	return where(c, deviceTypeUrnWhere(c))
+}
+
+func where(c *Condition, extra []string) string {
 	where := []string{}
 
 	if c.DeviceID != "" {
@@ -434,6 +443,8 @@ func Where(c *Condition) string {
 		where = append(where, "a.type=@alarmtype")
 	}
 
+	where = append(where, extra...)
+
 	if len(c.Metadata) > 0 {
 		for k := range c.Metadata {
 			metadataWhere := fmt.Sprintf("EXISTS (SELECT 1 FROM device_metadata dm WHERE dm.device_id = d.device_id AND dm.key = @meta_key_%s", k)
@@ -454,6 +465,18 @@ func Where(c *Condition) string {
 	}
 
 	return "WHERE " + strings.Join(where, " AND ")
+}
+
+func deviceTypeUrnWhere(c *Condition) []string {
+	if len(c.DeviceTypeUrns) == 1 && c.DeviceTypeUrns[0] != "" {
+		return []string{"EXISTS (SELECT 1 FROM device_sensor_profile_types dspt WHERE dspt.device_id = d.device_id AND dspt.sensor_profile_type_id = @device_type_urn)"}
+	}
+
+	if len(c.DeviceTypeUrns) > 1 {
+		return []string{"EXISTS (SELECT 1 FROM device_sensor_profile_types dspt WHERE dspt.device_id = d.device_id AND dspt.sensor_profile_type_id = ANY(@device_type_urns))"}
+	}
+
+	return nil
 }
 
 func NamedArgs(c *Condition) pgx.NamedArgs {
@@ -513,6 +536,12 @@ func NamedArgs(c *Condition) pgx.NamedArgs {
 	if c.Urn != "" {
 		args["urn"] = c.Urn
 	}
+	if len(c.DeviceTypeUrns) == 1 && c.DeviceTypeUrns[0] != "" {
+		args["device_type_urn"] = c.DeviceTypeUrns[0]
+	}
+	if len(c.DeviceTypeUrns) > 1 {
+		args["device_type_urns"] = c.DeviceTypeUrns
+	}
 	if len(c.Metadata) > 0 {
 		for k, v := range c.Metadata {
 			args[fmt.Sprintf("meta_key_%s", k)] = k
@@ -571,54 +600,86 @@ func OrderByWithFallback(c *Condition, fallback string) string {
 	return orderBy
 }
 
-func deviceConditionFromQuery(filters dmquery.Filters) *Condition {
+func deviceConditionFromQuery(query dmquery.Devices) *Condition {
 	condition := &Condition{
-		DeviceID:    filters.DeviceID,
-		SensorID:    filters.SensorID,
-		Active:      filters.Active,
-		Online:      filters.Online,
-		Types:       filters.Types,
-		Tenants:     filters.AllowedTenants,
-		Tenant:      filters.Tenant,
-		ProfileName: filters.ProfileNames,
-		Metadata:    filters.Metadata,
-		Search:      filters.Search,
-		Name:        filters.Name,
-		Urn:         filters.Urn,
-		Export:      filters.Export,
-		Offset:      filters.Offset,
-		Limit:       filters.Limit,
+		DeviceID:       query.DeviceID,
+		SensorID:       query.SensorID,
+		Active:         query.Active,
+		Online:         query.Online,
+		Types:          query.Types,
+		Tenants:        query.AllowedTenants,
+		Tenant:         query.Tenant,
+		ProfileName:    query.ProfileNames,
+		Metadata:       query.Metadata,
+		Search:         query.Search,
+		Name:           query.Name,
+		Urn:            query.Urn,
+		DeviceTypeUrns: query.Urns,
+		Export:         query.Export,
+		Offset:         query.Offset,
+		Limit:          query.Limit,
 	}
 
-	if filters.Bounds != nil {
+	if query.Bounds != nil {
 		condition.Bounds = &Box{
-			MinX: filters.Bounds.MinLon,
-			MaxX: filters.Bounds.MaxLon,
-			MinY: filters.Bounds.MinLat,
-			MaxY: filters.Bounds.MaxLat,
+			MinX: query.Bounds.MinLon,
+			MaxX: query.Bounds.MaxLon,
+			MinY: query.Bounds.MinLat,
+			MaxY: query.Bounds.MaxLat,
 		}
 	}
 
-	if filters.LastSeen != nil {
-		condition.LastSeen = *filters.LastSeen
+	if query.LastSeen != nil {
+		condition.LastSeen = *query.LastSeen
 	}
 
-	if filters.SortBy != "" {
-		condition = WithSortBy(filters.SortBy)(condition)
-		condition = WithSortDesc(filters.SortDesc)(condition)
+	if query.SortBy != "" {
+		condition = WithSortBy(query.SortBy)(condition)
+		condition = WithSortDesc(query.SortDesc)(condition)
 	}
 
 	return condition
 }
 
 func statusConditionFromQuery(deviceID string, query dmquery.Status) *Condition {
-	condition := deviceConditionFromQuery(query.Filters)
+	condition := &Condition{
+		DeviceID:    query.DeviceID,
+		SensorID:    query.SensorID,
+		Active:      query.Active,
+		Online:      query.Online,
+		Types:       query.Types,
+		Tenants:     query.AllowedTenants,
+		Tenant:      query.Tenant,
+		ProfileName: query.ProfileNames,
+		Metadata:    query.Metadata,
+		Search:      query.Search,
+		Name:        query.Name,
+		Urn:         query.Urn,
+		Export:      query.Export,
+		Offset:      query.Offset,
+		Limit:       query.Limit,
+	}
+	if query.Bounds != nil {
+		condition.Bounds = &Box{
+			MinX: query.Bounds.MinLon,
+			MaxX: query.Bounds.MaxLon,
+			MinY: query.Bounds.MinLat,
+			MaxY: query.Bounds.MaxLat,
+		}
+	}
+	if query.LastSeen != nil {
+		condition.LastSeen = *query.LastSeen
+	}
+	if query.SortBy != "" {
+		condition = WithSortBy(query.SortBy)(condition)
+		condition = WithSortDesc(query.SortDesc)(condition)
+	}
 	condition.DeviceID = deviceID
 	return condition
 }
 
 func measurementConditionFromQuery(deviceID string, query dmquery.Measurements) *Condition {
-	condition := deviceConditionFromQuery(query.Filters)
+	condition := statusConditionFromQuery(deviceID, dmquery.Status{Filters: query.Filters})
 	condition.DeviceID = deviceID
 	condition.IncludeDeleted = true
 	return condition

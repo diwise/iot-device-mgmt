@@ -30,6 +30,7 @@ type Filters struct {
 
 type Devices struct {
 	Filters
+	Urns []string
 }
 
 type Status struct {
