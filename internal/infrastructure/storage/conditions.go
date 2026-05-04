@@ -600,7 +600,7 @@ func OrderByWithFallback(c *Condition, fallback string) string {
 	return orderBy
 }
 
-func deviceConditionFromQuery(query dmquery.Devices) *Condition {
+func deviceConditionFromQuery(query dmquery.DeviceFilters) *Condition {
 	condition := &Condition{
 		DeviceID:       query.DeviceID,
 		SensorID:       query.SensorID,
@@ -641,7 +641,7 @@ func deviceConditionFromQuery(query dmquery.Devices) *Condition {
 	return condition
 }
 
-func statusConditionFromQuery(deviceID string, query dmquery.Status) *Condition {
+func statusConditionFromQuery(deviceID string, query dmquery.StatusFilters) *Condition {
 	condition := &Condition{
 		DeviceID:    query.DeviceID,
 		SensorID:    query.SensorID,
@@ -678,8 +678,8 @@ func statusConditionFromQuery(deviceID string, query dmquery.Status) *Condition 
 	return condition
 }
 
-func measurementConditionFromQuery(deviceID string, query dmquery.Measurements) *Condition {
-	condition := statusConditionFromQuery(deviceID, dmquery.Status{Filters: query.Filters})
+func measurementConditionFromQuery(deviceID string, query dmquery.MeasurementFilters) *Condition {
+	condition := statusConditionFromQuery(deviceID, dmquery.StatusFilters{Filters: query.Filters})
 	condition.DeviceID = deviceID
 	condition.IncludeDeleted = true
 	return condition

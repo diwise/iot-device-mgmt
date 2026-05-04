@@ -527,7 +527,7 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := statusConditionFromQuery(deviceID, query)
@@ -740,7 +740,7 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 	return d, true, nil
 }
 
-func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+func (s *Storage) Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := deviceConditionFromQuery(query)
@@ -1020,7 +1020,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 	}, nil
 }
 
-func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := measurementConditionFromQuery(deviceID, query)

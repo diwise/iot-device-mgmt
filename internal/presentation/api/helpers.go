@@ -147,34 +147,34 @@ func alarmQueryFromValues(values url.Values, allowedTenants []string) (alarmquer
 	return query, nil
 }
 
-func deviceQueryFromValues(values url.Values, allowedTenants []string) (dmquery.Devices, error) {
+func deviceQueryFromValues(values url.Values, allowedTenants []string) (dmquery.DeviceFilters, error) {
 	filters, err := filtersFromValues(filterValuesWithoutKeys(values, "urn", "urns"), allowedTenants)
 	if err != nil {
-		return dmquery.Devices{}, err
+		return dmquery.DeviceFilters{}, err
 	}
 
-	return dmquery.Devices{
+	return dmquery.DeviceFilters{
 		Filters: filters,
 		Urns:    append([]string(nil), values["urns"]...),
 	}, nil
 }
 
-func deviceStatusQueryFromValues(values url.Values, allowedTenants []string) (dmquery.Status, error) {
+func deviceStatusQueryFromValues(values url.Values, allowedTenants []string) (dmquery.StatusFilters, error) {
 	filters, err := filtersFromValues(values, allowedTenants)
 	if err != nil {
-		return dmquery.Status{}, err
+		return dmquery.StatusFilters{}, err
 	}
 
-	return dmquery.Status{Filters: filters}, nil
+	return dmquery.StatusFilters{Filters: filters}, nil
 }
 
-func deviceMeasurementsQueryFromValues(values url.Values, allowedTenants []string) (dmquery.Measurements, error) {
+func deviceMeasurementsQueryFromValues(values url.Values, allowedTenants []string) (dmquery.MeasurementFilters, error) {
 	filters, err := filtersFromValues(values, allowedTenants)
 	if err != nil {
-		return dmquery.Measurements{}, err
+		return dmquery.MeasurementFilters{}, err
 	}
 
-	return dmquery.Measurements{Filters: filters}, nil
+	return dmquery.MeasurementFilters{Filters: filters}, nil
 }
 
 func filtersFromValues(values url.Values, allowedTenants []string) (dmquery.Filters, error) {

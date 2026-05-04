@@ -8,7 +8,7 @@ import (
 )
 
 func (s service) AttachSensor(ctx context.Context, deviceID, sensorID string, tenants []string) error {
-	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
 	if err != nil {
 		return err
 	}
@@ -30,7 +30,7 @@ func (s service) AttachSensor(ctx context.Context, deviceID, sensorID string, te
 }
 
 func (s service) DetachSensor(ctx context.Context, deviceID string, tenants []string) error {
-	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
 	if err != nil {
 		return err
 	}
