@@ -49,6 +49,10 @@ func TestApi(t *testing.T) {
 		testQueryDevices(t, server.URL, mocks)
 	})
 
+	t.Run("GET /devices with urns filter", func(t *testing.T) {
+		testQueryDevicesWithUrnsFilter(t, server.URL, mocks)
+	})
+
 	t.Run("GET /sensors", func(t *testing.T) {
 		testQuerySensors(t, server.URL, sensorMocks)
 	})
@@ -319,7 +323,7 @@ func newDeviceMocks() deviceMocks {
 }
 
 func testQueryDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Data: []types.Device{testDevice},
 		}
@@ -333,6 +337,26 @@ func testQueryDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
 
 	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
 		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
+func testQueryDevicesWithUrnsFilter(t *testing.T, baseUrl string, mocks deviceMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+		if len(query.Urns) != 2 || query.Urns[0] != "urn:oma:lwm2m:ext:3303" || query.Urns[1] != "urn:oma:lwm2m:ext:3304" {
+			t.Fatalf("expected urns filter, got %+v", query.Urns)
+		}
+		if query.Urn != "" {
+			t.Fatalf("expected legacy urn filter to be ignored for devices, got %q", query.Urn)
+		}
+
+		return types.Collection[types.Device]{
+			Data: []types.Device{testDevice},
+		}, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/devices?urn=3303/0/5700&urns=urn:oma:lwm2m:ext:3303&urns=urn:oma:lwm2m:ext:3304", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
 	}
 }
 
@@ -462,7 +486,7 @@ func testQueryDevicesBySensorID(t *testing.T, baseUrl string, mocks deviceMocks)
 }
 
 func testGetDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		collection := types.Collection[types.Device]{
 			Count: 1,
 			Data:  []types.Device{testDevice},
@@ -481,7 +505,7 @@ func testGetDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+	mocks.reader.GetDeviceStatusFunc = func(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 		collection := types.Collection[types.SensorStatus]{
 			Data: []types.SensorStatus{
 				{
@@ -503,7 +527,7 @@ func testDeviceStatus(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Count: 1,
 			Data:  []types.Device{testDevice},
@@ -533,7 +557,7 @@ func testDeviceAlarms(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testDeviceMeasurements(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+	mocks.reader.GetDeviceMeasurementsFunc = func(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 		collection := types.Collection[types.Measurement]{
 			Data: []types.Measurement{
 				{
@@ -795,7 +819,7 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		return nil
 	}
 
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{
 			Data: []types.Device{},
 		}, nil
@@ -859,7 +883,7 @@ func testCreateSensorDuplicate(t *testing.T, baseUrl string, mocks sensorMocks) 
 }
 
 func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -961,7 +985,7 @@ func testUpdateSensorInternalError(t *testing.T, baseUrl string, mocks sensorMoc
 }
 
 func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 0}, nil
 	}
 
@@ -973,7 +997,7 @@ func testUpdateDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.writer.CreateOrUpdateDeviceFunc = func(ctx context.Context, d types.Device) error {
@@ -988,7 +1012,7 @@ func testUpdateDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMoc
 }
 
 func testPatchDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.writer.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {
@@ -1021,7 +1045,7 @@ func testPatchDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -1048,7 +1072,7 @@ func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -1066,7 +1090,7 @@ func testAttachSensorToDeviceConflict(t *testing.T, baseUrl string, mocks device
 }
 
 func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.writer.UnassignSensorFunc = func(ctx context.Context, deviceID string) error {
@@ -1083,7 +1107,7 @@ func testDetachSensorFromDevice(t *testing.T, baseUrl string, mocks deviceMocks)
 }
 
 func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 
@@ -1095,7 +1119,7 @@ func testPatchDeviceInvalidField(t *testing.T, baseUrl string, mocks deviceMocks
 }
 
 func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 0}, nil
 	}
 
@@ -1107,7 +1131,7 @@ func testPatchDeviceNotFound(t *testing.T, baseUrl string, mocks deviceMocks) {
 }
 
 func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMocks) {
-	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.writer.UpdateDeviceFunc = func(ctx context.Context, deviceID string, active *bool, name, description, environment, source, tenant *string, location *types.Location, interval *int) error {

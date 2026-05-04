@@ -59,16 +59,16 @@ type DeviceReaderMock struct {
 	GetSensorFunc func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
-	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
+	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
-	GetDeviceStatusFunc func(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error)
+	GetDeviceStatusFunc func(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
 
 	// QueryFunc mocks the Query method.
-	QueryFunc func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
+	QueryFunc func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -100,7 +100,7 @@ type DeviceReaderMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Query is the query argument value.
-			Query dmquery.Measurements
+			Query dmquery.MeasurementFilters
 		}
 		// GetDeviceStatus holds details about calls to the GetDeviceStatus method.
 		GetDeviceStatus []struct {
@@ -109,7 +109,7 @@ type DeviceReaderMock struct {
 			// DeviceID is the deviceID argument value.
 			DeviceID string
 			// Query is the query argument value.
-			Query dmquery.Status
+			Query dmquery.StatusFilters
 		}
 		// GetTenants holds details about calls to the GetTenants method.
 		GetTenants []struct {
@@ -121,7 +121,7 @@ type DeviceReaderMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// Query is the query argument value.
-			Query dmquery.Devices
+			Query dmquery.DeviceFilters
 		}
 	}
 	lockGetDeviceAlarms       sync.RWMutex
@@ -242,14 +242,14 @@ func (mock *DeviceReaderMock) GetSensorCalls() []struct {
 }
 
 // GetDeviceMeasurements calls GetDeviceMeasurementsFunc.
-func (mock *DeviceReaderMock) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+func (mock *DeviceReaderMock) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 	if mock.GetDeviceMeasurementsFunc == nil {
 		panic("DeviceReaderMock.GetDeviceMeasurementsFunc: method is nil but DeviceReader.GetDeviceMeasurements was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Query    dmquery.Measurements
+		Query    dmquery.MeasurementFilters
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
@@ -268,12 +268,12 @@ func (mock *DeviceReaderMock) GetDeviceMeasurements(ctx context.Context, deviceI
 func (mock *DeviceReaderMock) GetDeviceMeasurementsCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Query    dmquery.Measurements
+	Query    dmquery.MeasurementFilters
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Query    dmquery.Measurements
+		Query    dmquery.MeasurementFilters
 	}
 	mock.lockGetDeviceMeasurements.RLock()
 	calls = mock.calls.GetDeviceMeasurements
@@ -282,14 +282,14 @@ func (mock *DeviceReaderMock) GetDeviceMeasurementsCalls() []struct {
 }
 
 // GetDeviceStatus calls GetDeviceStatusFunc.
-func (mock *DeviceReaderMock) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+func (mock *DeviceReaderMock) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 	if mock.GetDeviceStatusFunc == nil {
 		panic("DeviceReaderMock.GetDeviceStatusFunc: method is nil but DeviceReader.GetDeviceStatus was just called")
 	}
 	callInfo := struct {
 		Ctx      context.Context
 		DeviceID string
-		Query    dmquery.Status
+		Query    dmquery.StatusFilters
 	}{
 		Ctx:      ctx,
 		DeviceID: deviceID,
@@ -308,12 +308,12 @@ func (mock *DeviceReaderMock) GetDeviceStatus(ctx context.Context, deviceID stri
 func (mock *DeviceReaderMock) GetDeviceStatusCalls() []struct {
 	Ctx      context.Context
 	DeviceID string
-	Query    dmquery.Status
+	Query    dmquery.StatusFilters
 } {
 	var calls []struct {
 		Ctx      context.Context
 		DeviceID string
-		Query    dmquery.Status
+		Query    dmquery.StatusFilters
 	}
 	mock.lockGetDeviceStatus.RLock()
 	calls = mock.calls.GetDeviceStatus
@@ -354,13 +354,13 @@ func (mock *DeviceReaderMock) GetTenantsCalls() []struct {
 }
 
 // Query calls QueryFunc.
-func (mock *DeviceReaderMock) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+func (mock *DeviceReaderMock) Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 	if mock.QueryFunc == nil {
 		panic("DeviceReaderMock.QueryFunc: method is nil but DeviceReader.Query was just called")
 	}
 	callInfo := struct {
 		Ctx   context.Context
-		Query dmquery.Devices
+		Query dmquery.DeviceFilters
 	}{
 		Ctx:   ctx,
 		Query: query,
@@ -377,11 +377,11 @@ func (mock *DeviceReaderMock) Query(ctx context.Context, query dmquery.Devices) 
 //	len(mockedDeviceReader.QueryCalls())
 func (mock *DeviceReaderMock) QueryCalls() []struct {
 	Ctx   context.Context
-	Query dmquery.Devices
+	Query dmquery.DeviceFilters
 } {
 	var calls []struct {
 		Ctx   context.Context
-		Query dmquery.Devices
+		Query dmquery.DeviceFilters
 	}
 	mock.lockQuery.RLock()
 	calls = mock.calls.Query

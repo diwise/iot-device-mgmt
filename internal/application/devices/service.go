@@ -18,13 +18,13 @@ var ErrSensorAlreadyAssigned = errSensorAlreadyAssigned
 var ErrSensorProfileRequired = errSensorProfileRequired
 
 type DeviceReader interface {
-	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
+	Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error)
 	GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
-	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
-	GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error)
+	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
+	GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
 }
 
 type DeviceWriter interface {
@@ -50,10 +50,10 @@ type DeviceProfileStore interface {
 type DeviceQueryService interface {
 	DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error)
 	Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error)
-	Status(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error)
+	Status(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
 	Alarms(ctx context.Context, deviceID string, tenants []string) (types.Collection[types.AlarmDetails], error)
-	Measurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error)
-	Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error)
+	Measurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
+	Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
 	Tenants(ctx context.Context) (types.Collection[string], error)
 	Lwm2mTypes(ctx context.Context, urn ...string) (types.Collection[types.Lwm2mType], error)
 	Profiles(ctx context.Context, name ...string) (types.Collection[types.SensorProfile], error)

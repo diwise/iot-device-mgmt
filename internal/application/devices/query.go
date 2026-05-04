@@ -31,7 +31,7 @@ func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []
 }
 
 func (s service) Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-	result, err := s.reader.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{
 		DeviceID:       deviceID,
 		AllowedTenants: tenants,
 	}})
@@ -46,7 +46,7 @@ func (s service) Device(ctx context.Context, deviceID string, tenants []string) 
 	return result.Data[0], nil
 }
 
-func (s service) Status(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+func (s service) Status(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 	if deviceID == "" {
 		return types.Collection[types.SensorStatus]{}, ErrDeviceNotFound
 	}
@@ -67,7 +67,7 @@ func (s service) Alarms(ctx context.Context, deviceID string, tenants []string) 
 	return s.reader.GetDeviceAlarms(ctx, deviceID)
 }
 
-func (s service) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+func (s service) Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 	return s.reader.Query(ctx, query)
 }
 
@@ -155,7 +155,7 @@ func (s service) Profiles(ctx context.Context, name ...string) (types.Collection
 	return collection, nil
 }
 
-func (s service) Measurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+func (s service) Measurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 	if len(query.AllowedTenants) == 0 {
 		return types.Collection[types.Measurement]{}, ErrMissingTenant
 	}

@@ -21,7 +21,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 	ctx := context.Background()
 
 	reader := &DeviceReaderMock{
-		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -111,7 +111,7 @@ func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
 	is := is.New(t)
 
 	reader := &DeviceReaderMock{
-		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -131,7 +131,7 @@ func TestAttachSensorRejectsAssignedSensor(t *testing.T) {
 	is := is.New(t)
 
 	reader := &DeviceReaderMock{
-		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
@@ -152,7 +152,7 @@ func TestDetachSensorCallsWriter(t *testing.T) {
 	called := false
 
 	reader := &DeviceReaderMock{
-		QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default", SensorID: "sensor-1"}}}, nil
 		},
 	}
