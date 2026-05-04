@@ -28,14 +28,15 @@ type Filters struct {
 	Limit          *int
 }
 
-type Devices struct {
+type DeviceFilters struct {
+	Filters
+	Urns []string
+}
+
+type StatusFilters struct {
 	Filters
 }
 
-type Status struct {
-	Filters
-}
-
-type Measurements struct {
+type MeasurementFilters struct {
 	Filters
 }

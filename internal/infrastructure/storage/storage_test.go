@@ -342,7 +342,7 @@ func TestStorage(t *testing.T) {
 	})
 
 	t.Run("query", func(t *testing.T) {
-		devices, err := s.Query(ctx, dmquery.Devices{Filters: dmquery.Filters{SensorID: sensorID}})
+		devices, err := s.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{SensorID: sensorID}})
 		if err != nil {
 			t.Fatalf("failed to query devices: %v", err)
 		}

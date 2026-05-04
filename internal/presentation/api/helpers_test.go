@@ -206,6 +206,7 @@ func TestDeviceQueryFromValues(t *testing.T) {
 		"tenant":             {"tenant-a"},
 		"name":               {"sensor name"},
 		"urn":                {"3303/0/5700"},
+		"urns":               {"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"},
 		"export":             {"true"},
 		"lastseen":           {"2024-01-02T03:04:05"},
 		"metadata[building]": {"alpha"},
@@ -243,8 +244,11 @@ func TestDeviceQueryFromValues(t *testing.T) {
 	if len(query.ProfileNames) != 1 || query.ProfileNames[0] != "profile-name" {
 		t.Fatalf("expected profile names, got %+v", query.ProfileNames)
 	}
-	if query.Search != "kitchen" || query.Tenant != "tenant-a" || query.Name != "sensor name" || query.Urn != "3303/0/5700" {
+	if query.Search != "kitchen" || query.Tenant != "tenant-a" || query.Name != "sensor name" || query.Urn != "" {
 		t.Fatalf("expected scalar filters to be preserved, got %+v", query.Filters)
+	}
+	if len(query.Urns) != 2 || query.Urns[0] != "urn:oma:lwm2m:ext:3303" || query.Urns[1] != "urn:oma:lwm2m:ext:3304" {
+		t.Fatalf("expected device urns to be preserved, got %+v", query.Urns)
 	}
 	if !query.Export {
 		t.Fatalf("expected export flag to be set")

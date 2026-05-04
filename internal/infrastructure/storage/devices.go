@@ -527,7 +527,7 @@ func (s *Storage) AddDeviceStatus(ctx context.Context, status types.StatusMessag
 	return tx.Commit(ctx)
 }
 
-func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+func (s *Storage) GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := statusConditionFromQuery(deviceID, query)
@@ -740,10 +740,10 @@ func (s *Storage) GetDeviceBySensorID(ctx context.Context, sensorID string) (typ
 	return d, true, nil
 }
 
-func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+func (s *Storage) Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 	log := logging.GetFromContext(ctx)
 
-	condition := deviceConditionFromQuery(query.Filters)
+	condition := deviceConditionFromQuery(query)
 	offsetLimit, offset, limit := OffsetLimit(condition, 0, 10)
 
 	if condition.Export {
@@ -836,7 +836,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 		LEFT JOIN metadata_list ml ON ml.device_id = d.device_id
 		%s
 		%s
-		%s;`, Where(condition), OrderByWithFallback(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
+		%s;`, DeviceWhere(condition), OrderByWithFallback(condition, "ORDER BY active DESC, state_observed_at DESC NULLS LAST, device_id ASC"), offsetLimit)
 
 	args := NamedArgs(condition)
 
@@ -1020,7 +1020,7 @@ func (s *Storage) Query(ctx context.Context, query dmquery.Devices) (types.Colle
 	}, nil
 }
 
-func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 	log := logging.GetFromContext(ctx)
 
 	condition := measurementConditionFromQuery(deviceID, query)
