@@ -21,7 +21,13 @@ type attachSensorRequest struct {
 func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "attach-device-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -78,7 +84,13 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) h
 func detachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "detach-device-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()

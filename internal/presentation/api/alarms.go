@@ -1,6 +1,7 @@
 package api
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 
@@ -14,7 +15,12 @@ func getAlarmsHandler(log *slog.Logger, svc alarms.AlarmAPIService) http.Handler
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "get-alarms")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
