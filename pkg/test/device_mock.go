@@ -4,8 +4,8 @@
 package client
 
 import (
-	"sync"
 	"github.com/diwise/iot-device-mgmt/pkg/client"
+	"sync"
 )
 
 // Ensure, that DeviceMock does implement Device.

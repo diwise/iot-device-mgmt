@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"github.com/diwise/service-chassis/pkg/infrastructure/env"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -45,11 +46,12 @@ func newPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
 		return nil, err
 	}
 
-	poolConfig.MaxConns = 10
-	poolConfig.MinConns = 0
-	poolConfig.MaxConnLifetime = time.Hour
-	poolConfig.MaxConnIdleTime = 30 * time.Minute
-	poolConfig.HealthCheckPeriod = time.Minute
+	poolConfig.MaxConns = env.GetVariableOrDefaultAs(ctx, "POSTGRES_MAX_CONNS", int32(10))
+	poolConfig.MinConns = env.GetVariableOrDefaultAs(ctx, "POSTGRES_MIN_CONNS", int32(2))
+	poolConfig.MaxConnLifetime = env.GetVariableOrDefaultAs(ctx, "POSTGRES_MAX_CONN_LIFETIME", 30*time.Minute)
+	poolConfig.MaxConnIdleTime = env.GetVariableOrDefaultAs(ctx, "POSTGRES_MAX_CONN_IDLE_TIME", 5*time.Minute)
+	poolConfig.HealthCheckPeriod = env.GetVariableOrDefaultAs(ctx, "POSTGRES_HEALTH_CHECK_PERIOD", 30*time.Second)
+
 	poolConfig.ConnConfig.RuntimeParams["application_name"] = "iot-device-mgmt"
 
 	p, err := pgxpool.NewWithConfig(ctx, poolConfig)

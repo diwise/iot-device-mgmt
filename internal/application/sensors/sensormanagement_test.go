@@ -11,8 +11,8 @@ import (
 )
 
 type readerStub struct {
-	queryFunc func(context.Context, sensorquery.Sensors) (types.Collection[types.Sensor], error)
-	getFunc   func(context.Context, string) (types.Sensor, bool, error)
+	queryFunc            func(context.Context, sensorquery.Sensors) (types.Collection[types.Sensor], error)
+	getFunc              func(context.Context, string) (types.Sensor, bool, error)
 	getSensorProfileFunc func(context.Context, string) (types.SensorProfile, bool, error)
 }
 
