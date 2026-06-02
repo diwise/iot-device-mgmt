@@ -3,6 +3,7 @@
 Device management service.
 
 # Design
+
 ```mermaid
 flowchart LR
     api --http--> iot-core
