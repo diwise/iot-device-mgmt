@@ -213,6 +213,15 @@ func GetTenantsWithAllowedScopes(ctx context.Context, scopes ...Scope) []string 
 	return tenants
 }
 
+func HasTenant(allowedTenants []string, s string) bool {
+	for _, t := range allowedTenants {
+		if t == s {
+			return true
+		}
+	}
+	return false
+}
+
 func WithAccess(ctx context.Context, access accessMap) context.Context {
 	return context.WithValue(ctx, accessCtxKey, access)
 }

@@ -76,7 +76,7 @@ require (
 )
 
 require (
-	github.com/diwise/service-chassis v0.0.0-20260414215153-59765904ab2f
+	github.com/diwise/service-chassis v0.0.0-20260602135046-9f4adf349775
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

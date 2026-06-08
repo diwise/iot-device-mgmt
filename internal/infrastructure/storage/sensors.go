@@ -112,7 +112,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 			return types.Collection[types.Sensor]{}, err
 		}
 
-		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval))
+		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, ""))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -152,6 +152,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 	var fq *int64
 	var dr *int
 	var statusObservedAt *time.Time
+	var tenant string
 
 	err = c.QueryRow(ctx, `
 		WITH latest_status AS (
@@ -177,12 +178,13 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 			ls.sf,
 			ls.dr,
 			ls.observed_at  AS status_observed_at
+			d.tenant
 
 		FROM sensors s
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
 		LEFT JOIN latest_status ls ON ls.sensor_id = s.sensor_id
-		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
+		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt, &tenant)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Sensor{}, false, nil
@@ -191,7 +193,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 		return types.Sensor{}, false, err
 	}
 
-	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval)
+	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, tenant)
 
 	if statusObservedAt != nil {
 		sens.SensorStatus = &types.SensorStatus{
@@ -401,8 +403,8 @@ func normalizeSensorProfileTypes(values []string) []string {
 	return normalized
 }
 
-func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int) types.Sensor {
-	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name}
+func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int, tenant string) types.Sensor {
+	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name, Tenant: tenant}
 	if location.Valid {
 		sensor.Location = &types.Location{Latitude: location.P.Y, Longitude: location.P.X}
 	}

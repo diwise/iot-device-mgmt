@@ -99,6 +99,11 @@ func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Handl
 			return
 		}
 
+		if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		response := ApiResponse{Data: sensor}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

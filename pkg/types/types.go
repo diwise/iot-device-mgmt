@@ -161,6 +161,7 @@ type Sensor struct {
 	SensorProfile *SensorProfile `json:"sensorProfile,omitempty"`
 	Name          *string        `json:"name,omitempty"`
 	Location      *Location      `json:"location,omitempty"`
+	Tenant        string         `json:"tenant"`
 	SensorStatus  *SensorStatus  `json:"sensorStatus,omitempty"`
 }
 

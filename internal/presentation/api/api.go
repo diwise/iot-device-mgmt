@@ -44,7 +44,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 			r.Use(authz.RequireAccess(ReadSensors))
 			r.Group(func(r router.ServeMux) {
 				r.Get("", querySensorsHandler(log, app.SensorService()))
-				r.Get("{id}", getSensorHandler(log, app.SensorService()))
+				r.Get("{id}", getSensorHandler(log, app.SensorService())) //X
 			})
 		})
 
