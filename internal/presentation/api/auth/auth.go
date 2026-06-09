@@ -32,26 +32,26 @@ type Enticator interface {
 
 type accessMap map[string]map[Scope]struct{}
 
+type options struct {
+	accessObjectAuthz bool
+}
+
+type Option func(*options)
+
+func WithAccessObjectAuthorization(enabled bool) Option {
+	return func(o *options) {
+		o.accessObjectAuthz = enabled
+	}
+}
+
 type impl struct {
-	query rego.PreparedEvalQuery
+	query             rego.PreparedEvalQuery
+	accessObjectAuthz bool
 }
 
 func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
-
-	validate_scopes := make([]string, 0, len(scopes))
-	for _, s := range scopes {
-		validate_scopes = append(validate_scopes, string(s))
-	}
-
-	containsAllRequiredScopes := func(allowed map[Scope]struct{}) bool {
-		for _, requiredScope := range validate_scopes {
-			if _, ok := allowed[Scope(requiredScope)]; !ok {
-				return false
-			}
-		}
-
-		return true
-	}
+	requiredScopes := normalizeRequiredScopes(scopes...)
+	validateScopes := scopesAsStrings(requiredScopes)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -71,9 +71,13 @@ func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
 				return
 			}
 
+			path := strings.Split(r.URL.Path, "/")
+
 			input := map[string]any{
+				"method": r.Method,
+				"path":   path[1:],
 				"token":  token[7:],
-				"scopes": validate_scopes,
+				"scopes": validateScopes,
 			}
 
 			results, err := a.query.Eval(r.Context(), rego.EvalInput(input))
@@ -111,37 +115,11 @@ func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
 					return
 				}
 
-				anyAccess, ok1 := result["access"]
-				access, ok2 := anyAccess.(map[string]any)
-
-				if !ok1 || !ok2 {
-					err = errors.New("bad response from authz policy engine")
+				accessObj, err := a.accessFromResult(result, requiredScopes)
+				if err != nil {
 					logger.Error("opa error", "err", err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
-				}
-
-				accessObj := accessMap{}
-
-				for tenant, anyScopes := range access {
-					scopes, ok := anyScopes.([]any)
-					if !ok {
-						logger.Error("rego response type error")
-						http.Error(w, "rego error", http.StatusInternalServerError)
-						return
-					}
-
-					tenantScopes := map[Scope]struct{}{}
-
-					for _, s := range scopes {
-						scope := s.(string)
-						tenantScopes[Scope(scope)] = struct{}{}
-					}
-
-					// only allow requests for this tenant if all required scopes are allowed
-					if containsAllRequiredScopes(tenantScopes) {
-						accessObj[tenant] = tenantScopes
-					}
 				}
 
 				if len(accessObj) == 0 {
@@ -161,10 +139,15 @@ func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
 	}
 }
 
-func NewAuthenticator(ctx context.Context, policies io.Reader) (Enticator, error) {
+func NewAuthenticator(ctx context.Context, policies io.Reader, opts ...Option) (Enticator, error) {
 	module, err := io.ReadAll(policies)
 	if err != nil {
 		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
+	}
+
+	authOptions := options{}
+	for _, apply := range opts {
+		apply(&authOptions)
 	}
 
 	query, err := rego.New(
@@ -176,7 +159,110 @@ func NewAuthenticator(ctx context.Context, policies io.Reader) (Enticator, error
 		return nil, err
 	}
 
-	return &impl{query: query}, nil
+	return &impl{query: query, accessObjectAuthz: authOptions.accessObjectAuthz}, nil
+}
+
+func (a *impl) accessFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	if a.accessObjectAuthz {
+		return accessObjectFromResult(result, requiredScopes)
+	}
+
+	return legacyTenantsFromResult(result, requiredScopes)
+}
+
+func accessObjectFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	anyAccess, ok := result["access"]
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	access, ok := anyAccess.(map[string]any)
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	accessObj := accessMap{}
+	for tenant, anyScopes := range access {
+		scopes, ok := anyScopes.([]any)
+		if !ok {
+			return nil, errors.New("rego response type error")
+		}
+
+		tenantScopes := map[Scope]struct{}{}
+		for _, s := range scopes {
+			scope, ok := s.(string)
+			if !ok {
+				return nil, errors.New("rego response type error")
+			}
+			tenantScopes[Scope(scope)] = struct{}{}
+		}
+
+		if containsAllRequiredScopes(tenantScopes, requiredScopes) {
+			accessObj[tenant] = tenantScopes
+		}
+	}
+
+	return accessObj, nil
+}
+
+func legacyTenantsFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	anyTenants, ok := result["tenants"]
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	tenants, ok := anyTenants.([]any)
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	accessObj := accessMap{}
+	for _, anyTenant := range tenants {
+		tenant, ok := anyTenant.(string)
+		if !ok {
+			return nil, errors.New("rego response type error")
+		}
+
+		accessObj[tenant] = scopesToSet(requiredScopes)
+	}
+
+	return accessObj, nil
+}
+
+func normalizeRequiredScopes(scopes ...Scope) []Scope {
+	if len(scopes) == 1 && scopes[0] == AnyScope {
+		return []Scope{}
+	}
+
+	return scopes
+}
+
+func scopesAsStrings(scopes []Scope) []string {
+	out := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		out = append(out, string(s))
+	}
+
+	return out
+}
+
+func scopesToSet(scopes []Scope) map[Scope]struct{} {
+	set := make(map[Scope]struct{}, len(scopes))
+	for _, scope := range scopes {
+		set[scope] = struct{}{}
+	}
+
+	return set
+}
+
+func containsAllRequiredScopes(allowed map[Scope]struct{}, required []Scope) bool {
+	for _, requiredScope := range required {
+		if _, ok := allowed[requiredScope]; !ok {
+			return false
+		}
+	}
+
+	return true
 }
 
 // GetTenantsWithAllowedScopes extracts the names of allowed tenants, if any, from the provided context

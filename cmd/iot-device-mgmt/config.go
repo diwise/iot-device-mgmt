@@ -17,6 +17,7 @@ const (
 	enableTracing
 
 	policiesFile
+	authzAccessObject
 	devicesFile
 	configurationFile
 

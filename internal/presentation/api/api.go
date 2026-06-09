@@ -27,12 +27,29 @@ const (
 	UpdateSensors auth.Scope = auth.Scope("sensors.update")
 )
 
-func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, app application.Management) error {
+type registerOptions struct {
+	authOptions []auth.Option
+}
+
+type RegisterOption func(*registerOptions)
+
+func WithAccessObjectAuthorization(enabled bool) RegisterOption {
+	return func(o *registerOptions) {
+		o.authOptions = append(o.authOptions, auth.WithAccessObjectAuthorization(enabled))
+	}
+}
+
+func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reader, app application.Management, opts ...RegisterOption) error {
 	const apiPrefix string = "/api/v0"
 
 	log := logging.GetFromContext(ctx)
 
-	authz, err := auth.NewAuthenticator(ctx, policies)
+	registerOpts := registerOptions{}
+	for _, apply := range opts {
+		apply(&registerOpts)
+	}
+
+	authz, err := auth.NewAuthenticator(ctx, policies, registerOpts.authOptions...)
 	if err != nil {
 		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
