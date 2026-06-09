@@ -244,6 +244,23 @@ func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
+		currentSensor, err := svc.Sensor(ctx, sc.SensorID)
+		if err != nil {
+			if errors.Is(err, sensors.ErrSensorNotFound) {
+				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+
+			logger.Error("could not fetch sensor", "sensor_id", sc.SensorID, "err", err.Error())
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		if currentSensor.Tenant != "" && !auth.HasTenant(allowedTenants, currentSensor.Tenant) {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
 		sensor := types.Sensor{
 			SensorID:      sc.SensorID,
 			Name:          sc.Name,
