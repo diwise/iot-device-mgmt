@@ -30,11 +30,16 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		query, parseErr := sensorQueryFromValues(r.URL.Query())
+		query, parseErr := sensorQueryFromValues(r.URL.Query(), allowedTenants)
 		if parseErr != nil {
 			logger.Error("invalid sensor query", "err", parseErr.Error())
 			w.WriteHeader(http.StatusBadRequest)
 			w.Write([]byte(parseErr.Error()))
+			return
+		}
+
+		if query.Tenant != "" && !auth.HasTenant(allowedTenants, query.Tenant) {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
@@ -43,6 +48,13 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			logger.Error("could not query sensors", "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
+		}
+
+		for _, sensor := range result.Data {
+			if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 		}
 
 		meta := &meta{
@@ -151,6 +163,11 @@ func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 
 		if sensor.SensorID == "" {
 			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 

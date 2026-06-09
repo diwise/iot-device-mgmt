@@ -59,6 +59,14 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		args["search"] = "%" + search + "%"
 		where = append(where, "(s.sensor_id ILIKE @search OR s.name ILIKE @search)")
 	}
+	if len(query.AllowedTenants) > 0 {
+		args["allowed_tenants"] = query.AllowedTenants
+		where = append(where, "(d.tenant IS NULL OR d.tenant = ANY(@allowed_tenants))")
+	}
+	if tenant := strings.TrimSpace(query.Tenant); tenant != "" {
+		args["tenant"] = tenant
+		where = append(where, "d.tenant = @tenant")
+	}
 
 	whereClause := ""
 	if len(where) > 0 {
@@ -83,6 +91,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 			sp.name,
 			sp.decoder,
 			sp.interval,
+			d.tenant,
 			count(*) OVER () AS count
 		FROM sensors s
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
@@ -105,14 +114,20 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		var location pgtype.Point
 		var profileName, decoder *string
 		var interval *int
+		var tenant *string
 
-		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &count)
+		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &tenant, &count)
 		if err != nil {
 			log.Error("failed to scan sensor row", "err", err.Error())
 			return types.Collection[types.Sensor]{}, err
 		}
 
-		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, ""))
+		sensorTenant := ""
+		if tenant != nil {
+			sensorTenant = *tenant
+		}
+
+		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, sensorTenant))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -177,7 +192,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 			ls.fq,
 			ls.sf,
 			ls.dr,
-			ls.observed_at  AS status_observed_at
+			ls.observed_at AS status_observed_at,
 			d.tenant
 
 		FROM sensors s

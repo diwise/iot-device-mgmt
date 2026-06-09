@@ -59,6 +59,10 @@ func TestApi(t *testing.T) {
 		testQuerySensorsWithFilters(t, server.URL, sensorMocks)
 	})
 
+	t.Run("GET /sensors rejects unauthorized tenant filter", func(t *testing.T) {
+		testQuerySensorsWithUnauthorizedTenant(t, server.URL, sensorMocks)
+	})
+
 	t.Run("GET /sensors?limit=invalid", func(t *testing.T) {
 		testQuerySensorsWithInvalidLimit(t, server.URL)
 	})
@@ -360,6 +364,10 @@ func testQueryDevicesWithUrnsFilter(t *testing.T, baseUrl string, mocks deviceMo
 
 func testQuerySensors(t *testing.T, baseUrl string, mocks sensorMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
+		if len(query.AllowedTenants) != 1 || query.AllowedTenants[0] != "default" {
+			t.Fatalf("expected allowed tenant default, got %+v", query.AllowedTenants)
+		}
+
 		return types.Collection[types.Sensor]{
 			Data:       []types.Sensor{testSensor},
 			Count:      1,
@@ -387,6 +395,12 @@ func testQuerySensorsWithFilters(t *testing.T, baseUrl string, mocks sensorMocks
 		if query.ProfileName != "Elsys" {
 			t.Fatalf("expected profileName filter Elsys, got %q", query.ProfileName)
 		}
+		if query.Tenant != "default" {
+			t.Fatalf("expected tenant filter default, got %q", query.Tenant)
+		}
+		if len(query.AllowedTenants) != 1 || query.AllowedTenants[0] != "default" {
+			t.Fatalf("expected allowed tenant default, got %+v", query.AllowedTenants)
+		}
 		if len(query.Types) != 2 || query.Types[0] != "urn:oma:lwm2m:ext:3303" || query.Types[1] != "urn:oma:lwm2m:ext:3304" {
 			t.Fatalf("expected types filter, got %+v", query.Types)
 		}
@@ -400,9 +414,21 @@ func testQuerySensorsWithFilters(t *testing.T, baseUrl string, mocks sensorMocks
 		}, nil
 	}
 
-	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?profileName=Elsys&types=urn:oma:lwm2m:ext:3303&types=urn:oma:lwm2m:ext:3304", nil)
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?profileName=Elsys&tenant=default&types=urn:oma:lwm2m:ext:3303&types=urn:oma:lwm2m:ext:3304", nil)
 	if statusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testQuerySensorsWithUnauthorizedTenant(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
+		t.Fatal("expected unauthorized tenant query to stop before service call")
+		return types.Collection[types.Sensor]{}, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?tenant=wrongtenant", nil)
+	if statusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", statusCode)
 	}
 }
 
@@ -1171,6 +1197,7 @@ var testDevice = types.Device{SensorID: "test-sensor-1", DeviceID: "test-device-
 
 var testSensor = types.Sensor{
 	SensorID: "test-sensor-standalone",
+	Tenant:   "default",
 	SensorProfile: &types.SensorProfile{
 		Name:     "Elsys",
 		Decoder:  "elsys",

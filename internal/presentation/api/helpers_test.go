@@ -105,7 +105,8 @@ func TestSensorQueryFromValues(t *testing.T) {
 		"hasProfile":  {"true"},
 		"profileName": {"ElSys"},
 		"types":       {"urn:oma:lwm2m:ext:3303", "urn:oma:lwm2m:ext:3304"},
-	})
+		"tenant":      {"tenant-a"},
+	}, []string{"tenant-a"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -128,10 +129,16 @@ func TestSensorQueryFromValues(t *testing.T) {
 	if len(query.Types) != 2 || query.Types[0] != "urn:oma:lwm2m:ext:3303" || query.Types[1] != "urn:oma:lwm2m:ext:3304" {
 		t.Fatalf("expected types to be preserved, got %+v", query.Types)
 	}
+	if query.Tenant != "tenant-a" {
+		t.Fatalf("expected tenant tenant-a, got %q", query.Tenant)
+	}
+	if len(query.AllowedTenants) != 1 || query.AllowedTenants[0] != "tenant-a" {
+		t.Fatalf("expected allowed tenants, got %+v", query.AllowedTenants)
+	}
 }
 
 func TestSensorQueryFromValuesSupportsSensorTypeAlias(t *testing.T) {
-	query, err := sensorQueryFromValues(url.Values{"sensorType": {"Elsys"}})
+	query, err := sensorQueryFromValues(url.Values{"sensorType": {"Elsys"}}, []string{"tenant-a"})
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -142,14 +149,14 @@ func TestSensorQueryFromValuesSupportsSensorTypeAlias(t *testing.T) {
 }
 
 func TestSensorQueryFromValuesRejectsInvalidLimit(t *testing.T) {
-	_, err := sensorQueryFromValues(url.Values{"limit": {"not-a-number"}})
+	_, err := sensorQueryFromValues(url.Values{"limit": {"not-a-number"}}, []string{"tenant-a"})
 	if err == nil {
 		t.Fatal("expected error for invalid limit")
 	}
 }
 
 func TestSensorQueryFromValuesRejectsInvalidAssigned(t *testing.T) {
-	_, err := sensorQueryFromValues(url.Values{"assigned": {"maybe"}})
+	_, err := sensorQueryFromValues(url.Values{"assigned": {"maybe"}}, []string{"tenant-a"})
 	if err == nil {
 		t.Fatal("expected error for invalid assigned")
 	}
