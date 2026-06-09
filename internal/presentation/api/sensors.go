@@ -38,7 +38,7 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if query.Tenant != "" && !auth.HasTenant(allowedTenants, query.Tenant) {
+		if query.Tenant != "" && !auth.IsAllowed(allowedTenants, query.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -51,7 +51,7 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 		}
 
 		for _, sensor := range result.Data {
-			if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+			if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
@@ -111,7 +111,7 @@ func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Handl
 			return
 		}
 
-		if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+		if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -166,7 +166,7 @@ func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if sensor.Tenant != "" && !auth.HasTenant(allowedTenants, sensor.Tenant) {
+		if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -256,7 +256,7 @@ func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if currentSensor.Tenant != "" && !auth.HasTenant(allowedTenants, currentSensor.Tenant) {
+		if currentSensor.Tenant != "" && !auth.IsAllowed(allowedTenants, currentSensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

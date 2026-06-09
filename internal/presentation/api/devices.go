@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/application"
@@ -384,7 +383,7 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 				return
 			}
 
-			if !slices.Contains(allowedTenants, d.Tenant) {
+			if !auth.IsAllowed(allowedTenants, d.Tenant) {
 				logger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
@@ -450,7 +449,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 			return
 		}
 
-		if !slices.Contains(allowedTenants, d.Tenant) {
+		if !auth.IsAllowed(allowedTenants, d.Tenant) {
 			logger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 			w.WriteHeader(http.StatusUnauthorized)
 			return

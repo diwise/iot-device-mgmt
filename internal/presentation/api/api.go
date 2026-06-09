@@ -63,18 +63,18 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(ReadDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Get("", queryDevicesHandler(log, app.DeviceService())) //X
-				r.Get("{id}", getDeviceHandler(log, app.DeviceService()))
-				r.Get("{id}/status", getDeviceStatusHandler(log, app.DeviceService()))
-				r.Get("{id}/alarms", getDeviceAlarmsHandler(log, app.DeviceService()))
-				r.Get("{id}/measurements", getDeviceMeasurementsHandler(log, app.DeviceService()))
+				r.Get("", queryDevicesHandler(log, app.DeviceService()))                           //X
+				r.Get("{id}", getDeviceHandler(log, app.DeviceService()))                          // X filtrer on tenant, 404
+				r.Get("{id}/status", getDeviceStatusHandler(log, app.DeviceService()))             //X 404
+				r.Get("{id}/alarms", getDeviceAlarmsHandler(log, app.DeviceService()))             //X 404
+				r.Get("{id}/measurements", getDeviceMeasurementsHandler(log, app.DeviceService())) //X
 			})
 		})
 
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(UpdateDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Put("{id}", updateDeviceHandler(log, app.DeviceService()))
+				r.Put("{id}", updateDeviceHandler(log, app.DeviceService())) //X
 				r.Patch("{id}", patchDeviceHandler(log, app.DeviceService()))
 				r.Put("{id}/sensor", attachDeviceSensorHandler(log, app.DeviceService()))
 				r.Delete("{id}/sensor", detachDeviceSensorHandler(log, app.DeviceService()))
