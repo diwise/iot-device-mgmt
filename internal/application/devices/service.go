@@ -8,6 +8,7 @@ import (
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
 
+var ErrForbidden = errForbidden
 var ErrDeviceNotFound = errDeviceNotFound
 var ErrDeviceAlreadyExist = errDeviceAlreadyExist
 var ErrDeviceProfileNotFound = errDeviceProfileNotFound

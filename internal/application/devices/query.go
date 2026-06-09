@@ -12,6 +12,7 @@ import (
 var errDeviceNotFound = fmt.Errorf("device not found")
 var errDeviceProfileNotFound = fmt.Errorf("device profile not found")
 var errMissingTenant = fmt.Errorf("missing tenant")
+var errForbidden = fmt.Errorf("forbidden")
 
 func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
 	d, found, err := s.reader.GetDeviceBySensorID(ctx, sensorID)

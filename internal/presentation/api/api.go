@@ -50,7 +50,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(UpdateSensors))
-			r.Put("{id}", updateSensorHandler(log, app.SensorService()))
+			r.Put("{id}", updateSensorHandler(log, app.SensorService())) //X plocka upp innan
 		})
 
 		r.Group(func(r router.ServeMux) {
@@ -63,7 +63,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(ReadDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Get("", queryDevicesHandler(log, app.DeviceService()))
+				r.Get("", queryDevicesHandler(log, app.DeviceService())) //X
 				r.Get("{id}", getDeviceHandler(log, app.DeviceService()))
 				r.Get("{id}/status", getDeviceStatusHandler(log, app.DeviceService()))
 				r.Get("{id}/alarms", getDeviceAlarmsHandler(log, app.DeviceService()))

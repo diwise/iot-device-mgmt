@@ -47,6 +47,9 @@ func queryDevicesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 					logger.Debug(fmt.Sprintf("device %s not found", sensorID))
 					w.WriteHeader(http.StatusNotFound)
 					return
+				} else if errors.Is(err, devices.ErrForbidden) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
 				}
 
 				logger.Error("could not fetch data", "sensor_id", sensorID, "err", err.Error())
