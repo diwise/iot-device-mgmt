@@ -531,6 +531,10 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 				w.WriteHeader(http.StatusNotFound)
 				return
 			}
+			if errors.Is(err, devices.ErrForbidden) {
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
 
 			logger.Error("unable to update device", "device_id", deviceID, "err", err.Error())
 			w.WriteHeader(http.StatusInternalServerError)

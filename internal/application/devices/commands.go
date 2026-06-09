@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -158,6 +159,9 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 				return err
 			}
 			tenant = &s
+			if !auth.IsAllowed(tenants, s) {
+				return ErrForbidden
+			}
 		case "types":
 			types, err := patchStringSlice(k, v)
 			if err != nil {
