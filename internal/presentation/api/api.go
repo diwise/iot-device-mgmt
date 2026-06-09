@@ -74,9 +74,9 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(UpdateDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Put("{id}", updateDeviceHandler(log, app.DeviceService())) //X
-				r.Patch("{id}", patchDeviceHandler(log, app.DeviceService()))
-				r.Put("{id}/sensor", attachDeviceSensorHandler(log, app.DeviceService()))
+				r.Put("{id}", updateDeviceHandler(log, app.DeviceService()))              //X
+				r.Patch("{id}", patchDeviceHandler(log, app.DeviceService()))             //X
+				r.Put("{id}/sensor", attachDeviceSensorHandler(log, app.DeviceService())) //
 				r.Delete("{id}/sensor", detachDeviceSensorHandler(log, app.DeviceService()))
 			})
 		})

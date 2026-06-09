@@ -389,10 +389,14 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 				return
 			}
 
-			err = app.DeviceService().Create(ctx, d)
+			err = app.DeviceService().Create(ctx, d, allowedTenants)
 			if err != nil {
 				if errors.Is(err, devices.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)
+					return
+				}
+				if errors.Is(err, devices.ErrForbidden) {
+					w.WriteHeader(http.StatusForbidden)
 					return
 				}
 
@@ -462,7 +466,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 			return
 		}
 
-		err = svc.Update(ctx, d)
+		err = svc.Update(ctx, d, allowedTenants)
 		if err != nil {
 			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)

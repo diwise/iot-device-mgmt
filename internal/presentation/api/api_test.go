@@ -849,7 +849,7 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -911,7 +911,7 @@ func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return testDevice, true, nil
@@ -1073,7 +1073,7 @@ func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil

@@ -69,6 +69,8 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) h
 				w.WriteHeader(http.StatusNotFound)
 			case errors.Is(err, devices.ErrSensorAlreadyAssigned), errors.Is(err, devices.ErrSensorProfileRequired):
 				w.WriteHeader(http.StatusConflict)
+			case errors.Is(err, devices.ErrForbidden):
+				w.WriteHeader(http.StatusForbidden)
 			default:
 				logger.Error("unable to attach sensor", "sensor_id", request.SensorID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
