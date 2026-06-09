@@ -43,19 +43,19 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(ReadSensors))
 			r.Group(func(r router.ServeMux) {
-				r.Get("", querySensorsHandler(log, app.SensorService()))  //X
-				r.Get("{id}", getSensorHandler(log, app.SensorService())) //X
+				r.Get("", querySensorsHandler(log, app.SensorService()))
+				r.Get("{id}", getSensorHandler(log, app.SensorService()))
 			})
 		})
 
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(UpdateSensors))
-			r.Put("{id}", updateSensorHandler(log, app.SensorService())) //X plocka upp innan
+			r.Put("{id}", updateSensorHandler(log, app.SensorService()))
 		})
 
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(CreateSensors))
-			r.Post("", createSensorHandler(log, app.SensorService())) //X
+			r.Post("", createSensorHandler(log, app.SensorService()))
 		})
 	})
 
@@ -63,20 +63,20 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(ReadDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Get("", queryDevicesHandler(log, app.DeviceService()))                           //X
-				r.Get("{id}", getDeviceHandler(log, app.DeviceService()))                          // X filtrer on tenant, 404
-				r.Get("{id}/status", getDeviceStatusHandler(log, app.DeviceService()))             //X 404
-				r.Get("{id}/alarms", getDeviceAlarmsHandler(log, app.DeviceService()))             //X 404
-				r.Get("{id}/measurements", getDeviceMeasurementsHandler(log, app.DeviceService())) //X
+				r.Get("", queryDevicesHandler(log, app.DeviceService()))
+				r.Get("{id}", getDeviceHandler(log, app.DeviceService()))
+				r.Get("{id}/status", getDeviceStatusHandler(log, app.DeviceService()))
+				r.Get("{id}/alarms", getDeviceAlarmsHandler(log, app.DeviceService()))
+				r.Get("{id}/measurements", getDeviceMeasurementsHandler(log, app.DeviceService()))
 			})
 		})
 
 		r.Group(func(r router.ServeMux) {
 			r.Use(authz.RequireAccess(UpdateDevices))
 			r.Group(func(r router.ServeMux) {
-				r.Put("{id}", updateDeviceHandler(log, app.DeviceService()))              //X
-				r.Patch("{id}", patchDeviceHandler(log, app.DeviceService()))             //X
-				r.Put("{id}/sensor", attachDeviceSensorHandler(log, app.DeviceService())) //
+				r.Put("{id}", updateDeviceHandler(log, app.DeviceService()))
+				r.Patch("{id}", patchDeviceHandler(log, app.DeviceService()))
+				r.Put("{id}/sensor", attachDeviceSensorHandler(log, app.DeviceService()))
 				r.Delete("{id}/sensor", detachDeviceSensorHandler(log, app.DeviceService()))
 			})
 		})
