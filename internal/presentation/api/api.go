@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/diwise/iot-device-mgmt/assets/docs"
 	"github.com/diwise/iot-device-mgmt/internal/application"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 
@@ -26,6 +27,8 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	if err != nil {
 		return fmt.Errorf("failed to create api authenticator: %w", err)
 	}
+
+	docs.RegisterHandlers(ctx, mux)
 
 	r := router.New(mux, router.WithPrefix(apiPrefix))
 

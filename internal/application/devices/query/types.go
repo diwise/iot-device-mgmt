@@ -7,25 +7,28 @@ import (
 )
 
 type Filters struct {
-	DeviceID       string
-	SensorID       string
 	Active         *bool
-	Online         *bool
-	Types          []string
 	AllowedTenants []string
-	Tenant         string
-	ProfileNames   []string
-	Metadata       map[string]string
-	LastSeen       *time.Time
-	Search         string
 	Bounds         *types.Bounds
+	DeviceID       string
+	LastSeen       *time.Time
+	Metadata       map[string]string
 	Name           string
+	Online         *bool
+	ProfileNames   []string
+	Search         string
+	SensorID       string
+	Tenant         string
+	Types          []string
 	Urn            string
-	Export         bool
-	SortBy         string
-	SortDesc       bool
-	Offset         *int
-	Limit          *int
+	Status         string
+
+	Export bool
+
+	Limit    *int
+	Offset   *int
+	SortBy   string
+	SortDesc bool
 }
 
 type DeviceFilters struct {

@@ -53,6 +53,10 @@ func TestApi(t *testing.T) {
 		testQueryDevicesWithUrnsFilter(t, server.URL, mocks)
 	})
 
+	t.Run("GET /devices with stale status", func(t *testing.T) {
+		testQueryStaleDevices(t, server.URL, mocks)
+	})
+
 	t.Run("GET /sensors", func(t *testing.T) {
 		testQuerySensors(t, server.URL, sensorMocks)
 	})
@@ -83,6 +87,10 @@ func TestApi(t *testing.T) {
 
 	t.Run("GET /devices?limit=invalid", func(t *testing.T) {
 		testQueryDevicesWithInvalidLimit(t, server.URL)
+	})
+
+	t.Run("GET /devices?status=invalid", func(t *testing.T) {
+		testQueryDevicesWithInvalidStatus(t, server.URL)
 	})
 
 	t.Run("GET /devices?devEUI=test-sensor-1", func(t *testing.T) {
@@ -360,6 +368,27 @@ func testQueryDevicesWithUrnsFilter(t *testing.T, baseUrl string, mocks deviceMo
 	}
 }
 
+func testQueryStaleDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
+	mocks.reader.StaleDevicesFunc = func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.Device], error) {
+		if len(tenants) != 1 || tenants[0] != "default" {
+			t.Fatalf("expected allowed tenants [default], got %+v", tenants)
+		}
+
+		return types.Collection[types.Device]{
+			Data: []types.Device{testDevice},
+		}, nil
+	}
+
+	statusCode, body := do(t, http.MethodGet, baseUrl+"/api/v0/devices?status=stale", nil)
+	if statusCode != http.StatusOK {
+		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+
+	if !strings.Contains(string(body), `"sensorID":"test-sensor-1"`) {
+		t.Fatalf("expected response to contain sensorID 'test-sensor-1', got %s", string(body))
+	}
+}
+
 func testQuerySensors(t *testing.T, baseUrl string, mocks sensorMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
 		return types.Collection[types.Sensor]{
@@ -465,6 +494,13 @@ func testGetSensorInternalError(t *testing.T, baseUrl string, mocks sensorMocks)
 
 func testQueryDevicesWithInvalidLimit(t *testing.T, baseUrl string) {
 	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/devices?limit=invalid", nil)
+	if statusCode != http.StatusBadRequest {
+		t.Fatalf("expected status 400, got %d", statusCode)
+	}
+}
+
+func testQueryDevicesWithInvalidStatus(t *testing.T, baseUrl string) {
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/devices?status=online", nil)
 	if statusCode != http.StatusBadRequest {
 		t.Fatalf("expected status 400, got %d", statusCode)
 	}

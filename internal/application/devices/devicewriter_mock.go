@@ -5,9 +5,8 @@ package devices
 
 import (
 	"context"
-	"sync"
-
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"sync"
 )
 
 // Ensure, that DeviceWriterMock does implement DeviceWriter.
