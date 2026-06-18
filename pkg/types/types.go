@@ -18,14 +18,14 @@ type Device struct {
 
 	Interval int `json:"interval,omitzero"`
 
-	Lwm2mTypes []Lwm2mType `json:"types"`
+	Lwm2mTypes []Lwm2mType `json:"types,omitzero"`
 	Tags       []Tag       `json:"tags,omitzero"`
 	Metadata   []Metadata  `json:"metadata,omitzero"`
 
 	DeviceState DeviceState `json:"deviceState"`
 
 	SensorProfile SensorProfile `json:"sensorProfile"`
-	SensorStatus  SensorStatus  `json:"sensorStatus"`
+	SensorStatus  SensorStatus  `json:"sensorStatus,omitzero"`
 
 	Alarms []string `json:"alarms,omitzero"`
 }
@@ -75,7 +75,7 @@ const (
 
 type DeviceState struct {
 	Online     bool      `json:"online"`
-	State      int       `json:"state"`
+	State      int       `json:"state,omitzero"`
 	ObservedAt time.Time `json:"observedAt"`
 }
 

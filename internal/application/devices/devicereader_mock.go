@@ -5,10 +5,9 @@ package devices
 
 import (
 	"context"
-	"sync"
-
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
+	"sync"
 )
 
 // Ensure, that DeviceReaderMock does implement DeviceReader.
@@ -27,20 +26,23 @@ var _ DeviceReader = &DeviceReaderMock{}
 //			GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 //				panic("mock out the GetDeviceBySensorID method")
 //			},
-//			GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-//				panic("mock out the GetSensor method")
-//			},
-//			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, query dmquery.Measurements) (types.Collection[types.Measurement], error) {
+//			GetDeviceMeasurementsFunc: func(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error) {
 //				panic("mock out the GetDeviceMeasurements method")
 //			},
-//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, query dmquery.Status) (types.Collection[types.SensorStatus], error) {
+//			GetDeviceStatusFunc: func(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error) {
 //				panic("mock out the GetDeviceStatus method")
+//			},
+//			GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
+//				panic("mock out the GetSensor method")
 //			},
 //			GetTenantsFunc: func(ctx context.Context) (types.Collection[string], error) {
 //				panic("mock out the GetTenants method")
 //			},
-//			QueryFunc: func(ctx context.Context, query dmquery.Devices) (types.Collection[types.Device], error) {
+//			QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
+//			},
+//			StaleDevicesFunc: func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.Device], error) {
+//				panic("mock out the StaleDevices method")
 //			},
 //		}
 //
@@ -55,20 +57,23 @@ type DeviceReaderMock struct {
 	// GetDeviceBySensorIDFunc mocks the GetDeviceBySensorID method.
 	GetDeviceBySensorIDFunc func(ctx context.Context, sensorID string) (types.Device, bool, error)
 
-	// GetSensorFunc mocks the GetSensor method.
-	GetSensorFunc func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
-
 	// GetDeviceMeasurementsFunc mocks the GetDeviceMeasurements method.
 	GetDeviceMeasurementsFunc func(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
 
 	// GetDeviceStatusFunc mocks the GetDeviceStatus method.
 	GetDeviceStatusFunc func(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
 
+	// GetSensorFunc mocks the GetSensor method.
+	GetSensorFunc func(ctx context.Context, sensorID string) (types.Sensor, bool, error)
+
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
 
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
+
+	// StaleDevicesFunc mocks the StaleDevices method.
+	StaleDevicesFunc func(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.Device], error)
 
 	// calls tracks calls to the methods.
 	calls struct {
@@ -81,13 +86,6 @@ type DeviceReaderMock struct {
 		}
 		// GetDeviceBySensorID holds details about calls to the GetDeviceBySensorID method.
 		GetDeviceBySensorID []struct {
-			// Ctx is the ctx argument value.
-			Ctx context.Context
-			// SensorID is the sensorID argument value.
-			SensorID string
-		}
-		// GetSensor holds details about calls to the GetSensor method.
-		GetSensor []struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 			// SensorID is the sensorID argument value.
@@ -111,6 +109,13 @@ type DeviceReaderMock struct {
 			// Query is the query argument value.
 			Query dmquery.StatusFilters
 		}
+		// GetSensor holds details about calls to the GetSensor method.
+		GetSensor []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// SensorID is the sensorID argument value.
+			SensorID string
+		}
 		// GetTenants holds details about calls to the GetTenants method.
 		GetTenants []struct {
 			// Ctx is the ctx argument value.
@@ -123,14 +128,26 @@ type DeviceReaderMock struct {
 			// Query is the query argument value.
 			Query dmquery.DeviceFilters
 		}
+		// StaleDevices holds details about calls to the StaleDevices method.
+		StaleDevices []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Offset is the offset argument value.
+			Offset int
+			// Limit is the limit argument value.
+			Limit int
+			// Tenants is the tenants argument value.
+			Tenants []string
+		}
 	}
 	lockGetDeviceAlarms       sync.RWMutex
 	lockGetDeviceBySensorID   sync.RWMutex
-	lockGetSensor             sync.RWMutex
 	lockGetDeviceMeasurements sync.RWMutex
 	lockGetDeviceStatus       sync.RWMutex
+	lockGetSensor             sync.RWMutex
 	lockGetTenants            sync.RWMutex
 	lockQuery                 sync.RWMutex
+	lockStaleDevices          sync.RWMutex
 }
 
 // GetDeviceAlarms calls GetDeviceAlarmsFunc.
@@ -202,42 +219,6 @@ func (mock *DeviceReaderMock) GetDeviceBySensorIDCalls() []struct {
 	mock.lockGetDeviceBySensorID.RLock()
 	calls = mock.calls.GetDeviceBySensorID
 	mock.lockGetDeviceBySensorID.RUnlock()
-	return calls
-}
-
-// GetSensor calls GetSensorFunc.
-func (mock *DeviceReaderMock) GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-	if mock.GetSensorFunc == nil {
-		panic("DeviceReaderMock.GetSensorFunc: method is nil but DeviceReader.GetSensor was just called")
-	}
-	callInfo := struct {
-		Ctx      context.Context
-		SensorID string
-	}{
-		Ctx:      ctx,
-		SensorID: sensorID,
-	}
-	mock.lockGetSensor.Lock()
-	mock.calls.GetSensor = append(mock.calls.GetSensor, callInfo)
-	mock.lockGetSensor.Unlock()
-	return mock.GetSensorFunc(ctx, sensorID)
-}
-
-// GetSensorCalls gets all the calls that were made to GetSensor.
-// Check the length with:
-//
-//	len(mockedDeviceReader.GetSensorCalls())
-func (mock *DeviceReaderMock) GetSensorCalls() []struct {
-	Ctx      context.Context
-	SensorID string
-} {
-	var calls []struct {
-		Ctx      context.Context
-		SensorID string
-	}
-	mock.lockGetSensor.RLock()
-	calls = mock.calls.GetSensor
-	mock.lockGetSensor.RUnlock()
 	return calls
 }
 
@@ -321,6 +302,42 @@ func (mock *DeviceReaderMock) GetDeviceStatusCalls() []struct {
 	return calls
 }
 
+// GetSensor calls GetSensorFunc.
+func (mock *DeviceReaderMock) GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
+	if mock.GetSensorFunc == nil {
+		panic("DeviceReaderMock.GetSensorFunc: method is nil but DeviceReader.GetSensor was just called")
+	}
+	callInfo := struct {
+		Ctx      context.Context
+		SensorID string
+	}{
+		Ctx:      ctx,
+		SensorID: sensorID,
+	}
+	mock.lockGetSensor.Lock()
+	mock.calls.GetSensor = append(mock.calls.GetSensor, callInfo)
+	mock.lockGetSensor.Unlock()
+	return mock.GetSensorFunc(ctx, sensorID)
+}
+
+// GetSensorCalls gets all the calls that were made to GetSensor.
+// Check the length with:
+//
+//	len(mockedDeviceReader.GetSensorCalls())
+func (mock *DeviceReaderMock) GetSensorCalls() []struct {
+	Ctx      context.Context
+	SensorID string
+} {
+	var calls []struct {
+		Ctx      context.Context
+		SensorID string
+	}
+	mock.lockGetSensor.RLock()
+	calls = mock.calls.GetSensor
+	mock.lockGetSensor.RUnlock()
+	return calls
+}
+
 // GetTenants calls GetTenantsFunc.
 func (mock *DeviceReaderMock) GetTenants(ctx context.Context) (types.Collection[string], error) {
 	if mock.GetTenantsFunc == nil {
@@ -386,5 +403,49 @@ func (mock *DeviceReaderMock) QueryCalls() []struct {
 	mock.lockQuery.RLock()
 	calls = mock.calls.Query
 	mock.lockQuery.RUnlock()
+	return calls
+}
+
+// StaleDevices calls StaleDevicesFunc.
+func (mock *DeviceReaderMock) StaleDevices(ctx context.Context, offset int, limit int, tenants []string) (types.Collection[types.Device], error) {
+	if mock.StaleDevicesFunc == nil {
+		panic("DeviceReaderMock.StaleDevicesFunc: method is nil but DeviceReader.StaleDevices was just called")
+	}
+	callInfo := struct {
+		Ctx     context.Context
+		Offset  int
+		Limit   int
+		Tenants []string
+	}{
+		Ctx:     ctx,
+		Offset:  offset,
+		Limit:   limit,
+		Tenants: tenants,
+	}
+	mock.lockStaleDevices.Lock()
+	mock.calls.StaleDevices = append(mock.calls.StaleDevices, callInfo)
+	mock.lockStaleDevices.Unlock()
+	return mock.StaleDevicesFunc(ctx, offset, limit, tenants)
+}
+
+// StaleDevicesCalls gets all the calls that were made to StaleDevices.
+// Check the length with:
+//
+//	len(mockedDeviceReader.StaleDevicesCalls())
+func (mock *DeviceReaderMock) StaleDevicesCalls() []struct {
+	Ctx     context.Context
+	Offset  int
+	Limit   int
+	Tenants []string
+} {
+	var calls []struct {
+		Ctx     context.Context
+		Offset  int
+		Limit   int
+		Tenants []string
+	}
+	mock.lockStaleDevices.RLock()
+	calls = mock.calls.StaleDevices
+	mock.lockStaleDevices.RUnlock()
 	return calls
 }
