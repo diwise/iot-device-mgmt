@@ -19,6 +19,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -116,7 +117,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policiesFile.Close()
-				return api.RegisterHandlers(ctx, handler, policiesFile, app, api.WithAccessObjectAuthorization(accessObjectAuthz))
+				return api.RegisterHandlers(ctx, handler, policiesFile, app, auth.WithAccessObjectAuthorization(accessObjectAuthz))
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
