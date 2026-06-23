@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/diwise/iot-device-mgmt/internal/application"
@@ -23,7 +22,12 @@ func queryDevicesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "query-devices")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -41,6 +45,9 @@ func queryDevicesHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 				if errors.Is(err, devices.ErrDeviceNotFound) {
 					logger.Debug(fmt.Sprintf("device %s not found", sensorID))
 					w.WriteHeader(http.StatusNotFound)
+					return
+				} else if errors.Is(err, devices.ErrForbidden) {
+					w.WriteHeader(http.StatusUnauthorized)
 					return
 				}
 
@@ -132,7 +139,12 @@ func getDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Handl
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "get-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -174,7 +186,12 @@ func getDeviceStatusHandler(log *slog.Logger, svc devices.DeviceAPIService) http
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
 		_, ctx, logger := o11y.AddTraceIDToLoggerAndStoreInContext(span, log, ctx)
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(ctx)
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		deviceID := r.PathValue("id")
 		if deviceID == "" {
@@ -218,7 +235,12 @@ func getDeviceAlarmsHandler(log *slog.Logger, svc devices.DeviceAPIService) http
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "get-device-status")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -259,7 +281,12 @@ func getDeviceMeasurementsHandler(log *slog.Logger, svc devices.DeviceAPIService
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), ReadDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "get-device-status")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -307,7 +334,12 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
 
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), CreateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "create-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -351,16 +383,20 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 				return
 			}
 
-			if !slices.Contains(allowedTenants, d.Tenant) {
+			if !auth.IsAllowed(allowedTenants, d.Tenant) {
 				logger.Error("not allowed to create device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 
-			err = app.DeviceService().Create(ctx, d)
+			err = app.DeviceService().Create(ctx, d, allowedTenants)
 			if err != nil {
 				if errors.Is(err, devices.ErrDeviceAlreadyExist) {
 					w.WriteHeader(http.StatusConflict)
+					return
+				}
+				if errors.Is(err, devices.ErrForbidden) {
+					w.WriteHeader(http.StatusForbidden)
 					return
 				}
 
@@ -382,7 +418,13 @@ func createDeviceHandler(log *slog.Logger, app application.Management) http.Hand
 func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "update-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -411,7 +453,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 			return
 		}
 
-		if !slices.Contains(allowedTenants, d.Tenant) {
+		if !auth.IsAllowed(allowedTenants, d.Tenant) {
 			logger.Error("not allowed to update device with current tenant", "device_id", d.DeviceID, "tenant", d.Tenant)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -424,7 +466,7 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 			return
 		}
 
-		err = svc.Update(ctx, d)
+		err = svc.Update(ctx, d, allowedTenants)
 		if err != nil {
 			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
@@ -443,7 +485,13 @@ func updateDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Ha
 func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "patch-device")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -485,6 +533,10 @@ func patchDeviceHandler(log *slog.Logger, svc devices.DeviceAPIService) http.Han
 			}
 			if errors.Is(err, devices.ErrDeviceNotFound) {
 				w.WriteHeader(http.StatusNotFound)
+				return
+			}
+			if errors.Is(err, devices.ErrForbidden) {
+				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
 

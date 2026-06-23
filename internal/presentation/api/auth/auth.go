@@ -6,43 +6,58 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
+
+	"github.com/open-policy-agent/opa/v1/rego"
+	"go.opentelemetry.io/otel"
 
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/tracing"
-	"github.com/google/uuid"
-	"github.com/open-policy-agent/opa/rego"
-	"go.opentelemetry.io/otel"
 )
 
-type tenantsContextKey struct {
-	name string
+type accessContextKey struct{ name string }
+
+var accessCtxKey = &accessContextKey{"access"}
+
+var tracer = otel.Tracer("iot-device-mgmt/authz")
+
+type Scope string
+
+var AnyScope Scope = Scope("any")
+
+type Enticator interface {
+	RequireAccess(scopes ...Scope) func(http.Handler) http.Handler
 }
 
-var allowedTenantsCtxKey = &tenantsContextKey{"allowed-tenants"}
+type accessMap map[string]map[Scope]struct{}
 
-var tracer = otel.Tracer("iot-agent/authz")
+type options struct {
+	accessObjectAuthz bool
+}
 
-func NewAuthenticator(ctx context.Context, policies io.Reader) (func(http.Handler) http.Handler, error) {
-	module, err := io.ReadAll(policies)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
+type Option func(*options)
+
+func WithAccessObjectAuthorization(enabled bool) Option {
+	return func(o *options) {
+		o.accessObjectAuthz = enabled
 	}
+}
 
-	query, err := rego.New(
-		rego.Query("x = data.example.authz.allow"),
-		rego.Module("example.rego", string(module)),
-	).PrepareForEval(ctx)
+type impl struct {
+	query             rego.PreparedEvalQuery
+	accessObjectAuthz bool
+}
 
-	if err != nil {
-		return nil, err
-	}
-
-	logger := logging.GetFromContext(ctx)
+func (a *impl) RequireAccess(scopes ...Scope) func(http.Handler) http.Handler {
+	requiredScopes := normalizeRequiredScopes(scopes...)
+	validateScopes := scopesAsStrings(requiredScopes)
 
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var err error
+
+			logger := logging.GetFromContext(r.Context())
 
 			_, span := tracer.Start(r.Context(), "check-auth")
 			defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -62,9 +77,10 @@ func NewAuthenticator(ctx context.Context, policies io.Reader) (func(http.Handle
 				"method": r.Method,
 				"path":   path[1:],
 				"token":  token[7:],
+				"scopes": validateScopes,
 			}
 
-			results, err := query.Eval(r.Context(), rego.EvalInput(input))
+			results, err := a.query.Eval(r.Context(), rego.EvalInput(input))
 			if err != nil {
 				logger.Error("opa eval failed", "err", err.Error())
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -99,44 +115,195 @@ func NewAuthenticator(ctx context.Context, policies io.Reader) (func(http.Handle
 					return
 				}
 
-				anyt, ok1 := result["tenants"]
-				t, ok2 := anyt.([]any)
-
-				if !ok1 || !ok2 {
-					err = errors.New("bad response from authz policy engine")
+				accessObj, err := a.accessFromResult(result, requiredScopes)
+				if err != nil {
 					logger.Error("opa error", "err", err.Error())
 					http.Error(w, err.Error(), http.StatusInternalServerError)
 					return
 				}
 
-				tenants := make([]string, len(t))
-				for idx, tenant := range t {
-					tenants[idx] = tenant.(string)
+				if len(accessObj) == 0 {
+					// requested scopes were not allowed in any tenant
+					err = errors.New("authorization failed")
+					logger.Warn(err.Error())
+					http.Error(w, "Unauthorized", http.StatusUnauthorized)
+					return
 				}
 
-				ctx := context.WithValue(r.Context(), allowedTenantsCtxKey, tenants)
-				r = r.WithContext(ctx)
+				r = r.WithContext(WithAccess(r.Context(), accessObj))
 			}
 
 			// Token is authenticated, pass it through
 			next.ServeHTTP(w, r)
 		})
-	}, nil
+	}
 }
 
-// GetAllowedTenantsFromContext extracts the names of allowed tenants, if any, from the provided context
-func GetAllowedTenantsFromContext(ctx context.Context) []string {
-	tenants, ok := ctx.Value(allowedTenantsCtxKey).([]string)
+func NewAuthenticator(ctx context.Context, policies io.Reader, opts ...Option) (Enticator, error) {
+	module, err := io.ReadAll(policies)
+	if err != nil {
+		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
+	}
 
+	authOptions := options{}
+	for _, apply := range opts {
+		apply(&authOptions)
+	}
+
+	query, err := rego.New(
+		rego.Query("x = data.example.authz.allow"),
+		rego.Module("example.rego", string(module)),
+	).PrepareForEval(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &impl{query: query, accessObjectAuthz: authOptions.accessObjectAuthz}, nil
+}
+
+func (a *impl) accessFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	if a.accessObjectAuthz {
+		return accessObjectFromResult(result, requiredScopes)
+	}
+
+	return legacyTenantsFromResult(result, requiredScopes)
+}
+
+func accessObjectFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	anyAccess, ok := result["access"]
 	if !ok {
-		return []string{
-			uuid.NewString(),
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	access, ok := anyAccess.(map[string]any)
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	accessObj := accessMap{}
+	for tenant, anyScopes := range access {
+		scopes, ok := anyScopes.([]any)
+		if !ok {
+			return nil, errors.New("rego response type error")
+		}
+
+		tenantScopes := map[Scope]struct{}{}
+		for _, s := range scopes {
+			scope, ok := s.(string)
+			if !ok {
+				return nil, errors.New("rego response type error")
+			}
+			tenantScopes[Scope(scope)] = struct{}{}
+		}
+
+		if containsAllRequiredScopes(tenantScopes, requiredScopes) {
+			accessObj[tenant] = tenantScopes
+		}
+	}
+
+	return accessObj, nil
+}
+
+func legacyTenantsFromResult(result map[string]any, requiredScopes []Scope) (accessMap, error) {
+	anyTenants, ok := result["tenants"]
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	tenants, ok := anyTenants.([]any)
+	if !ok {
+		return nil, errors.New("bad response from authz policy engine")
+	}
+
+	accessObj := accessMap{}
+	for _, anyTenant := range tenants {
+		tenant, ok := anyTenant.(string)
+		if !ok {
+			return nil, errors.New("rego response type error")
+		}
+
+		accessObj[tenant] = scopesToSet(requiredScopes)
+	}
+
+	return accessObj, nil
+}
+
+func normalizeRequiredScopes(scopes ...Scope) []Scope {
+	if len(scopes) == 1 && scopes[0] == AnyScope {
+		return []Scope{}
+	}
+
+	return scopes
+}
+
+func scopesAsStrings(scopes []Scope) []string {
+	out := make([]string, 0, len(scopes))
+	for _, s := range scopes {
+		out = append(out, string(s))
+	}
+
+	return out
+}
+
+func scopesToSet(scopes []Scope) map[Scope]struct{} {
+	set := make(map[Scope]struct{}, len(scopes))
+	for _, scope := range scopes {
+		set[scope] = struct{}{}
+	}
+
+	return set
+}
+
+func containsAllRequiredScopes(allowed map[Scope]struct{}, required []Scope) bool {
+	for _, requiredScope := range required {
+		if _, ok := allowed[requiredScope]; !ok {
+			return false
+		}
+	}
+
+	return true
+}
+
+// GetTenantsWithAllowedScopes extracts the names of allowed tenants, if any, from the provided context
+func GetTenantsWithAllowedScopes(ctx context.Context, scopes ...Scope) []string {
+	access, ok := ctx.Value(accessCtxKey).(accessMap)
+	requiredScopeCount := len(scopes)
+
+	if !ok || requiredScopeCount == 0 {
+		return []string{}
+	}
+
+	// If the required scope is AnyScope we set the scope count to
+	// 0 to disable the scope checking below
+	if requiredScopeCount == 1 && scopes[0] == AnyScope {
+		requiredScopeCount = 0
+	}
+
+	tenants := make([]string, 0, len(access))
+
+	for t, allowedScopes := range access {
+		idx := 0
+
+		for idx < requiredScopeCount {
+			if _, ok := allowedScopes[scopes[idx]]; !ok {
+				break
+			}
+			idx++
+		}
+
+		if idx == requiredScopeCount {
+			tenants = append(tenants, t)
 		}
 	}
 
 	return tenants
 }
 
-func WithAllowedTenants(ctx context.Context, tenants []string) context.Context {
-	return context.WithValue(ctx, allowedTenantsCtxKey, tenants)
+func IsAllowed(allowedTenants []string, s string) bool {
+	return slices.Contains(allowedTenants, s)
+}
+
+func WithAccess(ctx context.Context, access accessMap) context.Context {
+	return context.WithValue(ctx, accessCtxKey, access)
 }
