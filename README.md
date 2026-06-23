@@ -32,7 +32,9 @@ Watchdog is a feature that will periodically verify the sensors. Currently only 
 ## Authorization
 Authorization is handled via OIDC access tokens that are delegated to [Open Policy Agent](https://www.openpolicyagent.org) for validation and decoding. This service does not impose any restrictions on the structure of a token's claims, allowing freedom for policy writers to integrate with existing organisational policies more easily.
 
-The only requirement is that the policy evaluation result is an object that contains a list of the tenants that the client is allowed to access. This list can be fetched from an arbitrary claim in the access token or created in the policy file based on other properties such as groups or subject identity (sub).
+By default the policy evaluation result must contain a `tenants` list with the tenants that the client is allowed to access. This list can be fetched from an arbitrary claim in the access token or created in the policy file based on other properties such as groups or subject identity (sub).
+
+The access-object authorization model can be enabled with `AUTHZ_ACCESS_OBJECT_ENABLED=true` or `-authz-access-object=true`. In that mode the policy result must contain an `access` object that maps tenant names to allowed scopes, for example `{"access":{"default":["devices.read","devices.update"]}}`.
 
 A [basic policy file](./assets/config/authz.rego) is included in the built image by default, but is expected to be replaced with an organisational specific policy at the time of deployment.
 
@@ -47,11 +49,13 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 "RABBITMQ_PASS": "bitnami"
 "RABBITMQ_DISABLED": "false"
 "SERVICE_PORT": "<8080>",
+"AUTHZ_ACCESS_OBJECT_ENABLED": "false",
 "POSTGRES_HOST": "url to postgresql database"
 ```
 ## CLI flags
  - `devices` - A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)
  - `policies` - An authorization policy file
+ - `authz-access-object` - Enable the access-object authorization policy result model
  - `notifications` - Configuration file for notifications via cloud events
 
 ## Configuration files
@@ -88,4 +92,3 @@ notifications:
 
 # Links
 [iot-device-mgmt](https://diwise.github.io/) on diwise.github.io
-

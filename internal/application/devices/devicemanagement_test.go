@@ -27,6 +27,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 			return types.Sensor{
 				SensorID: sensorID,
+				Tenant:   "default",
 				SensorProfile: &types.SensorProfile{
 					Decoder: "test",
 				},
@@ -100,7 +101,7 @@ func TestDeviceStatusHandler(t *testing.T) {
 		SensorStatus: types.SensorStatus{},
 		DeviceState:  types.DeviceState{},
 		Alarms:       []string{},
-	})
+	}, []string{"default"})
 	is.NoErr(err)
 
 	handler := newDeviceStatusHandler(svc)
@@ -115,7 +116,7 @@ func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
 			return types.Collection[types.Device]{}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-			return types.Sensor{SensorID: sensorID}, true, nil
+			return types.Sensor{SensorID: sensorID, Tenant: "default"}, true, nil
 		},
 		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 			return types.Device{}, false, nil
@@ -123,7 +124,7 @@ func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
 	}
 
 	svc := New(reader, &DeviceWriterMock{}, &DeviceStatusWriterMock{}, &DeviceProfileStoreMock{}, &messaging.MsgContextMock{}, nil)
-	err := svc.Create(context.Background(), types.Device{DeviceID: "device-1", SensorID: "sensor-1", Tenant: "default"})
+	err := svc.Create(context.Background(), types.Device{DeviceID: "device-1", SensorID: "sensor-1", Tenant: "default"}, []string{"default"})
 	is.True(errors.Is(err, ErrSensorProfileRequired))
 }
 
@@ -135,7 +136,7 @@ func TestAttachSensorRejectsAssignedSensor(t *testing.T) {
 			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-			return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+			return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 		},
 		GetDeviceBySensorIDFunc: func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 			return types.Device{DeviceID: "device-2", Tenant: "default"}, true, nil

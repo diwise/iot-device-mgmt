@@ -129,7 +129,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 		if !existingDevice {
 			log.Debug("seeding new device", slog.String("device_id", device.DeviceID))
 
-			err := a.devices.Create(ctx, device)
+			err := a.devices.Create(ctx, device, validTenants)
 			if err != nil {
 				log.Error("could not seed device", "device_id", device.DeviceID, "decoder", device.SensorProfile.Decoder)
 				return err
@@ -137,7 +137,7 @@ func (a *app) SeedSensorsAndDevices(ctx context.Context, input io.ReadCloser, va
 		} else if a.shouldUpdate {
 			log.Debug("device already exists, updating device information if needed", slog.String("device_id", device.DeviceID))
 
-			err := a.devices.Update(ctx, device)
+			err := a.devices.Update(ctx, device, validTenants)
 			if err != nil {
 				log.Error("could not update device information", "device_id", device.DeviceID, "err", err.Error())
 				return err

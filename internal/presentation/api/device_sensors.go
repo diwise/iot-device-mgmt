@@ -21,7 +21,13 @@ type attachSensorRequest struct {
 func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "attach-device-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()
@@ -63,6 +69,8 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) h
 				w.WriteHeader(http.StatusNotFound)
 			case errors.Is(err, devices.ErrSensorAlreadyAssigned), errors.Is(err, devices.ErrSensorProfileRequired):
 				w.WriteHeader(http.StatusConflict)
+			case errors.Is(err, devices.ErrForbidden):
+				w.WriteHeader(http.StatusForbidden)
 			default:
 				logger.Error("unable to attach sensor", "sensor_id", request.SensorID, "err", err.Error())
 				w.WriteHeader(http.StatusInternalServerError)
@@ -78,7 +86,13 @@ func attachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) h
 func detachDeviceSensorHandler(log *slog.Logger, svc devices.DeviceAPIService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var err error
-		allowedTenants := auth.GetAllowedTenantsFromContext(r.Context())
+
+		allowedTenants := auth.GetTenantsWithAllowedScopes(r.Context(), UpdateDevices)
+		if len(allowedTenants) == 0 {
+			err = errors.New("not authorized")
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 
 		ctx, span := tracer.Start(r.Context(), "detach-device-sensor")
 		defer func() { tracing.RecordAnyErrorAndEndSpan(err, span) }()

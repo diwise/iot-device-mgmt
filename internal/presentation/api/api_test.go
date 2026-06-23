@@ -1,11 +1,9 @@
 package api
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"io"
-	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -18,6 +16,7 @@ import (
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	sensorquery "github.com/diwise/iot-device-mgmt/internal/application/sensors/query"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -40,7 +39,7 @@ func TestApi(t *testing.T) {
 	app := application.New(dm, sm, &as, true)
 
 	mux := http.NewServeMux()
-	RegisterHandlers(ctx, mux, policies, app)
+	RegisterHandlers(ctx, mux, policies, app, auth.WithAccessObjectAuthorization(true))
 
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -63,6 +62,10 @@ func TestApi(t *testing.T) {
 
 	t.Run("GET /sensors with decoder and types filters", func(t *testing.T) {
 		testQuerySensorsWithFilters(t, server.URL, sensorMocks)
+	})
+
+	t.Run("GET /sensors rejects unauthorized tenant filter", func(t *testing.T) {
+		testQuerySensorsWithUnauthorizedTenant(t, server.URL, sensorMocks)
 	})
 
 	t.Run("GET /sensors?limit=invalid", func(t *testing.T) {
@@ -391,6 +394,10 @@ func testQueryStaleDevices(t *testing.T, baseUrl string, mocks deviceMocks) {
 
 func testQuerySensors(t *testing.T, baseUrl string, mocks sensorMocks) {
 	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
+		if len(query.AllowedTenants) != 1 || query.AllowedTenants[0] != "default" {
+			t.Fatalf("expected allowed tenant default, got %+v", query.AllowedTenants)
+		}
+
 		return types.Collection[types.Sensor]{
 			Data:       []types.Sensor{testSensor},
 			Count:      1,
@@ -418,6 +425,12 @@ func testQuerySensorsWithFilters(t *testing.T, baseUrl string, mocks sensorMocks
 		if query.ProfileName != "Elsys" {
 			t.Fatalf("expected profileName filter Elsys, got %q", query.ProfileName)
 		}
+		if query.Tenant != "default" {
+			t.Fatalf("expected tenant filter default, got %q", query.Tenant)
+		}
+		if len(query.AllowedTenants) != 1 || query.AllowedTenants[0] != "default" {
+			t.Fatalf("expected allowed tenant default, got %+v", query.AllowedTenants)
+		}
 		if len(query.Types) != 2 || query.Types[0] != "urn:oma:lwm2m:ext:3303" || query.Types[1] != "urn:oma:lwm2m:ext:3304" {
 			t.Fatalf("expected types filter, got %+v", query.Types)
 		}
@@ -431,9 +444,21 @@ func testQuerySensorsWithFilters(t *testing.T, baseUrl string, mocks sensorMocks
 		}, nil
 	}
 
-	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?profileName=Elsys&types=urn:oma:lwm2m:ext:3303&types=urn:oma:lwm2m:ext:3304", nil)
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?profileName=Elsys&tenant=default&types=urn:oma:lwm2m:ext:3303&types=urn:oma:lwm2m:ext:3304", nil)
 	if statusCode != http.StatusOK {
 		t.Fatalf("expected status 200, got %d", statusCode)
+	}
+}
+
+func testQuerySensorsWithUnauthorizedTenant(t *testing.T, baseUrl string, mocks sensorMocks) {
+	mocks.reader.QueryFunc = func(ctx context.Context, query sensorquery.Sensors) (types.Collection[types.Sensor], error) {
+		t.Fatal("expected unauthorized tenant query to stop before service call")
+		return types.Collection[types.Sensor]{}, nil
+	}
+
+	statusCode, _ := do(t, http.MethodGet, baseUrl+"/api/v0/sensors?tenant=wrongtenant", nil)
+	if statusCode != http.StatusUnauthorized {
+		t.Fatalf("expected status 401, got %d", statusCode)
 	}
 }
 
@@ -684,7 +709,7 @@ func testGetDeviceProfiles(t *testing.T, dm devices.DeviceAPIService) {
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
 
 	mux := http.NewServeMux()
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -716,7 +741,7 @@ func testGetDeviceProfilesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 
 	mux := http.NewServeMux()
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -744,7 +769,7 @@ func testGetDeviceProfilesInternalError(t *testing.T, dm devices.DeviceAPIServic
 
 	mux := http.NewServeMux()
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -777,7 +802,7 @@ func testGetLwm2mTypes(t *testing.T, dm devices.DeviceAPIService) {
 
 	mux := http.NewServeMux()
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -809,7 +834,7 @@ func testGetLwm2mTypesNotFound(t *testing.T, dm devices.DeviceAPIService) {
 
 	mux := http.NewServeMux()
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -837,7 +862,7 @@ func testGetLwm2mTypesInternalError(t *testing.T, dm devices.DeviceAPIService) {
 
 	mux := http.NewServeMux()
 	app := application.New(service, newNoopSensorAPIService(), &alarms.AlarmAPIServiceMock{}, true)
-	if err := RegisterHandlers(t.Context(), mux, policies, app); err != nil {
+	if err := RegisterHandlers(t.Context(), mux, policies, app, auth.WithAccessObjectAuthorization(true)); err != nil {
 		t.Fatalf("failed to register handlers: %v", err)
 	}
 
@@ -861,7 +886,7 @@ func testCreateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -923,7 +948,7 @@ func testUpdateDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return testDevice, true, nil
@@ -1085,7 +1110,7 @@ func testAttachSensorToDevice(t *testing.T, baseUrl string, mocks deviceMocks) {
 		return types.Collection[types.Device]{Count: 1, Data: []types.Device{testDevice}}, nil
 	}
 	mocks.reader.GetSensorFunc = func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
-		return types.Sensor{SensorID: sensorID, SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
+		return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil
 	}
 	mocks.reader.GetDeviceBySensorIDFunc = func(ctx context.Context, sensorID string) (types.Device, bool, error) {
 		return types.Device{}, false, nil
@@ -1181,30 +1206,6 @@ func testPatchDeviceInternalError(t *testing.T, baseUrl string, mocks deviceMock
 	}
 }
 
-func createMultipartFileUpload(t *testing.T, fieldName, fileName, content string) (*bytes.Buffer, string) {
-	t.Helper()
-
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-
-	part, err := writer.CreateFormFile(fieldName, fileName)
-	if err != nil {
-		t.Fatalf("failed to create multipart file field: %v", err)
-	}
-
-	_, err = io.Copy(part, strings.NewReader(content))
-	if err != nil {
-		t.Fatalf("failed to write multipart content: %v", err)
-	}
-
-	err = writer.Close()
-	if err != nil {
-		t.Fatalf("failed to finalize multipart body: %v", err)
-	}
-
-	return body, writer.FormDataContentType()
-}
-
 func do(t *testing.T, method, url string, body io.Reader, headers ...map[string]string) (int, []byte) {
 	req, _ := http.NewRequest(method, url, body)
 	req.Header.Set("Authorization", "Bearer mock-token")
@@ -1233,19 +1234,13 @@ var testDevice = types.Device{SensorID: "test-sensor-1", DeviceID: "test-device-
 
 var testSensor = types.Sensor{
 	SensorID: "test-sensor-standalone",
+	Tenant:   "default",
 	SensorProfile: &types.SensorProfile{
 		Name:     "Elsys",
 		Decoder:  "elsys",
 		Interval: 60,
 	},
 }
-
-const csvMock string = `sensor_id;device_id;lat;lon;where;types;sensorType;name;description;active;tenant;interval;source;metadata
-a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3302,urn:oma:lwm2m:ext:3301;Elsys_Codec;name-a81758fffe06bfa3;desc-a81758fffe06bfa3;true;default;60;source;key=value
-a81758fffe051d00;intern-a81758fffe051d00;0.0;0.0;air;urn:oma:lwm2m:ext:3303;Elsys_Codec;name-a81758fffe051d00;desc-a81758fffe051d00;true;_default;60;source;
-1234;intern-1234;0.0;0.0;air;urn:oma:lwm2m:ext:3303,urn:oma:lwm2m:ext:3304;enviot;name-1234;desc-1234;true;_test;60;källa;
-5678;intern-5678;0.0;0.0;soil;urn:oma:lwm2m:ext:3303;enviot;name-5678;desc-5678;true;_test;60;;
-`
 
 const policiesMock string = `
 package example.authz
@@ -1254,8 +1249,17 @@ package example.authz
 
 default allow := false
 
-allow = response {
+allow = response if {
 	response := {
-		"tenants": ["default"]
+		"access": {
+            "default": [
+                "devices.create",
+                "devices.read",
+                "devices.update",
+                "sensors.create",
+                "sensors.read",
+                "sensors.update"
+            ]
+        }
 	}
 }`
