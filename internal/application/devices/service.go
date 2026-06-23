@@ -20,6 +20,7 @@ var ErrSensorProfileRequired = errSensorProfileRequired
 
 type DeviceReader interface {
 	Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
+	StaleDevices(ctx context.Context, offset, limit int, tenants []string) (types.Collection[types.Device], error)
 	GetDeviceBySensorID(ctx context.Context, sensorID string) (types.Device, bool, error)
 	GetSensor(ctx context.Context, sensorID string) (types.Sensor, bool, error)
 	GetTenants(ctx context.Context) (types.Collection[string], error)

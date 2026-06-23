@@ -1,0 +1,832 @@
+openapi: 3.0.3
+info:
+  title: IoT Device Management API
+  version: 0.1.0
+  description: API for managing sensors, devices, alarms and administrative lookup data.
+servers:
+  - url: /api/v0
+security:
+  - bearerAuth: []
+tags:
+  - name: Sensors
+  - name: Devices
+  - name: Alarms
+  - name: Admin
+paths:
+  /sensors:
+    get:
+      tags: [Sensors]
+      summary: Query sensors
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: assigned
+          in: query
+          schema: { type: boolean }
+        - name: hasProfile
+          in: query
+          schema: { type: boolean }
+        - name: profileName
+          in: query
+          schema: { type: string }
+        - name: sensorType
+          in: query
+          schema: { type: string }
+        - name: types
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Sensors returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorCollectionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    post:
+      tags: [Sensors]
+      summary: Create sensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Sensor'
+      responses:
+        '201': { description: Sensor created }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /sensors/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Sensors]
+      summary: Get sensor
+      responses:
+        '200':
+          description: Sensor returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    put:
+      tags: [Sensors]
+      summary: Update sensor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SensorInputModel'
+      responses:
+        '200': { description: Sensor updated }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices:
+    get:
+      tags: [Devices]
+      summary: Query devices
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: devEUI
+          in: query
+          description: Return a single device by sensor identifier.
+          schema: { type: string }
+        - name: sensor_id
+          in: query
+          schema: { type: string }
+        - name: device_id
+          in: query
+          schema: { type: string }
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: types
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: active
+          in: query
+          schema: { type: boolean }
+        - name: online
+          in: query
+          schema: { type: boolean }
+        - name: sortBy
+          in: query
+          schema: { type: string }
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+        - name: bounds
+          in: query
+          description: Bounding box formatted as [minLat,minLon;maxLat,maxLon].
+          schema: { type: string }
+        - name: profileName
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: search
+          in: query
+          schema: { type: string }
+        - name: tenant
+          in: query
+          schema: { type: string }
+        - name: name
+          in: query
+          schema: { type: string }
+        - name: urn
+          in: query
+          schema: { type: string }
+        - name: urns
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [stale]
+        - name: export
+          in: query
+          schema: { type: boolean }
+        - name: lastseen
+          in: query
+          schema:
+            type: string
+            example: '2026-06-18T12:00'
+        - name: metadata[key]
+          in: query
+          description: Metadata filter. Replace key with the metadata key to filter on.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Devices returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceCollectionResponse'
+            application/geo+json:
+              schema:
+                $ref: '#/components/schemas/GeoJSONFeatureCollection'
+            text/csv:
+              schema:
+                type: string
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    post:
+      tags: [Devices]
+      summary: Create device or import devices from file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Device'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                fileupload:
+                  type: string
+                  format: binary
+              required: [fileupload]
+      responses:
+        '201': { description: Device created or import accepted }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Devices]
+      summary: Get device
+      responses:
+        '200':
+          description: Device returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    put:
+      tags: [Devices]
+      summary: Update device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Device'
+      responses:
+        '200': { description: Device updated }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    patch:
+      tags: [Devices]
+      summary: Patch device
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200': { description: Device patched }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices/{id}/status:
+    get:
+      tags: [Devices]
+      summary: Get device status history
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: online
+          in: query
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Device statuses returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SensorStatusCollectionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices/{id}/alarms:
+    get:
+      tags: [Devices]
+      summary: Get alarms for a device
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Device alarms returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmDetailsCollectionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices/{id}/measurements:
+    get:
+      tags: [Devices]
+      summary: Get measurements for a device
+      parameters:
+        - $ref: '#/components/parameters/Id'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: type
+          in: query
+          schema: { type: string }
+        - name: types
+          in: query
+          style: form
+          explode: true
+          schema:
+            type: array
+            items: { type: string }
+      responses:
+        '200':
+          description: Measurements returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeasurementCollectionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /devices/{id}/sensor:
+    put:
+      tags: [Devices]
+      summary: Attach sensor to device
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AttachSensorRequest'
+      responses:
+        '200': { description: Sensor attached }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '415': { $ref: '#/components/responses/UnsupportedMediaType' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+    delete:
+      tags: [Devices]
+      summary: Detach sensor from device
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '204': { description: Sensor detached }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /alarms:
+    get:
+      tags: [Alarms]
+      summary: Query alarms
+      parameters:
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Offset'
+        - name: alarmType
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Alarms returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlarmDetailsCollectionResponse'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /admin/deviceprofiles:
+    get:
+      tags: [Admin]
+      summary: Query device profiles
+      parameters:
+        - name: name
+          in: query
+          description: Profile name or comma-separated profile names.
+          schema: { type: string }
+      responses:
+        '200':
+          description: Device profile or profiles returned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SensorProfileResponse'
+                  - $ref: '#/components/schemas/SensorProfileCollectionResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /admin/deviceprofiles/{id}:
+    get:
+      tags: [Admin]
+      summary: Get device profile by id or name
+      parameters:
+        - $ref: '#/components/parameters/Id'
+      responses:
+        '200':
+          description: Device profile returned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/SensorProfileResponse'
+                  - $ref: '#/components/schemas/SensorProfileCollectionResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /admin/lwm2mtypes:
+    get:
+      tags: [Admin]
+      summary: Query LwM2M types
+      parameters:
+        - name: urn
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: LwM2M type or types returned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Lwm2mTypeResponse'
+                  - $ref: '#/components/schemas/Lwm2mTypeCollectionResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /admin/lwm2mtypes/{urn}:
+    get:
+      tags: [Admin]
+      summary: Get LwM2M type by URN
+      parameters:
+        - name: urn
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: LwM2M type returned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/Lwm2mTypeResponse'
+                  - $ref: '#/components/schemas/Lwm2mTypeCollectionResponse'
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalServerError' }
+  /admin/tenants:
+    get:
+      tags: [Admin]
+      summary: Get allowed tenants
+      responses:
+        '200':
+          description: Allowed tenants returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StringArrayResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+    Offset:
+      name: offset
+      in: query
+      schema:
+        type: integer
+        minimum: 0
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        text/plain:
+          schema: { type: string }
+    Unauthorized:
+      description: Unauthorized
+    NotFound:
+      description: Not found
+    Conflict:
+      description: Conflict
+    UnsupportedMediaType:
+      description: Unsupported media type
+    InternalServerError:
+      description: Internal server error
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        meta:
+          $ref: '#/components/schemas/Meta'
+        data: {}
+        links:
+          $ref: '#/components/schemas/Links'
+      required: [data]
+    Meta:
+      type: object
+      properties:
+        totalRecords:
+          type: integer
+          format: uint64
+        offset:
+          type: integer
+          format: uint64
+        limit:
+          type: integer
+          format: uint64
+        count:
+          type: integer
+          format: uint64
+      required: [totalRecords, count]
+    Links:
+      type: object
+      properties:
+        self: { type: string, format: uri-reference }
+        first: { type: string, format: uri-reference }
+        prev: { type: string, format: uri-reference }
+        next: { type: string, format: uri-reference }
+        last: { type: string, format: uri-reference }
+    Location:
+      type: object
+      properties:
+        latitude: { type: number, format: double }
+        longitude: { type: number, format: double }
+      required: [latitude, longitude]
+    Metadata:
+      type: object
+      properties:
+        key: { type: string }
+        value: { type: string }
+      required: [key, value]
+    Tag:
+      type: object
+      properties:
+        name: { type: string }
+      required: [name]
+    Lwm2mType:
+      type: object
+      properties:
+        urn: { type: string }
+        name: { type: string }
+      required: [urn, name]
+    SensorProfile:
+      type: object
+      properties:
+        name: { type: string }
+        decoder: { type: string }
+        interval: { type: integer }
+        types:
+          type: array
+          items: { type: string }
+      required: [name, decoder, interval]
+    SensorStatus:
+      type: object
+      properties:
+        batteryLevel: { type: integer }
+        rssi: { type: number, format: double, nullable: true }
+        loRaSNR: { type: number, format: double, nullable: true }
+        frequency: { type: integer, format: int64, nullable: true }
+        spreadingFactor: { type: number, format: double, nullable: true }
+        dr: { type: integer, nullable: true }
+        observedAt: { type: string, format: date-time }
+      required: [observedAt]
+    DeviceState:
+      type: object
+      properties:
+        online: { type: boolean }
+        state:
+          type: integer
+          description: '-1 unknown, 1 OK, 2 warning, 3 error.'
+        observedAt: { type: string, format: date-time }
+      required: [online, observedAt]
+    Device:
+      type: object
+      properties:
+        sensorID: { type: string }
+        deviceID: { type: string }
+        active: { type: boolean }
+        name: { type: string }
+        description: { type: string }
+        location:
+          $ref: '#/components/schemas/Location'
+        environment: { type: string }
+        source: { type: string }
+        tenant: { type: string }
+        interval: { type: integer }
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/Lwm2mType'
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+        metadata:
+          type: array
+          items:
+            $ref: '#/components/schemas/Metadata'
+        deviceState:
+          $ref: '#/components/schemas/DeviceState'
+        sensorProfile:
+          $ref: '#/components/schemas/SensorProfile'
+        sensorStatus:
+          $ref: '#/components/schemas/SensorStatus'
+        alarms:
+          type: array
+          items: { type: string }
+      required: [deviceID, active, location, tenant, deviceState, sensorProfile]
+    Sensor:
+      type: object
+      properties:
+        sensorID: { type: string }
+        deviceID: { type: string, nullable: true }
+        sensorProfile:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SensorProfile'
+        name: { type: string, nullable: true }
+        location:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Location'
+        sensorStatus:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/SensorStatus'
+      required: [sensorID]
+    SensorInputModel:
+      type: object
+      properties:
+        sensorID: { type: string }
+        sensorProfileID: { type: string }
+        name: { type: string, nullable: true }
+        location:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/Location'
+      required: [sensorID, sensorProfileID]
+    AlarmDetails:
+      type: object
+      properties:
+        deviceID: { type: string }
+        alarmType: { type: string }
+        description: { type: string }
+        observedAt: { type: string, format: date-time }
+        severity:
+          type: integer
+          description: '0 unknown, 1 low, 2 medium, 3 high.'
+      required: [alarmType, observedAt, severity]
+    Measurement:
+      type: object
+      properties:
+        id: { type: string }
+        urn: { type: string }
+        name: { type: string, nullable: true }
+        value: {}
+        unit: { type: string, nullable: true }
+        timestamp: { type: string, format: date-time }
+      required: [timestamp]
+    AttachSensorRequest:
+      type: object
+      properties:
+        sensorID: { type: string }
+      required: [sensorID]
+    GeoJSONFeatureCollection:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [FeatureCollection]
+        features:
+          type: array
+          items:
+            $ref: '#/components/schemas/GeoJSONFeature'
+        meta:
+          $ref: '#/components/schemas/Meta'
+        links:
+          $ref: '#/components/schemas/Links'
+      required: [type, features]
+    GeoJSONFeature:
+      type: object
+      properties:
+        id: { type: string }
+        type:
+          type: string
+          enum: [Feature]
+        geometry:
+          $ref: '#/components/schemas/GeoJSONGeometry'
+        properties:
+          type: object
+          additionalProperties: true
+      required: [id, type, geometry, properties]
+    GeoJSONGeometry:
+      type: object
+      properties:
+        type: { type: string }
+        value:
+          type: object
+          properties:
+            type: { type: string }
+            coordinates:
+              type: array
+              items: { type: number, format: double }
+      required: [type, value]
+    DeviceResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Device'
+    DeviceCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Device'
+    SensorResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Sensor'
+    SensorCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Sensor'
+    SensorStatusCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SensorStatus'
+    AlarmDetailsCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/AlarmDetails'
+    MeasurementCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Measurement'
+    SensorProfileResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/SensorProfile'
+    SensorProfileCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/SensorProfile'
+    Lwm2mTypeResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Lwm2mType'
+    Lwm2mTypeCollectionResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/Lwm2mType'
+    StringArrayResponse:
+      allOf:
+        - $ref: '#/components/schemas/ApiResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { type: string }

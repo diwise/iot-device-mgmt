@@ -69,6 +69,21 @@ func (s service) Alarms(ctx context.Context, deviceID string, tenants []string) 
 }
 
 func (s service) Query(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+	if query.Status == "stale" {
+		offset := 0
+		limit := 0
+
+		if query.Offset != nil {
+			offset = int(*query.Offset)
+		}
+
+		if query.Limit != nil {
+			limit = int(*query.Limit)
+		}
+
+		return s.reader.StaleDevices(ctx, offset, limit, query.AllowedTenants)
+	}
+
 	return s.reader.Query(ctx, query)
 }
 

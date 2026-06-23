@@ -15,36 +15,39 @@ import (
 )
 
 func createLinks(u *url.URL, m *meta) *links {
-	if m == nil || m.TotalRecords == 0 {
+	if m == nil || m.TotalRecords == 0 || m.Offset == nil || m.Limit == nil || *m.Limit == 0 {
 		return nil
 	}
 
-	query := u.Query()
+	offset := *m.Offset
+	limit := *m.Limit
 
 	newURL := func(offset uint64) *string {
-		query.Set("offset", strconv.Itoa(int(offset)))
-		u.RawQuery = query.Encode()
-		urlValue := u.String()
-		return &urlValue
+		nextURL := *u
+		query := nextURL.Query()
+		query.Set("offset", strconv.FormatUint(offset, 10))
+		query.Set("limit", strconv.FormatUint(limit, 10))
+		nextURL.RawQuery = query.Encode()
+
+		value := nextURL.String()
+		return &value
 	}
 
-	first := uint64(0)
-	last := ((m.TotalRecords - 1) / *m.Limit) * *m.Limit
-	next := *m.Offset + *m.Limit
-	prev := int64(*m.Offset) - int64(*m.Limit)
+	last := ((m.TotalRecords - 1) / limit) * limit
+	next := offset + limit
 
 	links := &links{
-		Self:  newURL(*m.Offset),
-		First: newURL(first),
+		Self:  newURL(offset),
+		First: newURL(0),
 		Last:  newURL(last),
+	}
+
+	if offset >= limit {
+		links.Prev = newURL(offset - limit)
 	}
 
 	if next < m.TotalRecords {
 		links.Next = newURL(next)
-	}
-
-	if prev >= 0 {
-		links.Prev = newURL(uint64(prev))
 	}
 
 	return links
@@ -155,6 +158,11 @@ func deviceQueryFromValues(values url.Values, allowedTenants []string) (dmquery.
 		return dmquery.DeviceFilters{}, err
 	}
 
+	if filters.Status != "" && !strings.EqualFold(filters.Status, "stale") {
+		return dmquery.DeviceFilters{}, fmt.Errorf("invalid status value: %s", filters.Status)
+	}
+	filters.Status = strings.ToLower(filters.Status)
+
 	return dmquery.DeviceFilters{
 		Filters: filters,
 		Urns:    append([]string(nil), values["urns"]...),
@@ -239,6 +247,8 @@ func filtersFromValues(values url.Values, allowedTenants []string) (dmquery.Filt
 			filters.Name = value[0]
 		case "urn":
 			filters.Urn = value[0]
+		case "status":
+			filters.Status = value[0]
 		case "export":
 			filters.Export = strings.EqualFold(value[0], "true")
 		case "lastseen":
