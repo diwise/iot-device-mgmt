@@ -167,7 +167,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 	var fq *int64
 	var dr *int
 	var statusObservedAt *time.Time
-	var tenant string
+	var tenant *string
 
 	err = c.QueryRow(ctx, `
 		WITH latest_status AS (
@@ -208,7 +208,12 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 		return types.Sensor{}, false, err
 	}
 
-	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, tenant)
+	sensorTenant := ""
+	if tenant != nil {
+		sensorTenant = *tenant
+	}
+
+	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, sensorTenant)
 
 	if statusObservedAt != nil {
 		sens.SensorStatus = &types.SensorStatus{
