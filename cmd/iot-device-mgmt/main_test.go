@@ -156,7 +156,9 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	api.RegisterHandlers(ctx, mux, policies, app)
+	if err := api.RegisterHandlers(ctx, mux, policies, app); err != nil {
+		t.Fatalf("failed to register API handlers: %v", err)
+	}
 
 	return mux, is
 }
@@ -417,7 +419,7 @@ package example.authz
 
 default allow := false
 
-allow = response {
+allow = response if {
     is_valid_token
 
     input.method == "GET"
@@ -431,11 +433,11 @@ allow = response {
     }
 }
 
-is_valid_token {
+is_valid_token if {
     1 == 1
 }
 
-token := {"payload": payload} {
+token := {"payload": payload} if {
     [_, payload, _] := io.jwt.decode(input.token)
 }
 `
