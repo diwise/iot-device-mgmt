@@ -1256,6 +1256,7 @@ allow = response if {
                 "devices.create",
                 "devices.read",
                 "devices.update",
+				"devices.admin",
                 "sensors.create",
                 "sensors.read",
                 "sensors.update"
