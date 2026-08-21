@@ -208,7 +208,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 		sensorTenant = *tenant
 	}
 
-	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, sensorTenant)
+	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, &sensorTenant)
 
 	if statusObservedAt != nil {
 		sens.SensorStatus = &types.SensorStatus{
