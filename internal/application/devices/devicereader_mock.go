@@ -38,6 +38,9 @@ var _ DeviceReader = &DeviceReaderMock{}
 //			GetTenantsFunc: func(ctx context.Context) (types.Collection[string], error) {
 //				panic("mock out the GetTenants method")
 //			},
+//			GetUnknownFunc: func(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+//				panic("mock out the GetUnknown method")
+//			},
 //			QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
 //				panic("mock out the Query method")
 //			},
@@ -68,6 +71,9 @@ type DeviceReaderMock struct {
 
 	// GetTenantsFunc mocks the GetTenants method.
 	GetTenantsFunc func(ctx context.Context) (types.Collection[string], error)
+
+	// GetUnknownFunc mocks the GetUnknown method.
+	GetUnknownFunc func(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error)
 
 	// QueryFunc mocks the Query method.
 	QueryFunc func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error)
@@ -121,6 +127,13 @@ type DeviceReaderMock struct {
 			// Ctx is the ctx argument value.
 			Ctx context.Context
 		}
+		// GetUnknown holds details about calls to the GetUnknown method.
+		GetUnknown []struct {
+			// Ctx is the ctx argument value.
+			Ctx context.Context
+			// Filter is the filter argument value.
+			Filter dmquery.DeviceFilters
+		}
 		// Query holds details about calls to the Query method.
 		Query []struct {
 			// Ctx is the ctx argument value.
@@ -146,6 +159,7 @@ type DeviceReaderMock struct {
 	lockGetDeviceStatus       sync.RWMutex
 	lockGetSensor             sync.RWMutex
 	lockGetTenants            sync.RWMutex
+	lockGetUnknown            sync.RWMutex
 	lockQuery                 sync.RWMutex
 	lockStaleDevices          sync.RWMutex
 }
@@ -367,6 +381,42 @@ func (mock *DeviceReaderMock) GetTenantsCalls() []struct {
 	mock.lockGetTenants.RLock()
 	calls = mock.calls.GetTenants
 	mock.lockGetTenants.RUnlock()
+	return calls
+}
+
+// GetUnknown calls GetUnknownFunc.
+func (mock *DeviceReaderMock) GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+	if mock.GetUnknownFunc == nil {
+		panic("DeviceReaderMock.GetUnknownFunc: method is nil but DeviceReader.GetUnknown was just called")
+	}
+	callInfo := struct {
+		Ctx    context.Context
+		Filter dmquery.DeviceFilters
+	}{
+		Ctx:    ctx,
+		Filter: filter,
+	}
+	mock.lockGetUnknown.Lock()
+	mock.calls.GetUnknown = append(mock.calls.GetUnknown, callInfo)
+	mock.lockGetUnknown.Unlock()
+	return mock.GetUnknownFunc(ctx, filter)
+}
+
+// GetUnknownCalls gets all the calls that were made to GetUnknown.
+// Check the length with:
+//
+//	len(mockedDeviceReader.GetUnknownCalls())
+func (mock *DeviceReaderMock) GetUnknownCalls() []struct {
+	Ctx    context.Context
+	Filter dmquery.DeviceFilters
+} {
+	var calls []struct {
+		Ctx    context.Context
+		Filter dmquery.DeviceFilters
+	}
+	mock.lockGetUnknown.RLock()
+	calls = mock.calls.GetUnknown
+	mock.lockGetUnknown.RUnlock()
 	return calls
 }
 
