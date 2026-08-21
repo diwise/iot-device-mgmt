@@ -27,6 +27,7 @@ type DeviceReader interface {
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
 	GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
+	GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error)
 }
 
 type DeviceWriter interface {

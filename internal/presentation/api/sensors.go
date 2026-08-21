@@ -205,6 +205,8 @@ func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 
 		logger = logger.With(slog.String("method", r.Method), slog.String("url", r.URL.String()))
 
+		logger.Debug("update-sensor handler called")
+
 		if !isApplicationJson(r) {
 			logger.Error("Unsupported MediaType")
 			w.WriteHeader(http.StatusUnsupportedMediaType)
