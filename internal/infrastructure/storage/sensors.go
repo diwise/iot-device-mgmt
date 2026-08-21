@@ -122,12 +122,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 			return types.Collection[types.Sensor]{}, err
 		}
 
-		sensorTenant := ""
-		if tenant != nil {
-			sensorTenant = *tenant
-		}
-
-		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, sensorTenant))
+		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, tenant))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -423,8 +418,14 @@ func normalizeSensorProfileTypes(values []string) []string {
 	return normalized
 }
 
-func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int, tenant string) types.Sensor {
-	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name, Tenant: tenant}
+func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int, tenant *string) types.Sensor {
+
+	var sensorTenant string
+	if tenant != nil {
+		sensorTenant = *tenant
+	}
+
+	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name, Tenant: sensorTenant}
 	if location.Valid {
 		sensor.Location = &types.Location{Latitude: location.P.Y, Longitude: location.P.X}
 	}

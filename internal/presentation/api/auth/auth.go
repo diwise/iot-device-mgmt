@@ -301,7 +301,7 @@ func GetTenantsWithAllowedScopes(ctx context.Context, scopes ...Scope) []string 
 }
 
 func IsAllowed(allowedTenants []string, s string) bool {
-	return slices.Contains(allowedTenants, s)
+	return slices.Contains(allowedTenants, s) || s == ""
 }
 
 func WithAccess(ctx context.Context, access accessMap) context.Context {
