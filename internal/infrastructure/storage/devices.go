@@ -1117,13 +1117,19 @@ func (s *Storage) GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) 
 	}
 
 	offsetLimitStr, offset, limit := offsetLimitFromQuery(filter)
+	search := strings.TrimSpace(filter.Search)
+	searchCondition := ""
+	if search != "" {
+		searchCondition = "AND sensor_id ILIKE @search"
+	}
 
 	sql := fmt.Sprintf(`
 		SELECT sensor_id, "name", "location", sensor_profile, count(*) OVER () AS count
 		FROM sensors
 		WHERE sensor_profile = 'unknown'
+		%s
 		ORDER BY "name" ASC 
-		%s`, offsetLimitStr)
+		%s`, searchCondition, offsetLimitStr)
 
 	log := logging.GetFromContext(ctx)
 
@@ -1143,6 +1149,9 @@ func (s *Storage) GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) 
 	args := pgx.NamedArgs{
 		"offset": offset,
 		"limit":  limit,
+	}
+	if search != "" {
+		args["search"] = "%" + search + "%"
 	}
 
 	rows, err := c.Query(ctx, sql, args)
