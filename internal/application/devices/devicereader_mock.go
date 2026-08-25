@@ -5,9 +5,10 @@ package devices
 
 import (
 	"context"
+	"sync"
+
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
-	"sync"
 )
 
 // Ensure, that DeviceReaderMock does implement DeviceReader.
