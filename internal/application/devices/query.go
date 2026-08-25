@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"strings"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -12,6 +13,7 @@ import (
 var errDeviceNotFound = fmt.Errorf("device not found")
 var errDeviceProfileNotFound = fmt.Errorf("device profile not found")
 var errMissingTenant = fmt.Errorf("missing tenant")
+var errForbidden = fmt.Errorf("forbidden")
 
 func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []string) (types.Device, error) {
 	d, found, err := s.reader.GetDeviceBySensorID(ctx, sensorID)
@@ -81,6 +83,10 @@ func (s service) Query(ctx context.Context, query dmquery.DeviceFilters) (types.
 		}
 
 		return s.reader.StaleDevices(ctx, offset, limit, query.AllowedTenants)
+	}
+
+	if (len(query.ProfileNames) == 1 && strings.EqualFold(query.ProfileNames[0], "unknown")) || (len(query.Types) == 1 && strings.EqualFold(query.Types[0], "unknown")) {
+		return s.reader.GetUnknown(ctx, query)
 	}
 
 	return s.reader.Query(ctx, query)

@@ -59,6 +59,14 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		args["search"] = "%" + search + "%"
 		where = append(where, "(s.sensor_id ILIKE @search OR s.name ILIKE @search)")
 	}
+	if len(query.AllowedTenants) > 0 {
+		args["allowed_tenants"] = query.AllowedTenants
+		where = append(where, "(d.tenant IS NULL OR d.tenant = ANY(@allowed_tenants))")
+	}
+	if tenant := strings.TrimSpace(query.Tenant); tenant != "" {
+		args["tenant"] = tenant
+		where = append(where, "d.tenant = @tenant")
+	}
 
 	whereClause := ""
 	if len(where) > 0 {
@@ -83,6 +91,7 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 			sp.name,
 			sp.decoder,
 			sp.interval,
+			d.tenant,
 			count(*) OVER () AS count
 		FROM sensors s
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
@@ -105,14 +114,15 @@ func (s *Storage) QuerySensors(ctx context.Context, query sensorquery.Sensors) (
 		var location pgtype.Point
 		var profileName, decoder *string
 		var interval *int
+		var tenant *string
 
-		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &count)
+		err = rows.Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &tenant, &count)
 		if err != nil {
 			log.Error("failed to scan sensor row", "err", err.Error())
 			return types.Collection[types.Sensor]{}, err
 		}
 
-		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval))
+		items = append(items, sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, tenant))
 	}
 
 	if err = rows.Err(); err != nil {
@@ -152,6 +162,7 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 	var fq *int64
 	var dr *int
 	var statusObservedAt *time.Time
+	var tenant *string
 
 	err = c.QueryRow(ctx, `
 		WITH latest_status AS (
@@ -176,13 +187,14 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 			ls.fq,
 			ls.sf,
 			ls.dr,
-			ls.observed_at  AS status_observed_at
+			ls.observed_at AS status_observed_at,
+			d.tenant
 
 		FROM sensors s
 		LEFT JOIN devices d ON d.sensor_id = s.sensor_id AND d.deleted = FALSE
 		LEFT JOIN sensor_profiles sp ON sp.sensor_profile_id = s.sensor_profile
 		LEFT JOIN latest_status ls ON ls.sensor_id = s.sensor_id
-		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt)
+		WHERE s.sensor_id = @sensor_id`, pgx.NamedArgs{"sensor_id": sensorID}).Scan(&sensorID, &deviceID, &name, &location, &profileName, &decoder, &interval, &batteryLevel, &rssi, &snr, &fq, &sf, &dr, &statusObservedAt, &tenant)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return types.Sensor{}, false, nil
@@ -191,7 +203,12 @@ func (s *Storage) GetSensor(ctx context.Context, sensorID string) (types.Sensor,
 		return types.Sensor{}, false, err
 	}
 
-	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval)
+	sensorTenant := ""
+	if tenant != nil {
+		sensorTenant = *tenant
+	}
+
+	sens := sensorFromRow(sensorID, deviceID, name, location, profileName, decoder, interval, &sensorTenant)
 
 	if statusObservedAt != nil {
 		sens.SensorStatus = &types.SensorStatus{
@@ -401,8 +418,14 @@ func normalizeSensorProfileTypes(values []string) []string {
 	return normalized
 }
 
-func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int) types.Sensor {
-	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name}
+func sensorFromRow(sensorID string, deviceID, name *string, location pgtype.Point, profileName, decoder *string, interval *int, tenant *string) types.Sensor {
+
+	var sensorTenant string
+	if tenant != nil {
+		sensorTenant = *tenant
+	}
+
+	sensor := types.Sensor{SensorID: sensorID, DeviceID: deviceID, Name: name, Tenant: sensorTenant}
 	if location.Valid {
 		sensor.Location = &types.Location{Latitude: location.P.Y, Longitude: location.P.X}
 	}

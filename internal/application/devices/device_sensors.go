@@ -21,7 +21,7 @@ func (s service) AttachSensor(ctx context.Context, deviceID, sensorID string, te
 		return ErrSensorNotFound
 	}
 
-	err = s.ensureSensorCanBeAssigned(ctx, deviceID, sensorID)
+	err = s.ensureSensorCanBeAssigned(ctx, deviceID, sensorID, tenants)
 	if err != nil {
 		return err
 	}

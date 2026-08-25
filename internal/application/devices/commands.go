@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -16,7 +17,7 @@ var errSensorNotFound = fmt.Errorf("sensor not found")
 var errSensorAlreadyAssigned = fmt.Errorf("sensor already assigned")
 var errSensorProfileRequired = fmt.Errorf("sensor profile required")
 
-func (s service) Create(ctx context.Context, device types.Device) error {
+func (s service) Create(ctx context.Context, device types.Device, allowedTenants []string) error {
 	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
 	if err != nil {
 		return err
@@ -27,7 +28,7 @@ func (s service) Create(ctx context.Context, device types.Device) error {
 	}
 
 	if strings.TrimSpace(device.SensorID) != "" {
-		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID)
+		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID, allowedTenants)
 		if err != nil {
 			return err
 		}
@@ -53,7 +54,7 @@ func (s service) Create(ctx context.Context, device types.Device) error {
 	return nil
 }
 
-func (s service) Update(ctx context.Context, device types.Device) error {
+func (s service) Update(ctx context.Context, device types.Device, allowedTenants []string) error {
 	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
 	if err != nil {
 		return err
@@ -64,7 +65,7 @@ func (s service) Update(ctx context.Context, device types.Device) error {
 	}
 
 	if strings.TrimSpace(device.SensorID) != "" {
-		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID)
+		err = s.ensureSensorCanBeAssigned(ctx, device.DeviceID, device.SensorID, allowedTenants)
 		if err != nil {
 			return err
 		}
@@ -158,6 +159,9 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 				return err
 			}
 			tenant = &s
+			if !auth.IsAllowed(tenants, s) {
+				return ErrForbidden
+			}
 		case "types":
 			types, err := patchStringSlice(k, v)
 			if err != nil {
@@ -208,7 +212,7 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 	return nil
 }
 
-func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensorID string) error {
+func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensorID string, allowedSensors []string) error {
 	sensorID = strings.TrimSpace(sensorID)
 	if sensorID == "" {
 		return nil
@@ -223,6 +227,9 @@ func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensor
 	}
 	if sensor.SensorProfile == nil || strings.TrimSpace(sensor.SensorProfile.Decoder) == "" {
 		return ErrSensorProfileRequired
+	}
+	if !auth.IsAllowed(allowedSensors, sensor.Tenant) {
+		return ErrForbidden
 	}
 
 	assignedDevice, found, err := s.reader.GetDeviceBySensorID(ctx, sensorID)

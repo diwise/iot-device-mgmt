@@ -1105,3 +1105,100 @@ func (s *Storage) GetDeviceMeasurements(ctx context.Context, deviceID string, qu
 		Limit:      uint64(limit),
 	}, nil
 }
+
+func (s *Storage) GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+
+	offsetLimitFromQuery := func(filter dmquery.DeviceFilters) (string, int, int) {
+		offsetLimit, offset, limit := OffsetLimit(deviceConditionFromQuery(filter), 0, 10)
+		if offsetLimit == "" {
+			offsetLimit = "OFFSET 0 LIMIT 10 "
+		}
+		return offsetLimit, offset, limit
+	}
+
+	offsetLimitStr, offset, limit := offsetLimitFromQuery(filter)
+	search := strings.TrimSpace(filter.Search)
+	searchCondition := ""
+	if search != "" {
+		searchCondition = "AND sensor_id ILIKE @search"
+	}
+
+	sql := fmt.Sprintf(`
+		SELECT sensor_id, "name", "location", sensor_profile, count(*) OVER () AS count
+		FROM sensors
+		WHERE sensor_profile = 'unknown'
+		%s
+		ORDER BY "name" ASC 
+		%s`, searchCondition, offsetLimitStr)
+
+	log := logging.GetFromContext(ctx)
+
+	c, err := s.conn.Acquire(ctx)
+	if err != nil {
+		log.Error("could not acquire connection", "err", err.Error())
+		return types.Collection[types.Device]{}, err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return types.Collection[types.Device]{}, err
+	}
+	defer tx.Rollback(ctx)
+
+	args := pgx.NamedArgs{
+		"offset": offset,
+		"limit":  limit,
+	}
+	if search != "" {
+		args["search"] = "%" + search + "%"
+	}
+
+	rows, err := c.Query(ctx, sql, args)
+	if err != nil {
+		log.Error("failed to fetch unknown sensors", "sql", sql, "err", err.Error())
+		return types.Collection[types.Device]{}, err
+	}
+	defer rows.Close()
+
+	var sensorID, name, sensorProfile string
+	var loc pgtype.Point
+	var n int64
+	devices := []types.Device{}
+
+	for rows.Next() {
+		err := rows.Scan(&sensorID, &name, &loc, &sensorProfile, &n)
+		if err != nil {
+			log.Error("failed to scan unknown sensors", "err", err.Error())
+			return types.Collection[types.Device]{}, err
+		}
+
+		device := types.Device{
+			SensorID:    sensorID,
+			DeviceID:    "",
+			Active:      false,
+			Name:        name,
+			Description: "",
+			SensorProfile: types.SensorProfile{
+				Name:    "unknown",
+				Decoder: "unknown",
+			},
+		}
+		if loc.Valid {
+			device.Location = types.Location{
+				Latitude:  loc.P.Y,
+				Longitude: loc.P.X,
+			}
+		}
+
+		devices = append(devices, device)
+	}
+
+	return types.Collection[types.Device]{
+		Data:       devices,
+		Count:      uint64(len(devices)),
+		Offset:     uint64(offset),
+		Limit:      uint64(limit),
+		TotalCount: uint64(n),
+	}, nil
+}

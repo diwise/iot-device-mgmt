@@ -19,6 +19,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/application/watchdog"
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/buildinfo"
@@ -40,6 +41,7 @@ func defaultFlags() flagMap {
 		enableTracing: "true",
 
 		policiesFile:      "/opt/diwise/config/authz.rego",
+		authzAccessObject: "false",
 		configurationFile: "/opt/diwise/config/config.yaml",
 		devicesFile:       "/opt/diwise/config/devices.csv",
 
@@ -87,6 +89,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 	log := logging.GetFromContext(ctx)
 	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
+	accessObjectAuthz, _ := strconv.ParseBool(flags[authzAccessObject])
 
 	probes := map[string]k8shandlers.ServiceProber{
 		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
@@ -114,7 +117,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policiesFile.Close()
-				return api.RegisterHandlers(ctx, handler, policiesFile, app)
+				return api.RegisterHandlers(ctx, handler, policiesFile, app, auth.WithAccessObjectAuthorization(accessObjectAuthz))
 			}),
 		),
 		oninit(func(ctx context.Context, ac *appConfig) error {
@@ -220,6 +223,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flags[servicePort] = envOrDef(ctx, "SERVICE_PORT", flags[servicePort])
 
 	flags[policiesFile] = envOrDef(ctx, "POLICIES_FILE", flags[policiesFile])
+	flags[authzAccessObject] = envOrDef(ctx, "AUTHZ_ACCESS_OBJECT_ENABLED", flags[authzAccessObject])
 	flags[allowedSeedTenants] = envOrDef(ctx, "ALLOWED_SEED_TENANTS", flags[allowedSeedTenants])
 	flags[seedExistingDevices] = envOrDef(ctx, "SEED_EXISTING_DEVICES", flags[seedExistingDevices])
 
@@ -241,6 +245,7 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 
 	// Allow command line arguments to override defaults and environment variables
 	flag.Func("policies", "an authorization policy file", apply(policiesFile))
+	flag.Func("authz-access-object", "enable access-object authorization policy result model", apply(authzAccessObject))
 	flag.Func("devices", "list of known devices", apply(devicesFile))
 	flag.Func("config", "device management configuration file", apply(configurationFile))
 	flag.Func("devmode", "enable dev mode", apply(devmode))

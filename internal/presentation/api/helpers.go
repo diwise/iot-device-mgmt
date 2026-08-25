@@ -73,8 +73,8 @@ func wantsTextCSV(r *http.Request) bool {
 	return strings.Contains(contentType, "text/csv")
 }
 
-func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
-	query := sensorquery.Sensors{}
+func sensorQueryFromValues(values url.Values, allowedTenants []string) (sensorquery.Sensors, error) {
+	query := sensorquery.Sensors{AllowedTenants: allowedTenants}
 
 	for key, value := range values {
 		if len(value) == 0 {
@@ -112,6 +112,8 @@ func sensorQueryFromValues(values url.Values) (sensorquery.Sensors, error) {
 			query.Types = append([]string(nil), value...)
 		case "search":
 			query.Search = value[0]
+		case "tenant":
+			query.Tenant = value[0]
 		}
 	}
 

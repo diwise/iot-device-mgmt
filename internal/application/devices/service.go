@@ -8,6 +8,7 @@ import (
 	"github.com/diwise/messaging-golang/pkg/messaging"
 )
 
+var ErrForbidden = errForbidden
 var ErrDeviceNotFound = errDeviceNotFound
 var ErrDeviceAlreadyExist = errDeviceAlreadyExist
 var ErrDeviceProfileNotFound = errDeviceProfileNotFound
@@ -26,6 +27,7 @@ type DeviceReader interface {
 	GetDeviceAlarms(ctx context.Context, deviceID string) (types.Collection[types.AlarmDetails], error)
 	GetDeviceMeasurements(ctx context.Context, deviceID string, query dmquery.MeasurementFilters) (types.Collection[types.Measurement], error)
 	GetDeviceStatus(ctx context.Context, deviceID string, query dmquery.StatusFilters) (types.Collection[types.SensorStatus], error)
+	GetUnknown(ctx context.Context, filter dmquery.DeviceFilters) (types.Collection[types.Device], error)
 }
 
 type DeviceWriter interface {
@@ -61,8 +63,8 @@ type DeviceQueryService interface {
 }
 
 type DeviceCommandService interface {
-	Create(ctx context.Context, device types.Device) error
-	Update(ctx context.Context, device types.Device) error
+	Create(ctx context.Context, device types.Device, tenants []string) error
+	Update(ctx context.Context, device types.Device, tenants []string) error
 	Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error
 	AttachSensor(ctx context.Context, deviceID, sensorID string, tenants []string) error
 	DetachSensor(ctx context.Context, deviceID string, tenants []string) error

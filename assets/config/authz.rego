@@ -6,7 +6,7 @@ package example.authz
 
 default allow := false
 
-allow = response {
+allow = response if {
     is_valid_token
 
     #input.method == "GET"
@@ -34,7 +34,7 @@ jwks_request(url) := http.send({
     "force_cache_duration_seconds": 3600 # Cache response for an hour
 })
 
-is_valid_token {
+is_valid_token if {
 
     openid_config := metadata_discovery(token.payload.iss)
     jwks := jwks_request(openid_config.jwks_uri).raw_body
@@ -43,6 +43,6 @@ is_valid_token {
     verified == true
 }
 
-token := {"payload": payload} {
+token := {"payload": payload} if {
     [_, payload, _] := io.jwt.decode(input.token)
 }
