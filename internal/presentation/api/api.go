@@ -22,7 +22,6 @@ const (
 	CreateDevices auth.Scope = auth.Scope("devices.create")
 	ReadDevices   auth.Scope = auth.Scope("devices.read")
 	UpdateDevices auth.Scope = auth.Scope("devices.update")
-	Admin         auth.Scope = auth.Scope("devices.admin")
 
 	CreateSensors auth.Scope = auth.Scope("sensors.create")
 	ReadSensors   auth.Scope = auth.Scope("sensors.read")
@@ -97,7 +96,7 @@ func RegisterHandlers(ctx context.Context, mux *http.ServeMux, policies io.Reade
 	})
 
 	r.Route("admin", func(r router.ServeMux) {
-		r.Use(authz.RequireAccess(Admin))
+		r.Use(authz.RequireAccess(ReadDevices))
 		r.Get("deviceprofiles", queryDeviceProfilesHandler(log, app.DeviceService()))
 		r.Get("deviceprofiles/{id}", queryDeviceProfilesHandler(log, app.DeviceService()))
 		r.Get("lwm2mtypes", queryLwm2mTypesHandler(log, app.DeviceService()))
