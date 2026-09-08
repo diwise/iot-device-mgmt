@@ -56,7 +56,31 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
  - `devices` - A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)
  - `policies` - An authorization policy file
  - `authz-access-object` - Enable the access-object authorization policy result model
- - `notifications` - Configuration file for notifications via cloud events
+ - `config` - Device management configuration file (`config.yaml`)
+ - `devmode` - Enable dev mode (parsed but currently unused after parsing)
+
+## Faktisk konfiguration (kod ar facit, HARM-002)
+Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `messaging.LoadConfiguration`.
+
+| Variabel | Default | Notering |
+| --- | --- | --- |
+| `LISTEN_ADDRESS` | `0.0.0.0` | Galler bade publik server och kontrollserver |
+| `SERVICE_PORT` | `8080` | Publik server (`/api/v0/...`, `/openapi.yaml`, `/docs`) |
+| `CONTROL_PORT` | `8000` | Kontrollserver: pprof, liveness, readiness-stubbar (`rabbitmq`, `timescale`) som returnerar OK |
+| `POLICIES_FILE` | `/opt/diwise/config/authz.rego` | Kravs vid startup |
+| `AUTHZ_ACCESS_OBJECT_ENABLED` | `false` | Switches between the `tenants` and `access` result models (see Security above) |
+| `ALLOWED_SEED_TENANTS` | `default` | Kommaseparerad lista vid seedning |
+| `SEED_EXISTING_DEVICES` | `true` |  |
+| `POSTGRES_HOST` | (tom) | Lagring ar enbart PostgreSQL/pgx i nulaget |
+| `POSTGRES_PORT` | `5432` |  |
+| `POSTGRES_DBNAME` | `diwise` |  |
+| `POSTGRES_USER` | (tom) |  |
+| `POSTGRES_PASSWORD` | (tom) |  |
+| `POSTGRES_SSLMODE` | `disable` |  |
+| `ENABLE_TRACING` | `true` | Tracing pa publik server |
+
+Filer som kravs vid startup: `config.yaml` (default `/opt/diwise/config/config.yaml`), `devices.csv` (default `/opt/diwise/config/devices.csv`), `authz.rego` (default `/opt/diwise/config/authz.rego`).
+Not: avsnittet om SQLite-fallback under Storage och `notifications.yaml` nedan beskriver aldre beteende och galler inte for aktuell kod.
 
 ## Configuration files
 First row of csv-files contains headers.
