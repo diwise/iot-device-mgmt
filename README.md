@@ -21,6 +21,23 @@ flowchart LR
 
 ## Dependencies 
 
+# Stable public packages
+
+`pkg/client`, `pkg/types` and `pkg/test` form the stable public Go API
+of this module. External consumers include iot-agent (device lookup
+and creation, sensor models, client mocks) and iot-core (device
+management client and mocks).
+
+Rules for these packages:
+
+- Do not rename/move packages, types, fields, JSON tags, topics,
+  content types or client methods without a compatibility/migration
+  plan and contract tests on the consumer side.
+- Regenerate the `pkg/test` mocks with moq after any interface change.
+- Release order: release iot-device-mgmt first, then upgrade and
+  verify each consumer (notably iot-agent and iot-core) before
+  removing old API.
+
 # Storage
 When the service is started data will be loaded from configuration files and stored in a database. If `POSTGRES_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
 
