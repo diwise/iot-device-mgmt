@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -298,10 +297,6 @@ func GetTenantsWithAllowedScopes(ctx context.Context, scopes ...Scope) []string 
 	}
 
 	return tenants
-}
-
-func IsAllowed(allowedTenants []string, s string) bool {
-	return slices.Contains(allowedTenants, s) || s == ""
 }
 
 func WithAccess(ctx context.Context, access accessMap) context.Context {

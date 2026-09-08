@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/diwise/iot-device-mgmt/internal/application/access"
 	"github.com/diwise/iot-device-mgmt/internal/application/sensors"
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
@@ -38,7 +39,7 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if query.Tenant != "" && !auth.IsAllowed(allowedTenants, query.Tenant) {
+		if query.Tenant != "" && !access.IsAllowed(allowedTenants, query.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -51,7 +52,7 @@ func querySensorsHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 		}
 
 		for _, sensor := range result.Data {
-			if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
+			if sensor.Tenant != "" && !access.IsAllowed(allowedTenants, sensor.Tenant) {
 				w.WriteHeader(http.StatusUnauthorized)
 				return
 			}
@@ -111,7 +112,7 @@ func getSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Handl
 			return
 		}
 
-		if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
+		if sensor.Tenant != "" && !access.IsAllowed(allowedTenants, sensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -166,7 +167,7 @@ func createSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if sensor.Tenant != "" && !auth.IsAllowed(allowedTenants, sensor.Tenant) {
+		if sensor.Tenant != "" && !access.IsAllowed(allowedTenants, sensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
@@ -258,7 +259,7 @@ func updateSensorHandler(log *slog.Logger, svc sensors.SensorAPIService) http.Ha
 			return
 		}
 
-		if currentSensor.Tenant != "" && !auth.IsAllowed(allowedTenants, currentSensor.Tenant) {
+		if currentSensor.Tenant != "" && !access.IsAllowed(allowedTenants, currentSensor.Tenant) {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/diwise/iot-device-mgmt/internal/application/access"
 	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
-	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
 )
@@ -159,7 +159,7 @@ func (s service) Merge(ctx context.Context, deviceID string, fields map[string]a
 				return err
 			}
 			tenant = &s
-			if !auth.IsAllowed(tenants, s) {
+			if !access.IsAllowed(tenants, s) {
 				return ErrForbidden
 			}
 		case "types":
@@ -228,7 +228,7 @@ func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensor
 	if sensor.SensorProfile == nil || strings.TrimSpace(sensor.SensorProfile.Decoder) == "" {
 		return ErrSensorProfileRequired
 	}
-	if !auth.IsAllowed(allowedSensors, sensor.Tenant) {
+	if !access.IsAllowed(allowedSensors, sensor.Tenant) {
 		return ErrForbidden
 	}
 
