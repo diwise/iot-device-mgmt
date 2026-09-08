@@ -58,6 +58,8 @@ func defaultFlags() flagMap {
 		allowedSeedTenants:  "default",
 
 		devmode: "false",
+
+		logLevel: "debug",
 	}
 }
 
@@ -67,6 +69,8 @@ func main() {
 	serviceVersion := buildinfo.SourceVersion()
 	ctx, logger, cleanup := o11y.Init(ctx, serviceName, serviceVersion, "json")
 	defer cleanup()
+
+	logging.SetLogLevel(parseLogLevel(flags[logLevel]))
 
 	cfg, err := os.Open(flags[configurationFile])
 	exitIf(err, logger, "could not open configuration file")
@@ -383,6 +387,8 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 
 	flags[enableTracing] = envOrDef(ctx, "ENABLE_TRACING", flags[enableTracing])
 
+	flags[logLevel] = envOrDef(ctx, "LOG_LEVEL", flags[logLevel])
+
 	apply := func(f flagType) func(string) error {
 		return func(value string) error {
 			flags[f] = value
@@ -396,9 +402,25 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flag.Func("devices", "list of known devices", apply(devicesFile))
 	flag.Func("config", "device management configuration file", apply(configurationFile))
 	flag.Func("devmode", "enable dev mode", apply(devmode))
+	flag.Func("loglevel", "set the log level", apply(logLevel))
 	flag.Parse()
 
 	return ctx, flags
+}
+
+func parseLogLevel(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelDebug
+	}
 }
 
 func exitIf(err error, logger *slog.Logger, msg string, args ...any) {

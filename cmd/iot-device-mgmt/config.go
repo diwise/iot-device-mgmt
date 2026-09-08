@@ -32,6 +32,8 @@ const (
 	seedExistingDevices
 
 	devmode
+
+	logLevel
 )
 
 type appConfig struct {

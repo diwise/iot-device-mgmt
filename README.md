@@ -78,6 +78,7 @@ Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `mess
 | `POSTGRES_PASSWORD` | (tom) |  |
 | `POSTGRES_SSLMODE` | `disable` |  |
 | `ENABLE_TRACING` | `true` | Tracing pa publik server |
+| `LOG_LEVEL` | `debug` | `debug`, `info`, `warn`/`warning`, `error`; okant varde faller tillbaka till `debug`. Styrs aven via `-loglevel` |
 | `RABBITMQ_HOST` | (tom, kravs om inte avstangd) | Se `messaging.LoadConfiguration` |
 | `RABBITMQ_PORT` | `5672` |  |
 | `RABBITMQ_VHOST` | `/` |  |

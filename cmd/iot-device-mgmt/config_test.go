@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"log/slog"
 	"os"
 	"testing"
 
@@ -48,6 +49,7 @@ func TestDefaultFlags(t *testing.T) {
 		seedExistingDevices: "true",
 		allowedSeedTenants:  "default",
 		devmode:             "false",
+		logLevel:            "debug",
 	}
 
 	is.Equal(len(flags), len(expected))
@@ -69,6 +71,7 @@ func TestEnvOverrides(t *testing.T) {
 	t.Setenv("ALLOWED_SEED_TENANTS", "a,b")
 	t.Setenv("SEED_EXISTING_DEVICES", "false")
 	t.Setenv("POSTGRES_HOST", "db")
+	t.Setenv("LOG_LEVEL", "info")
 
 	_, flags := parseExternalConfig(context.Background(), defaultFlags())
 
@@ -80,6 +83,7 @@ func TestEnvOverrides(t *testing.T) {
 	is.Equal(flags[allowedSeedTenants], "a,b")
 	is.Equal(flags[seedExistingDevices], "false")
 	is.Equal(flags[dbHost], "db")
+	is.Equal(flags[logLevel], "info")
 }
 
 // HARM-004: locks CLI-over-env precedence. Note: devmode is parsed and
@@ -87,15 +91,17 @@ func TestEnvOverrides(t *testing.T) {
 // behavior so a future removal is a deliberate decision.
 func TestCLIOverridesEnv(t *testing.T) {
 	is := is.New(t)
-	withCleanFlags(t, []string{"iot-device-mgmt", "-policies=/tmp/p.rego", "-devmode=true", "-authz-access-object=true"})
+	withCleanFlags(t, []string{"iot-device-mgmt", "-policies=/tmp/p.rego", "-devmode=true", "-authz-access-object=true", "-loglevel=error"})
 
 	t.Setenv("POLICIES_FILE", "/tmp/env.rego")
+	t.Setenv("LOG_LEVEL", "info")
 
 	_, flags := parseExternalConfig(context.Background(), defaultFlags())
 
 	is.Equal(flags[policiesFile], "/tmp/p.rego")
 	is.Equal(flags[devmode], "true")
 	is.Equal(flags[authzAccessObject], "true")
+	is.Equal(flags[logLevel], "error")
 }
 
 // REV-015: the two bool toggles intentionally use different
@@ -125,6 +131,32 @@ func TestBoolToggleInterpretations(t *testing.T) {
 
 			is.Equal(tracingEnabled(flags), tc.tracing)
 			is.Equal(seedExistingDevicesEnabled(flags), tc.seed)
+		})
+	}
+}
+
+// DM-001: locks the shared log-level interpretation. Unknown values
+// fall back to debug, matching the other harmonized services.
+func TestParseLogLevel(t *testing.T) {
+	for _, tc := range []struct {
+		input string
+		want  slog.Level
+	}{
+		{"debug", slog.LevelDebug},
+		{"DEBUG", slog.LevelDebug},
+		{"info", slog.LevelInfo},
+		{"INFO", slog.LevelInfo},
+		{"warn", slog.LevelWarn},
+		{"warning", slog.LevelWarn},
+		{"WARNING", slog.LevelWarn},
+		{"error", slog.LevelError},
+		{"ERROR", slog.LevelError},
+		{"", slog.LevelDebug},
+		{"bogus", slog.LevelDebug},
+	} {
+		t.Run(tc.input, func(t *testing.T) {
+			is := is.New(t)
+			is.Equal(parseLogLevel(tc.input), tc.want)
 		})
 	}
 }
