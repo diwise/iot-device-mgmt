@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application"
@@ -96,12 +98,8 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		"timescale": func(context.Context) (string, error) { return "ok", nil },
 	}
 
-	s, err := newStorage(ctx, flags)
-	exitIf(err, log, "could not connrect to, or create, database")
-
-	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
-	exitIf(err, log, "failed to init messenger")
-
+	var s *storage.Storage
+	var messenger messaging.MsgContext
 	var deviceAPI devices.DeviceAPIService
 	var sensorAPI sensors.SensorAPIService
 	var alarmsAPI alarms.AlarmAPIService
@@ -109,6 +107,8 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 	var deviceStatusHandler devices.DeviceStatusHandler
 
 	var app application.Management
+
+	owned := &ownedResources{}
 
 	_, runner := servicerunner.New(ctx, *cfg,
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
@@ -123,12 +123,30 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
+			var err error
+
+			s, err = newStorage(ctx, flags)
+			if err != nil {
+				return fmt.Errorf("could not connect to, or create, database: %w", err)
+			}
+
+			messenger, err = messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
+			if err != nil {
+				s.Close()
+				s = nil
+				return fmt.Errorf("failed to init messenger: %w", err)
+			}
+
 			svc := devices.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
 			deviceAPI = svc
 			deviceStatusHandler = svc
 			sensorAPI = sensors.New(s, s)
 			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
 			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
+
+			owned.watchdog = wd
+			owned.messenger = messenger
+			owned.storage = s
 
 			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
 
@@ -171,15 +189,37 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		onshutdown(func(ctx context.Context, appCfg *appConfig) error {
 			log.Debug("shutdown servicerunner")
 
-			wd.Stop(ctx)
-			messenger.Close()
-			s.Close()
+			owned.close(ctx)
 
 			return nil
 		}),
 	)
 
 	return runner, nil
+}
+
+// ownedResources tracks the resources created during OnInit so shutdown
+// is nil-safe, ordered and idempotent. The underlying messenger Close is
+// not safe to call twice, hence the sync.Once guard.
+type ownedResources struct {
+	once      sync.Once
+	watchdog  watchdog.Watchdog
+	messenger messaging.MsgContext
+	storage   interface{ Close() }
+}
+
+func (o *ownedResources) close(ctx context.Context) {
+	o.once.Do(func() {
+		if o.watchdog != nil {
+			o.watchdog.Stop(ctx)
+		}
+		if o.messenger != nil {
+			o.messenger.Close()
+		}
+		if o.storage != nil {
+			o.storage.Close()
+		}
+	})
 }
 
 func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {

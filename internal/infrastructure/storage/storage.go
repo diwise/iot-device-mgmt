@@ -37,7 +37,12 @@ func New(ctx context.Context, config Config) (*Storage, error) {
 		conn: pool,
 	}
 
-	return s, initialize(ctx, s)
+	if err := initialize(ctx, s); err != nil {
+		s.Close()
+		return nil, err
+	}
+
+	return s, nil
 }
 
 func newPool(ctx context.Context, config Config) (*pgxpool.Pool, error) {
