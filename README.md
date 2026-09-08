@@ -6,17 +6,13 @@ Device management service.
 
 ```mermaid
 flowchart LR
-    api --http--> iot-core
     iot-agent --http--> api --http--> iot-agent
     iot-agent --rabbitMQ-->handler
-    core --cloudevent-->external-service
-    core --http--> iot-device-mgmt-web
     subgraph iot-device-mgmt
         api
-        handlerhttps://cloudevents.io/
-        core
+        handler
         watchdog-->watchdog
-    end 
+    end
 ```
 
 ## Dependencies 
@@ -39,7 +35,7 @@ Rules for these packages:
   removing old API.
 
 # Storage
-When the service is started data will be loaded from configuration files and stored in a database. If `POSTGRES_HOST` is set, postgreSql will be use. If not, sqlite is used instead.
+Storage is PostgreSQL/pgx only. At startup the service connects to PostgreSQL, runs schema initialization, and seeds LwM2M types, sensor profiles, sensors and devices from configuration files. There is no SQLite fallback.
 
 # Watchdog
 Watchdog is a feature that will periodically verify the sensors. Currently only last observed time is checked. If larger than `interval` a warning status will be set. 
@@ -75,6 +71,7 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
  - `authz-access-object` - Enable the access-object authorization policy result model
  - `config` - Device management configuration file (`config.yaml`)
  - `devmode` - Enable dev mode (parsed but currently unused after parsing)
+ - `loglevel` - Set the log level (overrides `LOG_LEVEL`)
 
 ## Faktisk konfiguration (kod ar facit, HARM-002)
 Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `messaging.LoadConfiguration`.
@@ -110,9 +107,32 @@ Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `mess
 | `POSTGRES_HEALTH_CHECK_PERIOD` | `30s` |  |
 
 Filer som kravs vid startup: `config.yaml` (default `/opt/diwise/config/config.yaml`), `devices.csv` (default `/opt/diwise/config/devices.csv`), `authz.rego` (default `/opt/diwise/config/authz.rego`).
-Not: avsnittet om SQLite-fallback under Storage och `notifications.yaml` nedan beskriver aldre beteende och galler inte for aktuell kod.
 
 Health paths pa kontrollservern (`CONTROL_PORT`): `/health`, `/healthz`, `/livez`, `/readyz`, `/readyz/{check}`.
+
+# Startup
+
+1. Read defaults, environment variables and CLI flags (precedence: default < env < CLI).
+2. Open and parse `config.yaml`, the OPA policy file and `devices.csv`.
+3. Initialize storage (PostgreSQL + schema) and messaging in `OnInit`.
+4. Seed LwM2M types, sensor profiles, sensors and devices, start messaging, register the two `device-status` consumers and start the watchdog in `OnStarting`.
+5. Serve the public API on `SERVICE_PORT` and liveness/readiness on `CONTROL_PORT`.
+6. On shutdown: stop the watchdog, close messaging and close storage (idempotent, each exactly once).
+
+# API
+
+The public HTTP API lives under `/api/v0` with bearer-token authorization (see Security above): `sensors`, `devices` (including `{id}/status`, `{id}/alarms`, `{id}/measurements`, `{id}/sensor`), `alarms`, and `admin` (`deviceprofiles`, `lwm2mtypes`, `tenants`). The full route and model reference is `assets/docs/openapi.yaml`, served as `/openapi.yaml` with Redoc UI at `/docs`. The service consumes `device-status` messages over RabbitMQ.
+
+# Verification
+
+```bash
+gofmt -l cmd/ internal/ pkg/
+go test -count=1 ./...
+go vet ./...
+go build -o /tmp/iot-device-mgmt ./cmd/...
+```
+
+Database-backed tests skip explicitly when no PostgreSQL is reachable; unit and contract tests always run.
 
 Externa Kubernetes- och Compose-definitioner finns inte i detta repo och ar darfor inte inventerade har.
 
@@ -136,17 +156,6 @@ a81758fffe06bfa3;intern-a81758fffe06bfa3;62.39160;17.30723;water;urn:oma:lwm2m:e
  - `tenant` - name of tenant 
  - `interval` - overrides interval set in sensorTypes
  - `source` - name of the source
-
-### notifications.yaml
-Configuration if a [cloud event](https://cloudevents.io/) should be sent to the configured endpoint.
-```yaml
-notifications:
-  - id: qalcosonic
-    name: Qalcosonic W1 StatusCodes
-    type: diwise.statusmessage
-    subscribers:
-    - endpoint: http://endpoint/api/cloudevents
-```
 
 # Links
 [iot-device-mgmt](https://diwise.github.io/) on diwise.github.io
