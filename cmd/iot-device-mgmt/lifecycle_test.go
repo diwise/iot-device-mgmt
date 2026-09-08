@@ -64,3 +64,18 @@ func TestShutdownWithoutResourcesIsSafe(t *testing.T) {
 	owned.close(context.Background())
 	owned.close(context.Background())
 }
+
+// BASE-004: readiness stubs always report OK without touching any
+// dependency, even when fakes report failures.
+func TestReadinessStubsAlwaysOK(t *testing.T) {
+	is := is.New(t)
+
+	probes := readinessProbes()
+	is.Equal(len(probes), 2)
+
+	for _, name := range []string{"rabbitmq", "timescale"} {
+		status, err := probes[name](context.Background())
+		is.NoErr(err)
+		is.Equal(status, "ok")
+	}
+}
