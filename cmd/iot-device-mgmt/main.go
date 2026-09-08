@@ -90,7 +90,6 @@ func main() {
 func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile, devicesFile io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 
 	log := logging.GetFromContext(ctx)
-	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
 	accessObjectAuthz, _ := strconv.ParseBool(flags[authzAccessObject])
 
 	probes := readinessProbes()
@@ -111,7 +110,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
 			pprof(), liveness(func() error { return nil }), readiness(probes),
 		),
-		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
+		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(tracingEnabled(flags)),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policiesFile.Close()
 				return api.RegisterHandlers(ctx, handler, policiesFile, app, auth.WithAccessObjectAuthorization(accessObjectAuthz))
@@ -146,7 +145,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 			owned.tracker = &handlerTracker{}
 			owned.storage = s
 
-			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
+			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevicesEnabled(flags))
 
 			return nil
 		}),
@@ -204,6 +203,21 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 	)
 
 	return runner, nil
+}
+
+// tracingEnabled is the minimal production seam for the tracing toggle.
+// Only the exact string "true" enables tracing; ParseBool spellings
+// such as "TRUE" or "1" intentionally do not.
+func tracingEnabled(flags flagMap) bool {
+	return flags[enableTracing] == "true"
+}
+
+// seedExistingDevicesEnabled is the minimal production seam for the
+// seed toggle, using strconv semantics: invalid values silently
+// disable seeding.
+func seedExistingDevicesEnabled(flags flagMap) bool {
+	v, _ := strconv.ParseBool(flags[seedExistingDevices])
+	return v
 }
 
 // readinessProbes returns the named readiness stubs. Per harmonization

@@ -97,3 +97,34 @@ func TestCLIOverridesEnv(t *testing.T) {
 	is.Equal(flags[devmode], "true")
 	is.Equal(flags[authzAccessObject], "true")
 }
+
+// REV-015: the two bool toggles intentionally use different
+// interpretations. Tests target the production seams so a changed
+// interpretation breaks them.
+func TestBoolToggleInterpretations(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		value   string
+		tracing bool
+		seed    bool
+	}{
+		{"exact true", "true", true, true},
+		{"uppercase TRUE", "TRUE", false, true},
+		{"numeric 1", "1", false, true},
+		{"false", "false", false, false},
+		{"numeric 0", "0", false, false},
+		{"empty", "", false, false},
+		{"invalid", "bogus", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			is := is.New(t)
+
+			flags := defaultFlags()
+			flags[enableTracing] = tc.value
+			flags[seedExistingDevices] = tc.value
+
+			is.Equal(tracingEnabled(flags), tc.tracing)
+			is.Equal(seedExistingDevicesEnabled(flags), tc.seed)
+		})
+	}
+}
