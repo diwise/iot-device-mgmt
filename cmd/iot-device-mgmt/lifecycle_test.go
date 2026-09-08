@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"log/slog"
 	"testing"
+	"time"
 
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/matryer/is"
@@ -31,10 +33,10 @@ func (f *recordingWatchdog) Stop(context.Context) {
 	*f.calls = append(*f.calls, "watchdog")
 }
 
-// BASE-003: shutdown must close owned resources exactly once, in
-// watchdog -> messenger -> storage order, even when invoked twice.
-// messenger.Close on a real context is not safe to call twice, hence
-// the guard under test.
+// REV-005: shutdown must stop inflow, await admitted handlers, stop
+// the watchdog and close storage exactly once, in messenger ->
+// watchdog -> storage order, even when invoked twice. messenger.Close
+// on a real context is not safe to call twice, hence the guard.
 func TestShutdownIsOrderedAndIdempotent(t *testing.T) {
 	is := is.New(t)
 
@@ -45,7 +47,7 @@ func TestShutdownIsOrderedAndIdempotent(t *testing.T) {
 	}
 	storage := &recordingCloser{name: "storage", calls: &order}
 
-	owned := &ownedResources{watchdog: wd, messenger: messenger, storage: storage}
+	owned := &ownedResources{watchdog: wd, messenger: messenger, tracker: &handlerTracker{}, storage: storage}
 
 	ctx := context.Background()
 	owned.close(ctx)
@@ -53,7 +55,94 @@ func TestShutdownIsOrderedAndIdempotent(t *testing.T) {
 
 	is.Equal(wd.n, 1)
 	is.Equal(storage.n, 1)
-	is.Equal(order, []string{"watchdog", "messenger", "storage"})
+	is.Equal(order, []string{"messenger", "watchdog", "storage"})
+}
+
+// REV-005: the watchdog must receive a real deadline even though the
+// runner invokes OnShutdown without one.
+func TestShutdownSuppliesWatchdogDeadline(t *testing.T) {
+	is := is.New(t)
+
+	var gotDeadline bool
+	var hasDeadline bool
+	wd := &deadlineRecordingWatchdog{
+		onStop: func(ctx context.Context) {
+			_, hasDeadline = ctx.Deadline()
+			gotDeadline = true
+		},
+	}
+
+	owned := &ownedResources{watchdog: wd}
+	owned.close(context.Background())
+
+	is.True(gotDeadline)
+	is.True(hasDeadline)
+}
+
+type deadlineRecordingWatchdog struct {
+	onStop func(context.Context)
+}
+
+func (f *deadlineRecordingWatchdog) Start(context.Context) {}
+
+func (f *deadlineRecordingWatchdog) Stop(ctx context.Context) {
+	f.onStop(ctx)
+}
+
+// REV-005: tracked handlers are awaited within budget; wait reports
+// whether all admitted deliveries finished.
+func TestHandlerTrackerWaitsForInflight(t *testing.T) {
+	is := is.New(t)
+
+	tracker := &handlerTracker{}
+	release := make(chan struct{})
+	handlerStarted := make(chan struct{})
+
+	tracked := tracker.track(func(context.Context, messaging.IncomingTopicMessage, *slog.Logger) {
+		close(handlerStarted)
+		<-release
+	})
+
+	done := make(chan bool, 1)
+	go func() {
+		tracked(context.Background(), nil, slog.Default())
+	}()
+
+	<-handlerStarted
+	go func() { done <- tracker.wait(5 * time.Second) }()
+
+	select {
+	case <-done:
+		t.Fatal("wait returned while handler still blocked")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	is.True(<-done)
+}
+
+// REV-005: wait times out instead of hanging shutdown forever.
+func TestHandlerTrackerWaitTimesOut(t *testing.T) {
+	is := is.New(t)
+
+	tracker := &handlerTracker{}
+	tracker.wg.Add(1)
+	defer tracker.wg.Done()
+
+	is.True(!tracker.wait(20 * time.Millisecond))
+}
+
+// REV-005: messaging configuration panics must surface as errors, not
+// crash startup after storage was opened.
+func TestInitMessengerConvertsPanicToError(t *testing.T) {
+	is := is.New(t)
+
+	t.Setenv("RABBITMQ_HOST", "")
+	t.Setenv("RABBITMQ_DISABLED", "false")
+
+	messenger, err := initMessenger(context.Background(), serviceName, slog.Default())
+	is.True(err != nil)
+	is.True(messenger == nil)
 }
 
 // BASE-003: shutdown with no initialized resources (e.g. failed OnInit)

@@ -127,7 +127,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return fmt.Errorf("could not connect to, or create, database: %w", err)
 			}
 
-			messenger, err = messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
+			messenger, err = initMessenger(ctx, serviceName, log)
 			if err != nil {
 				s.Close()
 				s = nil
@@ -143,6 +143,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 			owned.watchdog = wd
 			owned.messenger = messenger
+			owned.tracker = &handlerTracker{}
 			owned.storage = s
 
 			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
@@ -151,6 +152,14 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		}),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
+
+			// OnStarting failures bypass OnShutdown in the runner, so
+			// clean up acquired resources on every error path below.
+			defer func() {
+				if err != nil {
+					owned.close(ctx)
+				}
+			}()
 
 			err = app.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
@@ -169,12 +178,14 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 			messenger.Start()
 
-			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
+			tracked := &trackingMessenger{MsgContext: messenger, tracker: owned.tracker}
+
+			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, tracked)
 			if err != nil {
 				return
 			}
 
-			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, messenger)
+			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, tracked)
 			if err != nil {
 				return
 			}
@@ -204,28 +215,104 @@ func readinessProbes() map[string]k8shandlers.ServiceProber {
 	}
 }
 
+// Shutdown budgets, within the runner's 30s shutdown hook budget. The
+// hook itself never receives the runner's timeout, so shutdown derives
+// its own bounded contexts here.
+const (
+	shutdownHandlerDrainTimeout = 10 * time.Second
+	shutdownWatchdogTimeout     = 15 * time.Second
+)
+
+// handlerTracker tracks admitted topic-message deliveries so shutdown
+// can await them. The messaging library acknowledges on dispatch and its
+// Close only joins the dispatch loop, never the handler goroutines.
+type handlerTracker struct {
+	wg sync.WaitGroup
+}
+
+func (t *handlerTracker) track(next messaging.TopicMessageHandler) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg messaging.IncomingTopicMessage, log *slog.Logger) {
+		t.wg.Add(1)
+		defer t.wg.Done()
+		next(ctx, msg, log)
+	}
+}
+
+// wait blocks until tracked handlers complete or the timeout elapses,
+// reporting whether all handlers finished.
+func (t *handlerTracker) wait(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		t.wg.Wait()
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// trackingMessenger decorates handler registration with delivery
+// tracking. All other MsgContext behavior is forwarded unchanged.
+type trackingMessenger struct {
+	messaging.MsgContext
+	tracker *handlerTracker
+}
+
+func (m *trackingMessenger) RegisterTopicMessageHandler(routingKey string, h messaging.TopicMessageHandler) error {
+	return m.MsgContext.RegisterTopicMessageHandler(routingKey, m.tracker.track(h))
+}
+
 // ownedResources tracks the resources created during OnInit so shutdown
 // is nil-safe, ordered and idempotent. The underlying messenger Close is
 // not safe to call twice, hence the sync.Once guard.
+//
+// Shutdown order: stop inflow (messenger), await admitted handlers
+// within budget, stop the watchdog with a real deadline, then close
+// storage. HTTP servers stay live until after OnShutdown returns (runner
+// behavior); that residual window is documented, not fixed here.
 type ownedResources struct {
 	once      sync.Once
 	watchdog  watchdog.Watchdog
 	messenger messaging.MsgContext
+	tracker   *handlerTracker
 	storage   interface{ Close() }
 }
 
 func (o *ownedResources) close(ctx context.Context) {
 	o.once.Do(func() {
-		if o.watchdog != nil {
-			o.watchdog.Stop(ctx)
-		}
 		if o.messenger != nil {
 			o.messenger.Close()
+		}
+		if o.tracker != nil {
+			o.tracker.wait(shutdownHandlerDrainTimeout)
+		}
+		if o.watchdog != nil {
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownWatchdogTimeout)
+			defer cancel()
+			o.watchdog.Stop(stopCtx)
 		}
 		if o.storage != nil {
 			o.storage.Close()
 		}
 	})
+}
+
+// initMessenger initializes messaging while converting the library's
+// configuration panics (e.g. missing RABBITMQ_HOST) into errors.
+func initMessenger(ctx context.Context, serviceName string, log *slog.Logger) (messenger messaging.MsgContext, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			messenger = nil
+			err = fmt.Errorf("messaging initialization panicked: %v", r)
+		}
+	}()
+
+	messenger, err = messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
+	return messenger, err
 }
 
 func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
