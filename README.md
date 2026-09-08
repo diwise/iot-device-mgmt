@@ -78,9 +78,25 @@ Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `mess
 | `POSTGRES_PASSWORD` | (tom) |  |
 | `POSTGRES_SSLMODE` | `disable` |  |
 | `ENABLE_TRACING` | `true` | Tracing pa publik server |
+| `RABBITMQ_HOST` | (tom, kravs om inte avstangd) | Se `messaging.LoadConfiguration` |
+| `RABBITMQ_PORT` | `5672` |  |
+| `RABBITMQ_VHOST` | `/` |  |
+| `RABBITMQ_USER` | `user` |  |
+| `RABBITMQ_PASS` | `bitnami` |  |
+| `RABBITMQ_DISABLED` | `false` |  |
+| `RABBITMQ_INIT_TIMEOUT` | `10` | Sekunder |
+| `POSTGRES_MAX_CONNS` | `10` |  |
+| `POSTGRES_MIN_CONNS` | `2` |  |
+| `POSTGRES_MAX_CONN_LIFETIME` | `30m` |  |
+| `POSTGRES_MAX_CONN_IDLE_TIME` | `5m` |  |
+| `POSTGRES_HEALTH_CHECK_PERIOD` | `30s` |  |
 
 Filer som kravs vid startup: `config.yaml` (default `/opt/diwise/config/config.yaml`), `devices.csv` (default `/opt/diwise/config/devices.csv`), `authz.rego` (default `/opt/diwise/config/authz.rego`).
 Not: avsnittet om SQLite-fallback under Storage och `notifications.yaml` nedan beskriver aldre beteende och galler inte for aktuell kod.
+
+Health paths pa kontrollservern (`CONTROL_PORT`): `/health`, `/healthz`, `/livez`, `/readyz`, `/readyz/{check}`.
+
+Externa Kubernetes- och Compose-definitioner finns inte i detta repo och ar darfor inte inventerade har.
 
 ## Configuration files
 First row of csv-files contains headers.
