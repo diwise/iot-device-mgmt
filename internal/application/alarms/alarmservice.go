@@ -111,7 +111,7 @@ func RegisterTopicMessageHandler(ctx context.Context, svc AlarmAPIService, messe
 }
 
 func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) error {
 		var err error
 
 		ctx, span := tracer.Start(ctx, "device-status")
@@ -122,7 +122,7 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 		err = json.Unmarshal(itm.Body(), &m)
 		if err != nil {
 			log.Error("failed to unmarshal status message", "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
-			return
+			return messaging.Permanent(err)
 		}
 
 		if m.Code == nil && len(m.Messages) == 0 {
@@ -130,9 +130,8 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 			err = svc.Remove(ctx, m.DeviceID, AlarmDeviceNotObserved)
 			if err != nil {
 				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
-				return
 			}
-			return
+			return nil
 		}
 
 		if m.Code != nil && *m.Code != "" {
@@ -152,8 +151,11 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 			}
 		}
 
+		// Bevarad semantik: hanteringsfel loggas och ackas. Klassificering
+		// till Temporary/Permanent kräver verifierad idempotens.
 		if err != nil {
 			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
 		}
+		return nil
 	}
 }

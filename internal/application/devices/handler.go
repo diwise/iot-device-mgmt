@@ -43,7 +43,7 @@ func (s service) Handle(ctx context.Context, status types.StatusMessage) error {
 }
 
 func newDeviceStatusHandler(svc DeviceStatusHandler) messaging.TopicMessageHandler {
-	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) error {
 		var err error
 
 		ctx, span := tracer.Start(ctx, "device-status")
@@ -54,15 +54,17 @@ func newDeviceStatusHandler(svc DeviceStatusHandler) messaging.TopicMessageHandl
 		err = json.Unmarshal(itm.Body(), &m)
 		if err != nil {
 			log.Error("failed to unmarshal message", "err", err.Error())
-			return
+			return messaging.Permanent(err)
 		}
 
 		ctx = logging.NewContextWithLogger(ctx, log, slog.String("device_id", m.DeviceID), slog.String("tenant", m.Tenant))
 
+		// Bevarad semantik: hanteringsfel loggas och ackas. Klassificering
+		// till Temporary/Permanent kräver verifierad idempotens.
 		err = svc.Handle(ctx, m)
 		if err != nil {
 			log.Error("could not add device status", "err", err.Error())
-			return
 		}
+		return nil
 	}
 }

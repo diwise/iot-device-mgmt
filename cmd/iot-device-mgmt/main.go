@@ -179,7 +179,10 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return
 			}
 
-			messenger.Start()
+			err = messenger.Start(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to start messenger: %w", err)
+			}
 
 			tracked := &trackingMessenger{MsgContext: messenger, tracker: owned.tracker}
 
@@ -242,17 +245,18 @@ const (
 )
 
 // handlerTracker tracks admitted topic-message deliveries so shutdown
-// can await them. The messaging library acknowledges on dispatch and its
-// Close only joins the dispatch loop, never the handler goroutines.
+// can await them. The messaging library acknowledges after the handler
+// completes; the tracker additionally lets shutdown await admitted
+// handlers within budget before stopping the watchdog and storage.
 type handlerTracker struct {
 	wg sync.WaitGroup
 }
 
 func (t *handlerTracker) track(next messaging.TopicMessageHandler) messaging.TopicMessageHandler {
-	return func(ctx context.Context, msg messaging.IncomingTopicMessage, log *slog.Logger) {
+	return func(ctx context.Context, msg messaging.IncomingTopicMessage, log *slog.Logger) error {
 		t.wg.Add(1)
 		defer t.wg.Done()
-		next(ctx, msg, log)
+		return next(ctx, msg, log)
 	}
 }
 
@@ -285,8 +289,8 @@ func (m *trackingMessenger) RegisterTopicMessageHandler(routingKey string, h mes
 }
 
 // ownedResources tracks the resources created during OnInit so shutdown
-// is nil-safe, ordered and idempotent. The underlying messenger Close is
-// not safe to call twice, hence the sync.Once guard.
+// is nil-safe, ordered and idempotent via the sync.Once guard, so the
+// messenger is shut down at most once.
 //
 // Shutdown order: stop inflow (messenger), await admitted handlers
 // within budget, stop the watchdog with a real deadline, then close
@@ -303,7 +307,9 @@ type ownedResources struct {
 func (o *ownedResources) close(ctx context.Context) {
 	o.once.Do(func() {
 		if o.messenger != nil {
-			o.messenger.Close()
+			if err := o.messenger.Shutdown(ctx); err != nil {
+				logging.GetFromContext(ctx).Debug("failed to shut down messenger", "err", err.Error())
+			}
 		}
 		if o.tracker != nil {
 			o.tracker.wait(shutdownHandlerDrainTimeout)
@@ -319,18 +325,15 @@ func (o *ownedResources) close(ctx context.Context) {
 	})
 }
 
-// initMessenger initializes messaging while converting the library's
-// configuration panics (e.g. missing RABBITMQ_HOST) into errors.
-func initMessenger(ctx context.Context, serviceName string, log *slog.Logger) (messenger messaging.MsgContext, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			messenger = nil
-			err = fmt.Errorf("messaging initialization panicked: %v", r)
-		}
-	}()
+// initMessenger initializes messaging, surfacing configuration errors
+// (e.g. missing RABBITMQ_HOST) instead of exiting the process.
+func initMessenger(ctx context.Context, serviceName string, log *slog.Logger) (messaging.MsgContext, error) {
+	cfg, err := messaging.LoadConfiguration(ctx, serviceName, log)
+	if err != nil {
+		return nil, fmt.Errorf("messaging configuration error: %w", err)
+	}
 
-	messenger, err = messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
-	return messenger, err
+	return messaging.Initialize(ctx, cfg)
 }
 
 func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {

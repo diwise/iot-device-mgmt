@@ -43,7 +43,7 @@ func TestShutdownIsOrderedAndIdempotent(t *testing.T) {
 	var order []string
 	wd := &recordingWatchdog{calls: &order}
 	messenger := &messaging.MsgContextMock{
-		CloseFunc: func() { order = append(order, "messenger") },
+		ShutdownFunc: func(context.Context) error { order = append(order, "messenger"); return nil },
 	}
 	storage := &recordingCloser{name: "storage", calls: &order}
 
@@ -98,9 +98,10 @@ func TestHandlerTrackerWaitsForInflight(t *testing.T) {
 	release := make(chan struct{})
 	handlerStarted := make(chan struct{})
 
-	tracked := tracker.track(func(context.Context, messaging.IncomingTopicMessage, *slog.Logger) {
+	tracked := tracker.track(func(context.Context, messaging.IncomingTopicMessage, *slog.Logger) error {
 		close(handlerStarted)
 		<-release
+		return nil
 	})
 
 	done := make(chan bool, 1)
