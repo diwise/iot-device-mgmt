@@ -141,7 +141,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 			deviceAPI = svc
 			deviceStatusHandler = svc
 			sensorAPI = sensors.New(s, s)
-			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
+			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig, s)
 			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
 
 			owned.watchdog = wd
@@ -191,7 +191,7 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return
 			}
 
-			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, tracked)
+			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, s, tracked)
 			if err != nil {
 				return
 			}

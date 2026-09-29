@@ -141,7 +141,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	dm := devices.New(p, p, p, p, &msgCtx, &cfg.DeviceManagementConfig)
 	sm := sensors.New(p, p)
-	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig)
+	as := alarms.New(p, &msgCtx, &cfg.AlarmServiceConfig, p)
 
 	app := application.New(dm, sm, as, exisitingDeviceUpdateFlag)
 

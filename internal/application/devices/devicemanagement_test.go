@@ -20,9 +20,14 @@ func TestDeviceStatusHandler(t *testing.T) {
 	log := slog.Default()
 	ctx := context.Background()
 
+	calls := 0
 	reader := &DeviceReaderMock{
 		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
-			return types.Collection[types.Device]{}, nil
+			calls++
+			if calls == 1 {
+				return types.Collection[types.Device]{}, nil
+			}
+			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: query.DeviceID, Tenant: "default"}}}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 			return types.Sensor{
@@ -106,6 +111,46 @@ func TestDeviceStatusHandler(t *testing.T) {
 
 	handler := newDeviceStatusHandler(svc)
 	handler(ctx, statusMessage(sm), log)
+	is.Equal(1, len(statusWriter.SetDeviceStateCalls()))
+}
+
+func TestDeviceStatusHandlerDropsTenantMismatchMissingAndUnknown(t *testing.T) {
+	is := is.New(t)
+	ctx := context.Background()
+
+	newSvc := func(stored types.Collection[types.Device], qerr error) (*service, *DeviceStatusWriterMock) {
+		reader := &DeviceReaderMock{
+			QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
+				return stored, qerr
+			},
+		}
+		sw := &DeviceStatusWriterMock{
+			AddDeviceStatusFunc: func(ctx context.Context, status types.StatusMessage) error { return nil },
+			SetDeviceStateFunc:  func(ctx context.Context, deviceID string, state types.DeviceState) error { return nil },
+		}
+		return New(reader, &DeviceWriterMock{}, sw, &DeviceProfileStoreMock{}, &messaging.MsgContextMock{}, nil), sw
+	}
+
+	bat := 1.0
+	base := types.StatusMessage{DeviceID: "device-1", Tenant: "default", Timestamp: time.Now(), BatteryLevel: &bat}
+
+	svc, sw := newSvc(types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "other"}}}, nil)
+	is.NoErr(svc.Handle(ctx, base))
+	is.Equal(0, len(sw.SetDeviceStateCalls()))
+
+	svc, sw = newSvc(types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil)
+	missing := base
+	missing.Tenant = ""
+	is.NoErr(svc.Handle(ctx, missing))
+	is.Equal(0, len(sw.SetDeviceStateCalls()))
+
+	svc, sw = newSvc(types.Collection[types.Device]{}, nil)
+	is.NoErr(svc.Handle(ctx, base))
+	is.Equal(0, len(sw.SetDeviceStateCalls()))
+
+	svc, sw = newSvc(types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil)
+	is.NoErr(svc.Handle(ctx, base))
+	is.Equal(1, len(sw.SetDeviceStateCalls()))
 }
 
 func TestCreateRequiresSensorProfileForAssignedSensor(t *testing.T) {
@@ -133,7 +178,10 @@ func TestAttachSensorRejectsAssignedSensor(t *testing.T) {
 
 	reader := &DeviceReaderMock{
 		QueryFunc: func(ctx context.Context, query dmquery.DeviceFilters) (types.Collection[types.Device], error) {
-			return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: "device-1", Tenant: "default"}}}, nil
+			if query.DeviceID != "" {
+				return types.Collection[types.Device]{Count: 1, Data: []types.Device{{DeviceID: query.DeviceID, Tenant: "default"}}}, nil
+			}
+			return types.Collection[types.Device]{}, nil
 		},
 		GetSensorFunc: func(ctx context.Context, sensorID string) (types.Sensor, bool, error) {
 			return types.Sensor{SensorID: sensorID, Tenant: "default", SensorProfile: &types.SensorProfile{Decoder: "elsys"}}, true, nil

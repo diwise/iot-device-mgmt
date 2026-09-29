@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 
+	dmquery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
@@ -20,6 +21,32 @@ func RegisterTopicMessageHandler(ctx context.Context, svc DeviceStatusHandler, m
 }
 
 func (s service) Handle(ctx context.Context, status types.StatusMessage) error {
+	log := logging.GetFromContext(ctx)
+
+	if status.Tenant == "" {
+		log.Warn("dropping device-status with missing tenant", "device_id", status.DeviceID)
+		return nil
+	}
+
+	stored, err := s.reader.Query(ctx, dmquery.DeviceFilters{DeviceID: status.DeviceID})
+	if err != nil {
+		log.Warn("dropping device-status after lookup failure", "device_id", status.DeviceID, "err", err.Error())
+		return nil
+	}
+
+	if stored.Count != 1 {
+		log.Warn("dropping device-status for unknown device", "device_id", status.DeviceID)
+		return nil
+	}
+
+	if stored.Data[0].Tenant != status.Tenant {
+		log.Warn("dropping device-status with tenant mismatch",
+			"device_id", status.DeviceID,
+			"tenant", status.Tenant,
+			"expected_tenant", stored.Data[0].Tenant)
+		return nil
+	}
+
 	state := types.DeviceState{
 		Online:     true,
 		State:      types.DeviceStateOK,
@@ -30,7 +57,7 @@ func (s service) Handle(ctx context.Context, status types.StatusMessage) error {
 		state.State = types.DeviceStateWarning
 	}
 
-	err := s.statusWriter.SetDeviceState(ctx, status.DeviceID, state)
+	err = s.statusWriter.SetDeviceState(ctx, status.DeviceID, state)
 	if err != nil {
 		return err
 	}
