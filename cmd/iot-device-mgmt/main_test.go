@@ -18,6 +18,7 @@ import (
 	"github.com/diwise/iot-device-mgmt/internal/infrastructure/storage"
 
 	"github.com/diwise/iot-device-mgmt/internal/presentation/api"
+	"github.com/diwise/iot-device-mgmt/internal/presentation/api/auth"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/messaging-golang/pkg/messaging"
 	"github.com/go-chi/jwtauth/v5"
@@ -156,7 +157,7 @@ func setupTest(t *testing.T) (*http.ServeMux, *is.I) {
 
 	policies := bytes.NewBufferString(opaModule)
 	mux := http.NewServeMux()
-	if err := api.RegisterHandlers(ctx, mux, policies, app); err != nil {
+	if err := api.RegisterHandlers(ctx, mux, policies, app, auth.WithAccessObjectAuthorization(false)); err != nil {
 		t.Fatalf("failed to register API handlers: %v", err)
 	}
 

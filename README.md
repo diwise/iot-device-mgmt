@@ -45,9 +45,9 @@ Watchdog is a feature that will periodically verify the sensors. Currently only 
 ## Authorization
 Authorization is handled via OIDC access tokens that are delegated to [Open Policy Agent](https://www.openpolicyagent.org) for validation and decoding. This service does not impose any restrictions on the structure of a token's claims, allowing freedom for policy writers to integrate with existing organisational policies more easily.
 
-By default the policy evaluation result must contain a `tenants` list with the tenants that the client is allowed to access. This list can be fetched from an arbitrary claim in the access token or created in the policy file based on other properties such as groups or subject identity (sub).
+The policy derives tenant access and scopes from token claims or other properties such as groups or subject identity (`sub`). In explicit legacy mode it returns a `tenants` list instead of per-tenant scopes.
 
-The access-object authorization model can be enabled with `AUTHZ_ACCESS_OBJECT_ENABLED=true` or `-authz-access-object=true`. In that mode the policy result must contain an `access` object that maps tenant names to allowed scopes, for example `{"access":{"default":["devices.read","devices.update"]}}`.
+Access-object authorization is the default. The runtime policy result must contain an `access` object that maps tenant names to allowed scopes, for example `{"access":{"default":["devices.read","devices.update"]}}`. Legacy tenant-list policies require `AUTHZ_ACCESS_OBJECT_ENABLED=false` or `-authz-access-object=false`.
 
 A [basic policy file](./assets/config/authz.rego) is included in the built image by default, but is expected to be replaced with an organisational specific policy at the time of deployment.
 
@@ -62,13 +62,13 @@ A [basic policy file](./assets/config/authz.rego) is included in the built image
 "RABBITMQ_PASS": "bitnami"
 "RABBITMQ_DISABLED": "false"
 "SERVICE_PORT": "<8080>",
-"AUTHZ_ACCESS_OBJECT_ENABLED": "false",
+"AUTHZ_ACCESS_OBJECT_ENABLED": "true",
 "POSTGRES_HOST": "url to postgresql database"
 ```
 ## CLI flags
  - `devices` - A directory containing data of known devices (devices.csv) & sensorTypes (sensorTypes.csv)
  - `policies` - An authorization policy file
- - `authz-access-object` - Enable the access-object authorization policy result model
+ - `authz-access-object` - Access-object authorization (default true); set false for legacy tenant-list policies
  - `config` - Device management configuration file (`config.yaml`)
  - `devmode` - Enable dev mode (parsed but currently unused after parsing)
  - `loglevel` - Set the log level (overrides `LOG_LEVEL`)
@@ -82,7 +82,7 @@ Precedens: default < miljovariabel < CLI-flagga. RabbitMQ konfigureras via `mess
 | `SERVICE_PORT` | `8080` | Publik server (`/api/v0/...`, `/openapi.yaml`, `/docs`) |
 | `CONTROL_PORT` | `8000` | Kontrollserver: pprof, liveness, readiness-stubbar (`rabbitmq`, `timescale`) som returnerar OK |
 | `POLICIES_FILE` | `/opt/diwise/config/authz.rego` | Kravs vid startup |
-| `AUTHZ_ACCESS_OBJECT_ENABLED` | `false` | Switches between the `tenants` and `access` result models (see Security above) |
+| `AUTHZ_ACCESS_OBJECT_ENABLED` | `true` | Access-object result model; set `false` for legacy `tenants` policies (see Security above) |
 | `ALLOWED_SEED_TENANTS` | `default` | Kommaseparerad lista vid seedning |
 | `SEED_EXISTING_DEVICES` | `true` |  |
 | `POSTGRES_HOST` | (tom) | Lagring ar enbart PostgreSQL/pgx i nulaget |

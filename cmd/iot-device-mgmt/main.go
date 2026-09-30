@@ -43,7 +43,7 @@ func defaultFlags() flagMap {
 		enableTracing: "true",
 
 		policiesFile:      "/opt/diwise/config/authz.rego",
-		authzAccessObject: "false",
+		authzAccessObject: "true",
 		configurationFile: "/opt/diwise/config/config.yaml",
 		devicesFile:       "/opt/diwise/config/devices.csv",
 
