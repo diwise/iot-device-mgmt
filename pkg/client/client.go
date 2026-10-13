@@ -87,6 +87,11 @@ type devManagementClient struct {
 
 var tracer = otel.Tracer("device-mgmt-client")
 
+type tokenResult struct {
+	token *oauth2.Token
+	err   error
+}
+
 func New(ctx context.Context, baseUrl, oauthTokenURL string, oauthInsecureURL bool, oauthClientID, oauthClientSecret string) (DeviceManagementClient, error) {
 
 	// configure transport
@@ -130,10 +135,26 @@ func New(ctx context.Context, baseUrl, oauthTokenURL string, oauthInsecureURL bo
 		Timeout:   30 * time.Second,
 	}
 
-	// fail fast if token cannot be retrieved with the provided credentials
-	token, err := ts.Token()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get client credentials from %s: %w", oauthConfig.TokenURL, err)
+	// fail fast if token cannot be retrieved with the provided credentials.
+	// Bounded to 10s so a hung IdP cannot block process startup forever.
+	// Uses the shared TokenSource so the fetched token stays cached for
+	// subsequent API calls (no redundant second fetch).
+	tokenCh := make(chan tokenResult, 1)
+	go func() {
+		token, err := ts.Token()
+		tokenCh <- tokenResult{token: token, err: err}
+	}()
+
+	var token *oauth2.Token
+	select {
+	case res := <-tokenCh:
+		var err error
+		token, err = res.token, res.err
+		if err != nil {
+			return nil, fmt.Errorf("failed to get client credentials from %s: %w", oauthConfig.TokenURL, err)
+		}
+	case <-time.After(10 * time.Second):
+		return nil, fmt.Errorf("timed out getting client credentials from %s", oauthConfig.TokenURL)
 	}
 
 	if !token.Valid() {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	alarmquery "github.com/diwise/iot-device-mgmt/internal/application/alarms/query"
+	devicequery "github.com/diwise/iot-device-mgmt/internal/application/devices/query"
 	"github.com/diwise/iot-device-mgmt/pkg/types"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y"
 	"github.com/diwise/service-chassis/pkg/infrastructure/o11y/logging"
@@ -32,8 +33,13 @@ type AlarmStorage interface {
 	Alarms(ctx context.Context, query alarmquery.Alarms) (types.Collection[types.Alarms], error)
 }
 
+type DeviceTenantReader interface {
+	Query(ctx context.Context, query devicequery.DeviceFilters) (types.Collection[types.Device], error)
+}
+
 type svc struct {
 	storage   AlarmStorage
+	devices   DeviceTenantReader
 	messenger messaging.MsgContext
 	config    map[string]types.AlarmType
 }
@@ -92,9 +98,10 @@ func (svc *svc) Alarms(ctx context.Context, query alarmquery.Alarms) (types.Coll
 	return svc.storage.Alarms(ctx, query)
 }
 
-func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmAPIService {
+func New(s AlarmStorage, m messaging.MsgContext, cfg *Config, devices DeviceTenantReader) AlarmAPIService {
 	svc := &svc{
 		storage:   s,
+		devices:   devices,
 		messenger: m,
 		config:    make(map[string]types.AlarmType),
 	}
@@ -106,12 +113,12 @@ func New(s AlarmStorage, m messaging.MsgContext, cfg *Config) AlarmAPIService {
 	return svc
 }
 
-func RegisterTopicMessageHandler(ctx context.Context, svc AlarmAPIService, messenger messaging.MsgContext) error {
-	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc))
+func RegisterTopicMessageHandler(ctx context.Context, svc AlarmAPIService, lookup DeviceTenantReader, messenger messaging.MsgContext) error {
+	return messenger.RegisterTopicMessageHandler("device-status", newDeviceStatusHandler(svc, lookup))
 }
 
-func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
-	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) {
+func newDeviceStatusHandler(svc AlarmAPIService, lookup DeviceTenantReader) messaging.TopicMessageHandler {
+	return func(ctx context.Context, itm messaging.IncomingTopicMessage, l *slog.Logger) error {
 		var err error
 
 		ctx, span := tracer.Start(ctx, "device-status")
@@ -122,7 +129,30 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 		err = json.Unmarshal(itm.Body(), &m)
 		if err != nil {
 			log.Error("failed to unmarshal status message", "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
-			return
+			return messaging.Permanent(err)
+		}
+
+		if m.Tenant == "" {
+			log.Warn("dropping device-status with missing tenant", "handler", "Alarms.DeviceStatusHandler", "device_id", m.DeviceID)
+			return nil
+		}
+
+		if lookup != nil {
+			stored, qerr := lookup.Query(ctx, devicequery.DeviceFilters{DeviceID: m.DeviceID})
+			if qerr != nil {
+				log.Warn("dropping device-status after lookup failure", "handler", "Alarms.DeviceStatusHandler", "device_id", m.DeviceID, "err", qerr.Error())
+				return nil
+			}
+
+			if stored.Count != 1 {
+				log.Warn("dropping device-status for unknown device", "handler", "Alarms.DeviceStatusHandler", "device_id", m.DeviceID)
+				return nil
+			}
+
+			if stored.Data[0].Tenant != m.Tenant {
+				log.Warn("dropping device-status with tenant mismatch", "handler", "Alarms.DeviceStatusHandler", "device_id", m.DeviceID, "tenant", m.Tenant, "expected_tenant", stored.Data[0].Tenant)
+				return nil
+			}
 		}
 
 		if m.Code == nil && len(m.Messages) == 0 {
@@ -130,9 +160,8 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 			err = svc.Remove(ctx, m.DeviceID, AlarmDeviceNotObserved)
 			if err != nil {
 				log.Debug("could not remove device not observed alarms", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
-				return
 			}
-			return
+			return nil
 		}
 
 		if m.Code != nil && *m.Code != "" {
@@ -152,8 +181,11 @@ func newDeviceStatusHandler(svc AlarmAPIService) messaging.TopicMessageHandler {
 			}
 		}
 
+		// Bevarad semantik: hanteringsfel loggas och ackas. Klassificering
+		// till Temporary/Permanent kräver verifierad idempotens.
 		if err != nil {
 			log.Error("could not add or update alarm for device", "device_id", m.DeviceID, "handler", "Alarms.DeviceStatusHandler", "err", err.Error())
 		}
+		return nil
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"testing"
 )
 
-func TestAuthenticatorUsesLegacyTenantResultByDefault(t *testing.T) {
-	statusCode, tenants := evaluatePolicy(t, legacyPolicy, nil)
+func TestAuthenticatorUsesLegacyTenantResultWhenExplicitlyEnabled(t *testing.T) {
+	statusCode, tenants := evaluatePolicy(t, legacyPolicy, []Option{WithAccessObjectAuthorization(false)})
 
 	if statusCode != http.StatusNoContent {
 		t.Fatalf("expected status 204, got %d", statusCode)
@@ -19,8 +19,8 @@ func TestAuthenticatorUsesLegacyTenantResultByDefault(t *testing.T) {
 	}
 }
 
-func TestAuthenticatorUsesAccessObjectWhenEnabled(t *testing.T) {
-	statusCode, tenants := evaluatePolicy(t, accessObjectPolicy, []Option{WithAccessObjectAuthorization(true)})
+func TestAuthenticatorUsesAccessObjectByDefault(t *testing.T) {
+	statusCode, tenants := evaluatePolicy(t, accessObjectPolicy, nil)
 
 	if statusCode != http.StatusNoContent {
 		t.Fatalf("expected status 204, got %d", statusCode)

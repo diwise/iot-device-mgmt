@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/diwise/iot-device-mgmt/internal/application"
@@ -41,7 +43,7 @@ func defaultFlags() flagMap {
 		enableTracing: "true",
 
 		policiesFile:      "/opt/diwise/config/authz.rego",
-		authzAccessObject: "false",
+		authzAccessObject: "true",
 		configurationFile: "/opt/diwise/config/config.yaml",
 		devicesFile:       "/opt/diwise/config/devices.csv",
 
@@ -56,6 +58,8 @@ func defaultFlags() flagMap {
 		allowedSeedTenants:  "default",
 
 		devmode: "false",
+
+		logLevel: "debug",
 	}
 }
 
@@ -65,6 +69,8 @@ func main() {
 	serviceVersion := buildinfo.SourceVersion()
 	ctx, logger, cleanup := o11y.Init(ctx, serviceName, serviceVersion, "json")
 	defer cleanup()
+
+	logging.SetLogLevel(parseLogLevel(flags[logLevel]))
 
 	cfg, err := os.Open(flags[configurationFile])
 	exitIf(err, logger, "could not open configuration file")
@@ -88,20 +94,12 @@ func main() {
 func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile, devicesFile io.ReadCloser) (servicerunner.Runner[appConfig], error) {
 
 	log := logging.GetFromContext(ctx)
-	seedExistingDevices, _ := strconv.ParseBool(flags[seedExistingDevices])
 	accessObjectAuthz, _ := strconv.ParseBool(flags[authzAccessObject])
 
-	probes := map[string]k8shandlers.ServiceProber{
-		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
-		"timescale": func(context.Context) (string, error) { return "ok", nil },
-	}
+	probes := readinessProbes()
 
-	s, err := newStorage(ctx, flags)
-	exitIf(err, log, "could not connrect to, or create, database")
-
-	messenger, err := messaging.Initialize(ctx, messaging.LoadConfiguration(ctx, serviceName, log))
-	exitIf(err, log, "failed to init messenger")
-
+	var s *storage.Storage
+	var messenger messaging.MsgContext
 	var deviceAPI devices.DeviceAPIService
 	var sensorAPI sensors.SensorAPIService
 	var alarmsAPI alarms.AlarmAPIService
@@ -110,11 +108,13 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 
 	var app application.Management
 
+	owned := &ownedResources{}
+
 	_, runner := servicerunner.New(ctx, *cfg,
 		webserver("control", listen(flags[listenAddress]), port(flags[controlPort]),
 			pprof(), liveness(func() error { return nil }), readiness(probes),
 		),
-		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(flags[enableTracing] == "true"),
+		webserver("public", listen(flags[listenAddress]), port(flags[servicePort]), tracing(tracingEnabled(flags)),
 			muxinit(func(ctx context.Context, identifier string, port string, appCfg *appConfig, handler *http.ServeMux) error {
 				defer policiesFile.Close()
 				return api.RegisterHandlers(ctx, handler, policiesFile, app, auth.WithAccessObjectAuthorization(accessObjectAuthz))
@@ -123,19 +123,46 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		oninit(func(ctx context.Context, ac *appConfig) error {
 			log.Debug("initializing servicerunner")
 
+			var err error
+
+			s, err = newStorage(ctx, flags)
+			if err != nil {
+				return fmt.Errorf("could not connect to, or create, database: %w", err)
+			}
+
+			messenger, err = initMessenger(ctx, serviceName, log)
+			if err != nil {
+				s.Close()
+				s = nil
+				return fmt.Errorf("failed to init messenger: %w", err)
+			}
+
 			svc := devices.New(s, s, s, s, messenger, &ac.DeviceManagementConfig)
 			deviceAPI = svc
 			deviceStatusHandler = svc
 			sensorAPI = sensors.New(s, s)
-			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig)
+			alarmsAPI = alarms.New(s, messenger, &ac.AlarmServiceConfig, s)
 			wd = watchdog.New(alarmsAPI, &ac.WatchdogConfig)
 
-			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevices)
+			owned.watchdog = wd
+			owned.messenger = messenger
+			owned.tracker = &handlerTracker{}
+			owned.storage = s
+
+			app = application.New(deviceAPI, sensorAPI, alarmsAPI, seedExistingDevicesEnabled(flags))
 
 			return nil
 		}),
 		onstarting(func(ctx context.Context, appCfg *appConfig) (err error) {
 			log.Debug("starting servicerunner")
+
+			// OnStarting failures bypass OnShutdown in the runner, so
+			// clean up acquired resources on every error path below.
+			defer func() {
+				if err != nil {
+					owned.close(ctx)
+				}
+			}()
 
 			err = app.SeedLwm2mTypes(ctx, appCfg.DeviceManagementConfig.Types)
 			if err != nil {
@@ -152,14 +179,19 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 				return
 			}
 
-			messenger.Start()
+			err = messenger.Start(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to start messenger: %w", err)
+			}
 
-			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, messenger)
+			tracked := &trackingMessenger{MsgContext: messenger, tracker: owned.tracker}
+
+			err = devices.RegisterTopicMessageHandler(ctx, deviceStatusHandler, tracked)
 			if err != nil {
 				return
 			}
 
-			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, messenger)
+			err = alarms.RegisterTopicMessageHandler(ctx, alarmsAPI, s, tracked)
 			if err != nil {
 				return
 			}
@@ -171,15 +203,137 @@ func initialize(ctx context.Context, flags flagMap, cfg *appConfig, policiesFile
 		onshutdown(func(ctx context.Context, appCfg *appConfig) error {
 			log.Debug("shutdown servicerunner")
 
-			wd.Stop(ctx)
-			messenger.Close()
-			s.Close()
+			owned.close(ctx)
 
 			return nil
 		}),
 	)
 
 	return runner, nil
+}
+
+// tracingEnabled is the minimal production seam for the tracing toggle.
+// Only the exact string "true" enables tracing; ParseBool spellings
+// such as "TRUE" or "1" intentionally do not.
+func tracingEnabled(flags flagMap) bool {
+	return flags[enableTracing] == "true"
+}
+
+// seedExistingDevicesEnabled is the minimal production seam for the
+// seed toggle, using strconv semantics: invalid values silently
+// disable seeding.
+func seedExistingDevicesEnabled(flags flagMap) bool {
+	v, _ := strconv.ParseBool(flags[seedExistingDevices])
+	return v
+}
+
+// readinessProbes returns the named readiness stubs. Per harmonization
+// standard they always report OK and never call any dependency.
+func readinessProbes() map[string]k8shandlers.ServiceProber {
+	return map[string]k8shandlers.ServiceProber{
+		"rabbitmq":  func(context.Context) (string, error) { return "ok", nil },
+		"timescale": func(context.Context) (string, error) { return "ok", nil },
+	}
+}
+
+// Shutdown budgets, within the runner's 30s shutdown hook budget. The
+// hook itself never receives the runner's timeout, so shutdown derives
+// its own bounded contexts here.
+const (
+	shutdownHandlerDrainTimeout = 10 * time.Second
+	shutdownWatchdogTimeout     = 15 * time.Second
+)
+
+// handlerTracker tracks admitted topic-message deliveries so shutdown
+// can await them. The messaging library acknowledges after the handler
+// completes; the tracker additionally lets shutdown await admitted
+// handlers within budget before stopping the watchdog and storage.
+type handlerTracker struct {
+	wg sync.WaitGroup
+}
+
+func (t *handlerTracker) track(next messaging.TopicMessageHandler) messaging.TopicMessageHandler {
+	return func(ctx context.Context, msg messaging.IncomingTopicMessage, log *slog.Logger) error {
+		t.wg.Add(1)
+		defer t.wg.Done()
+		return next(ctx, msg, log)
+	}
+}
+
+// wait blocks until tracked handlers complete or the timeout elapses,
+// reporting whether all handlers finished.
+func (t *handlerTracker) wait(timeout time.Duration) bool {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		t.wg.Wait()
+	}()
+
+	select {
+	case <-done:
+		return true
+	case <-time.After(timeout):
+		return false
+	}
+}
+
+// trackingMessenger decorates handler registration with delivery
+// tracking. All other MsgContext behavior is forwarded unchanged.
+type trackingMessenger struct {
+	messaging.MsgContext
+	tracker *handlerTracker
+}
+
+func (m *trackingMessenger) RegisterTopicMessageHandler(routingKey string, h messaging.TopicMessageHandler) error {
+	return m.MsgContext.RegisterTopicMessageHandler(routingKey, m.tracker.track(h))
+}
+
+// ownedResources tracks the resources created during OnInit so shutdown
+// is nil-safe, ordered and idempotent via the sync.Once guard, so the
+// messenger is shut down at most once.
+//
+// Shutdown order: stop inflow (messenger), await admitted handlers
+// within budget, stop the watchdog with a real deadline, then close
+// storage. HTTP servers stay live until after OnShutdown returns (runner
+// behavior); that residual window is documented, not fixed here.
+type ownedResources struct {
+	once      sync.Once
+	watchdog  watchdog.Watchdog
+	messenger messaging.MsgContext
+	tracker   *handlerTracker
+	storage   interface{ Close() }
+}
+
+func (o *ownedResources) close(ctx context.Context) {
+	o.once.Do(func() {
+		if o.messenger != nil {
+			if err := o.messenger.Shutdown(ctx); err != nil {
+				logging.GetFromContext(ctx).Debug("failed to shut down messenger", "err", err.Error())
+			}
+		}
+		if o.tracker != nil {
+			o.tracker.wait(shutdownHandlerDrainTimeout)
+		}
+		if o.watchdog != nil {
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownWatchdogTimeout)
+			defer cancel()
+			o.watchdog.Stop(stopCtx)
+		}
+		if o.storage != nil {
+			o.storage.Close()
+		}
+	})
+}
+
+// initMessenger initializes messaging, surfacing configuration errors
+// (e.g. missing RABBITMQ_HOST) instead of exiting the process.
+func initMessenger(ctx context.Context, serviceName string, log *slog.Logger) (messaging.MsgContext, error) {
+	cfg, err := messaging.LoadConfiguration(ctx, serviceName, log)
+	if err != nil {
+		return nil, fmt.Errorf("messaging configuration error: %w", err)
+	}
+
+	return messaging.Initialize(ctx, cfg)
 }
 
 func newStorage(ctx context.Context, flags flagMap) (*storage.Storage, error) {
@@ -236,6 +390,8 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 
 	flags[enableTracing] = envOrDef(ctx, "ENABLE_TRACING", flags[enableTracing])
 
+	flags[logLevel] = envOrDef(ctx, "LOG_LEVEL", flags[logLevel])
+
 	apply := func(f flagType) func(string) error {
 		return func(value string) error {
 			flags[f] = value
@@ -249,9 +405,25 @@ func parseExternalConfig(ctx context.Context, flags flagMap) (context.Context, f
 	flag.Func("devices", "list of known devices", apply(devicesFile))
 	flag.Func("config", "device management configuration file", apply(configurationFile))
 	flag.Func("devmode", "enable dev mode", apply(devmode))
+	flag.Func("loglevel", "set the log level", apply(logLevel))
 	flag.Parse()
 
 	return ctx, flags
+}
+
+func parseLogLevel(level string) slog.Level {
+	switch strings.ToLower(level) {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelDebug
+	}
 }
 
 func exitIf(err error, logger *slog.Logger, msg string, args ...any) {

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"slices"
 	"strings"
 
 	"github.com/open-policy-agent/opa/v1/rego"
@@ -145,7 +144,7 @@ func NewAuthenticator(ctx context.Context, policies io.Reader, opts ...Option) (
 		return nil, fmt.Errorf("unable to read authz policies: %s", err.Error())
 	}
 
-	authOptions := options{}
+	authOptions := options{accessObjectAuthz: true}
 	for _, apply := range opts {
 		apply(&authOptions)
 	}
@@ -298,10 +297,6 @@ func GetTenantsWithAllowedScopes(ctx context.Context, scopes ...Scope) []string 
 	}
 
 	return tenants
-}
-
-func IsAllowed(allowedTenants []string, s string) bool {
-	return slices.Contains(allowedTenants, s) || s == ""
 }
 
 func WithAccess(ctx context.Context, access accessMap) context.Context {
