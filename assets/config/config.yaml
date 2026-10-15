@@ -9,6 +9,8 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3304
         - urn:oma:lwm2m:ext:3327
         - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3323
+        - urn:oma:lwm2m:ext:3435
     - name: elsys
       decoder: elsys
       interval: 3600
@@ -32,6 +34,7 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3428
         - urn:oma:lwm2m:ext:3302
         - urn:oma:lwm2m:ext:3200        
+        - urn:oma:lwm2m:ext:3324
     - name: elt_2_hp
       decoder: elt_2_hp
       interval: 3600
@@ -40,6 +43,7 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3303
         - urn:oma:lwm2m:ext:3304
         - urn:oma:lwm2m:ext:3301
+        - urn:oma:lwm2m:ext:3324
         - urn:oma:lwm2m:ext:3428
         - urn:oma:lwm2m:ext:3302
         - urn:oma:lwm2m:ext:3200
@@ -60,6 +64,7 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3330
         - urn:oma:lwm2m:ext:3304
         - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3200
     - name: niab-fls
       decoder: niab-fls
       interval: 3600
@@ -114,6 +119,7 @@ devicemanagement:
       interval: 3600
       types:
         - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
         - urn:oma:lwm2m:ext:3327
         - urn:oma:lwm2m:ext:3323
     - name: vegapuls_air_41
@@ -142,6 +148,7 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3303
         - urn:oma:lwm2m:ext:3304
         - urn:oma:lwm2m:ext:3323
+        - urn:oma:lwm2m:ext:3324
         - urn:oma:lwm2m:ext:3327
         - urn:oma:lwm2m:ext:3328
         - urn:oma:lwm2m:ext:3330
@@ -152,6 +159,73 @@ devicemanagement:
         - urn:oma:lwm2m:ext:3428
         - urn:oma:lwm2m:ext:3434
         - urn:oma:lwm2m:ext:3435
+    - name: cube02
+      decoder: cube02
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3327
+        - urn:oma:lwm2m:ext:3323
+    - name: elsys_codec
+      decoder: elsys_codec
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3301
+        - urn:oma:lwm2m:ext:3324
+        - urn:oma:lwm2m:ext:3428
+        - urn:oma:lwm2m:ext:3302
+        - urn:oma:lwm2m:ext:3200
+    - name: milesight_am100
+      decoder: milesight_am100
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3428
+        - urn:oma:lwm2m:ext:3330
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3200
+    - name: presence
+      decoder: presence
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3302
+    - name: strips_lora_ms_h
+      decoder: strips_lora_ms_h
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3302
+    - name: talkpool/oy1210
+      decoder: talkpool/oy1210
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
+        - urn:oma:lwm2m:ext:3428
+    - name: tem_lab_14ns
+      decoder: tem_lab_14ns
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+    - name: x2climate
+      decoder: x2climate
+      interval: 3600
+      types:
+        - urn:oma:lwm2m:ext:3
+        - urn:oma:lwm2m:ext:3303
+        - urn:oma:lwm2m:ext:3304
 
   types:
     - urn: urn:oma:lwm2m:ext:3

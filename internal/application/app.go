@@ -323,6 +323,7 @@ func validateDeviceRecord(r deviceRecord) error {
 		"presence",
 		"elsys",
 		"elsys/elt/sht3x",
+		"elt_2_hp",
 		"elsys_codec",
 		"talkpool/oy1210",
 		"enviot",
@@ -336,7 +337,8 @@ func validateDeviceRecord(r deviceRecord) error {
 		"virtual",
 		"axsensor",
 		"vegapuls_air_41",
-		"airquality"}, r.sensorType) {
+		"airquality",
+		"x2climate"}, r.sensorType) {
 		return fmt.Errorf("row with %s contains invalid sensorType parameter %s", r.devEUI, r.sensorType)
 	}
 
