@@ -315,28 +315,30 @@ func validateDeviceRecord(r deviceRecord) error {
 	}
 
 	if !slices.Contains([]string{
-		"qalcosonic",
-		"qalcosonic/w1h",
-		"qalcosonic/w1t",
-		"qalcosonic/w1e",
-		"sensative",
-		"presence",
+		"airquality",
+		"axsensor",
+		"cube02",
+		"elsys_codec",
 		"elsys",
 		"elsys/elt/sht3x",
-		"elsys_codec",
-		"talkpool/oy1210",
 		"enviot",
-		"senlabt",
-		"tem_lab_14ns",
-		"strips_lora_ms_h",
-		"cube02",
-		"milesight",
 		"milesight_am100",
+		"milesight",
 		"niab-fls",
-		"virtual",
-		"axsensor",
+		"presence",
+		"qalcosonic",
+		"qalcosonic/w1e",
+		"qalcosonic/w1h",
+		"qalcosonic/w1t",
+		"senlabt",
+		"sensative",
+		"strips_lora_ms_h",
+		"talkpool/oy1210",
+		"tem_lab_14ns",
 		"vegapuls_air_41",
-		"airquality"}, r.sensorType) {
+		"virtual",
+		"x2climate",
+		}, r.sensorType) {
 		return fmt.Errorf("row with %s contains invalid sensorType parameter %s", r.devEUI, r.sensorType)
 	}
 
