@@ -33,10 +33,9 @@ func (s service) DeviceBySensor(ctx context.Context, sensorID string, tenants []
 }
 
 func (s service) Device(ctx context.Context, deviceID string, tenants []string) (types.Device, error) {
-	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{
 		DeviceID:       deviceID,
-		AllowedTenants: tenants,
-	}})
+		AllowedTenants: tenants})
 	if err != nil {
 		return types.Device{}, err
 	}

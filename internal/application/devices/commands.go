@@ -18,7 +18,7 @@ var errSensorAlreadyAssigned = fmt.Errorf("sensor already assigned")
 var errSensorProfileRequired = fmt.Errorf("sensor profile required")
 
 func (s service) Create(ctx context.Context, device types.Device, allowedTenants []string) error {
-	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{DeviceID: device.DeviceID})
 	if err != nil {
 		return err
 	}
@@ -55,7 +55,7 @@ func (s service) Create(ctx context.Context, device types.Device, allowedTenants
 }
 
 func (s service) Update(ctx context.Context, device types.Device, allowedTenants []string) error {
-	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: device.DeviceID}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{DeviceID: device.DeviceID})
 	if err != nil {
 		return err
 	}
@@ -82,7 +82,7 @@ func (s service) Update(ctx context.Context, device types.Device, allowedTenants
 func (s service) Merge(ctx context.Context, deviceID string, fields map[string]any, tenants []string) error {
 	log := logging.GetFromContext(ctx)
 
-	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: deviceID, AllowedTenants: tenants}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{DeviceID: deviceID, AllowedTenants: tenants})
 	if err != nil {
 		return err
 	}
@@ -244,7 +244,7 @@ func (s service) ensureSensorCanBeAssigned(ctx context.Context, deviceID, sensor
 }
 
 func (s service) UpdateState(ctx context.Context, deviceID, tenant string, deviceState types.DeviceState) error {
-	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{Filters: dmquery.Filters{DeviceID: deviceID, Tenant: tenant}})
+	result, err := s.reader.Query(ctx, dmquery.DeviceFilters{DeviceID: deviceID, Tenant: tenant})
 	if err != nil {
 		return err
 	}
